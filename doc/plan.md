@@ -7,7 +7,7 @@
 - 集成可启动 LÖVE 游戏的 Android 原生运行环境。
 - 集成 Sora Editor。
 - 为 Lua 及常用语言提供语法高亮。
-- 提供手机友好的文件树、文件多标签和编辑区。
+- 提供手机友好的单目录文件浏览器、文件多标签和编辑区。
 - 支持通过右上角 Play 启动当前项目。
 - 支持项目管理和新建项目。
 - 项目保存在应用专属外部目录的 `projects/` 下。
@@ -48,7 +48,7 @@
 1. 以 `love-android` 的 Gradle/CMake/SDL/native library 装配方式为基础。
 2. 正式工程把 LÖVE 与 megasource 作为锁定提交的 submodule 或等价 vendor 目录放在运行时边界内；`ref/` 只存研究副本。
 3. 保留上游的 `GameActivity`/SDL 初始化和 native library 加载顺序，产品侧只增加最小的启动参数与生命周期适配。
-4. 产品主入口是编辑器 Activity；LÖVE 游戏使用独立的全屏 `LoveGameActivity`，避免游戏渲染窗口和编辑器 Toolbar/Drawer 共存。
+4. 产品主入口是编辑器 Activity；LÖVE 游戏使用独立的全屏 `LoveGameActivity` 和 `:game` 进程，避免 SDL/native 清理影响编辑器主进程。
 5. 不把 LÖVE 做成普通 Maven 依赖；它包含 CMake、JNI、SDL 和多 ABI native 构建，直接依赖会隐藏关键打包约束。
 
 #### Play 启动方案
@@ -108,11 +108,11 @@ projects/
 │              Sora CodeEditor             │ 编辑区
 │                                          │
 ├──────────────────────────────────────────┤
-│ ( ) [ ] { } " = : . , _ + - …           │ 符号输入栏（随输入法上移）
+│ ← → fun ( [ { " = : . , _ + - …         │ 快捷输入栏（随输入法上移）
 └──────────────────────────────────────────┘
 ```
 
-- 左上角导航按钮打开/关闭左侧文件树。
+- 左上角导航按钮打开/关闭左侧文件浏览器。
 - 右上角三角形 Play 启动当前项目。
 - Play 右侧使用 overflow action item，打开项目管理界面。
 - 横屏时 Drawer 和编辑区可以同时显示；竖屏时 Drawer 覆盖编辑区并带 scrim。
@@ -120,38 +120,30 @@ projects/
 - AppBar 和 Drawer 顶部按系统状态栏 inset 留白；编辑区采用 edge-to-edge，但交互控件不被系统栏遮挡。
 - 导航、关闭、新建、保存、Play 等图标统一使用 Google Material Icons 矢量图标，不使用 `android.R.drawable` 平台旧图标。
 
-### 4.2 左侧文件树
+### 4.2 左侧文件浏览器
 
-使用 `DrawerLayout + RecyclerView`，不直接照搬 VS Code 的桌面密度：
+使用 `DrawerLayout + RecyclerView` 的单目录逐级浏览模式，不展示可展开树：
 
-- 行只显示三部分：文件/文件夹图标、名称、简介属性。
-- 文件的简介默认显示语言/文件类型和可读大小；文件夹显示直接子项数量。
+- 列表只显示当前目录的直接子项；文件夹优先，名称按不区分大小写的顺序排列。
+- 行只显示文件/文件夹图标、名称和简介属性。
+- 文件简介显示语言/文件类型和可读大小；文件夹显示直接子项数量。
+- 顶部显示项目名和当前项目内相对路径；路径右侧三点菜单提供新建文件、新建文件夹、粘贴到当前目录和刷新。
 - 不在行内显示完整路径、时间戳、权限等低频信息；详细属性放到长按菜单的“详情”。
-- 文件夹优先排序，名称按本地化规则排序；展开状态由相对路径保存。
-- 只加载当前可见/展开节点，避免一次性把整个项目树转换成巨型 View 层级。
-- 文件操作在后台线程执行，完成后以新列表提交到 RecyclerView。
+- 目录读取和递归复制/删除在后台线程执行，完成后再提交新列表。
 
 交互定义：
 
 | 手势 | 默认行为 |
 | --- | --- |
-| 单击文件夹 | 展开/折叠 |
+| 单击文件夹 | 进入该目录 |
 | 单击文件 | 打开或切换到对应标签 |
-| 长按任意行 | 弹出操作菜单；若尚未多选则进入选择上下文 |
-| 左右水平滑动 | 选中该行；水平阈值触发，垂直滑动仍用于滚动 |
-| 精确两个端点已选中 | 显示“选中区间”操作，按当前父目录的可见顺序选择两端之间项目 |
+| 长按任意行 | 弹出当前项目的操作菜单，不自动开启多选 |
+| 左右水平滑动 | 选中该行并开启多选；水平阈值触发，垂直滑动仍用于滚动 |
+| 精确两个端点已选中 | 显示“选中区间”操作，按当前目录可见顺序选择两端之间项目 |
 | 开启多选后单击 | 切换当前行选中状态，不打开文件/文件夹 |
-| 点击 Drawer 外部或返回键 | 关闭 Drawer；若处于多选上下文则先退出选择上下文 |
+| 文件浏览器内按返回键 | 先退出多选，再返回上级目录；项目根目录再关闭 Drawer |
 
-区间选择默认只在同一父目录的同级可见行内计算，避免树状结构中“跨层级区间”的歧义。若用户需要跨目录批量操作，后续再增加明确的树遍历规则。
-
-长按菜单初版操作：
-
-- 文件：打开、重命名、复制、剪切、删除、详情。
-- 文件夹：展开/折叠、新建文件、新建文件夹、重命名、复制、剪切、删除、详情。
-- 多选：复制、剪切、删除、取消选择；当恰有两个端点时增加“选中区间”。
-- 新建文件名和重命名必须校验非法字符、重名和路径越界。
-- 删除使用确认对话框；不做静默递归删除。
+长按菜单提供打开、重命名、复制、剪切、删除和详情；多选时操作作用于当前选中项，并可取消选择或选择两个端点之间的区间。新建、粘贴和刷新属于顶部当前目录菜单。新建文件名和重命名必须校验非法字符、重名和路径越界；删除使用确认对话框。
 
 ### 4.3 Sora Editor 编辑区
 
@@ -197,7 +189,7 @@ overflow action item 打开独立的项目管理页面或全屏 Bottom Sheet（�
 - 在 `assets/textmate/` 注册 grammar、language configuration、`languages.json` 和主题。
 - 第一批语言：Lua、Java、Kotlin、JavaScript/TypeScript、Python、HTML、XML、Markdown、JSON、CSS、Shell。
 - 其中 Lua 是 LÖVE 项目的默认语言，必须优先验证；没有匹配 grammar 时使用纯文本语言，不阻塞打开文件。
-- 扩展名映射集中在 `LanguageResolver`，不把映射散落在 Activity 和文件树代码中。
+- 扩展名映射集中在 `LanguageResolver`，不把映射散落在 Activity 和文件浏览器代码中。
 - grammar 来源、版本/commit 和许可证写入第三方声明文件；不将 VS Code 等上游语法资源当成无许可证内容复制。
 - 初版只承诺语法高亮、缩进和编辑器基础能力，不承诺完整补全、语义诊断和 LSP。
 
@@ -212,29 +204,19 @@ Sora 的注册流程计划采用：
 ## 6. 建议的代码边界
 
 ```text
-app/src/main/java/top/wsdx233/love2droid/
-├── EditorActivity.kt
-├── editor/
-│   ├── EditorSession.kt       # 当前项目、打开标签、dirty/光标状态
-│   ├── EditorTabAdapter.kt
-│   └── LanguageResolver.kt
-├── filetree/
-│   ├── FileTreeController.kt  # 展开、排序、选择、区间选择
-│   ├── FileTreeAdapter.kt
-│   └── FileOperations.kt      # 新建/重命名/复制/剪切/删除
-├── project/
-│   ├── Project.kt
-│   ├── ProjectRepository.kt
-│   ├── ProjectManagerActivity.kt
-│   └── ProjectValidator.kt
-├── runtime/
-│   ├── LoveGameActivity.java  # 上游 GameActivity 的最小产品适配
-│   ├── LoveGameLauncher.kt
-│   ├── LovePackageBuilder.kt  # 项目目录 -> .love 临时快照
-│   └── LoveFileProvider.kt
-└── storage/
-    ├── AppStorage.kt
-    └── AtomicFileWriter.kt
+app/src/normal/java/top/wsdx233/love2droid/
+├── EditorActivity.kt          # 编辑器、标签和文件浏览器交互组装
+├── EditorSession.kt           # 打开标签、dirty、光标和滚动状态
+├── FileBrowserAdapter.kt      # 当前目录列表、选择和滑动手势
+├── LanguageResolver.kt        # 扩展名到 TextMate scope
+├── ProjectRepository.kt       # 项目目录和元数据
+├── ProjectManagerActivity.kt
+├── ProjectValidator.kt
+├── LovePackageBuilder.kt      # 项目目录 -> .love 临时快照
+└── StorageUtils.kt            # 路径约束、原子写和递归文件操作
+
+app/src/main/java/top/wsdx233/love2droid/runtime/
+└── LoveGameActivity.java      # 上游 GameActivity 的最小产品适配
 ```
 
 实际文件名可以按工程现状调整，但职责不跨层泄漏：
@@ -242,7 +224,7 @@ app/src/main/java/top/wsdx233/love2droid/
 - Activity 负责组装 View 和生命周期，不直接执行递归文件操作。
 - `ProjectRepository` 负责项目目录和元数据，不持有编辑器 View。
 - `EditorSession` 负责标签/dirty/光标状态，不负责项目列表 UI。
-- `LoveGameLauncher` 负责保存、校验、打包、Intent 启动，不负责文件树选择。
+- Play 启动流程负责保存、校验、打包和 Intent 启动，不负责文件浏览器选择。
 - native LÖVE/SDL 代码尽量保持上游结构，产品改动集中在 Java Activity 和启动参数边界。
 
 ## 7. 分阶段实施顺序
@@ -272,13 +254,13 @@ app/src/main/java/top/wsdx233/love2droid/
 
 验收：打开 `main.lua` 能看到 Lua 高亮，修改后保存，重新打开内容一致。
 
-### 阶段 D：文件树与手机交互
+### 阶段 D：文件浏览器与手机交互
 
-- 实现 Drawer、折叠树、文件行图标/名称/简介。
-- 实现单击打开/展开、长按菜单、水平滑动选择。
+- 实现 Drawer、单目录逐级浏览、当前路径和目录操作菜单。
+- 实现文件行图标/名称/简介、单击进入或打开、长按菜单和水平滑动选择。
 - 实现多选、两个端点的区间选择和批量文件操作。
 
-验收：不依赖桌面右键或键盘，单手可完成新建、重命名、复制/剪切、删除和批量选择。
+验收：不依赖桌面右键或键盘，单手可逐级浏览目录，并完成新建、重命名、复制/剪切、粘贴、删除和批量选择。
 
 ### 阶段 E：多标签与会话
 
@@ -311,8 +293,8 @@ app/src/main/java/top/wsdx233/love2droid/
 
 - 项目 id 和相对路径不能逃逸项目根目录。
 - 新建/重命名拒绝重名和非法名称。
-- 文件树同级区间选择包含两个端点，且不误选其他父目录节点。
-- 多选点击是幂等切换，不触发错误的打开/展开行为。
+- 当前目录区间选择包含两个端点，且不会包含其他目录项目。
+- 多选点击是幂等切换；长按菜单不会误开启多选，普通单击仍进入目录或打开文件。
 - 标签去重、dirty 关闭决策和项目切换状态正确。
 - `.love` 快照包含项目文件且根目录存在 `main.lua`。
 
@@ -332,13 +314,13 @@ app/src/main/java/top/wsdx233/love2droid/
 2. **content URI 到 LÖVE native 文件系统的兼容性**
    - 复用上游已有 content URI 参数路径；Play 初版使用 `.love` 快照；若实际设备发现某个 URI/SDL 组合不兼容，在 runtime 边界增加受控的本地 staging，而不是给全应用申请存储权限。
 3. **Android/data 对用户文件管理器不可见或受限制**
-   - 应用内文件树是唯一基础管理入口；不假设第三方文件管理器能任意访问该目录。
+   - 应用内文件浏览器是唯一基础管理入口；不假设第三方文件管理器能任意访问该目录。
 4. **TextMate 资源体积和许可证**
    - 只引入第一批需要的 grammar，记录来源和许可证，避免复制整套 Demo 资源。
 5. **手机编辑大文件导致卡顿/内存压力**
    - 后台读取、列表增量更新、文件大小保护；不在第一版加入复杂分页编辑器。
 6. **文件操作和编辑保存并发**
-   - 所有写入串行化，采用原子写；文件树刷新只在操作完成后提交。
+   - 所有写入串行化，采用原子写；文件浏览列表只在操作完成后提交。
 
 ## 10. 默认方案，请你先审阅
 
@@ -355,10 +337,10 @@ app/src/main/java/top/wsdx233/love2droid/
 
 ## 11. 当前实现状态
 
-基础框架已实现：LÖVE Android runtime、应用专属项目目录与项目管理、Drawer 文件树及文件操作、Sora Editor、多标签、符号输入栏、TextMate 语法资源注册、`.love` 打包与 Play 启动链路。
+基础框架已实现：LÖVE Android runtime、应用专属项目目录与项目管理、Drawer 单目录文件浏览器及文件操作、Sora Editor、多标签、快捷输入栏、TextMate 语法资源注册、`.love` 打包与 Play 启动链路。
 
 后续界面调整以用户最新要求为准：标签栏高度为 24dp；标签宽度随文件名自适应；文件名超过 15 个字符时显示前 15 个字符和 `...`；标签、关闭按钮和新建按钮均使用波纹反馈；活动标签底线使用主题色，其他标签使用灰色。该调整覆盖第 4.1 节原有的通用触控目标建议。
 
-已在标签栏最终调整前完成 Debug 单元任务、APK 构建及模拟器基础冒烟，覆盖项目创建、Drawer 文件打开和编辑器界面。打开文件时新标签内容被空编辑器状态覆盖的问题已经修正；最终标签栏调整及修正后的 Lua 高亮显示按用户要求不再继续自动测试，由用户侧验证。
+当前维护流程只运行不依赖 Android runtime 的逻辑测试和 APK 构建，不使用 Android 模拟器；界面、输入法、文件系统和 LÖVE runtime 的实际交互由用户在真机验证。打开文件内容覆盖、保存后 dirty 圆点刷新和游戏退出影响编辑器进程的问题均已在源码侧修正。
 
 以下属于计划中的增强边界，当前基础框架尚未实现：外部文件变化冲突检测、原始换行风格保留、二进制内容探测、Activity 重建后的完整标签会话恢复，以及项目列表的最近打开时间展示。

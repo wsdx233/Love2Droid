@@ -1,16 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/tree_row"
+    android:id="@+id/browser_row"
     android:layout_width="match_parent"
     android:layout_height="60dp"
     android:background="@android:color/transparent"
     android:foreground="?attr/selectableItemBackground"
     android:gravity="center_vertical"
     android:orientation="horizontal"
+    android:paddingStart="16dp"
     android:paddingEnd="12dp">
 
     <ImageView
-        android:id="@+id/tree_icon"
+        android:id="@+id/browser_icon"
         android:layout_width="24dp"
         android:layout_height="24dp"
         android:contentDescription="@null"
@@ -23,7 +24,7 @@
         android:orientation="vertical">
 
         <TextView
-            android:id="@+id/tree_name"
+            android:id="@+id/browser_name"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:ellipsize="middle"
@@ -31,7 +32,7 @@
             android:textSize="15sp" />
 
         <TextView
-            android:id="@+id/tree_summary"
+            android:id="@+id/browser_summary"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:ellipsize="end"

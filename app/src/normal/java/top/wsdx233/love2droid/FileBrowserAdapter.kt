@@ -12,51 +12,50 @@ import java.io.File
 import kotlin.math.abs
 import kotlin.math.sign
 
- data class TreeItem(
+data class BrowserItem(
     val file: File,
     val relativePath: String,
-    val depth: Int,
     val directory: Boolean,
     val childCount: Int,
 )
 
-class FileTreeAdapter(
-    private val onClick: (TreeItem) -> Unit,
-    private val onLongClick: (TreeItem, View) -> Unit,
-    private val onSwipe: (TreeItem) -> Unit,
-) : RecyclerView.Adapter<FileTreeAdapter.TreeHolder>() {
-    private var items: List<TreeItem> = emptyList()
+class FileBrowserAdapter(
+    private val onClick: (BrowserItem) -> Unit,
+    private val onLongClick: (BrowserItem, View) -> Unit,
+    private val onSwipe: (BrowserItem) -> Unit,
+) : RecyclerView.Adapter<FileBrowserAdapter.BrowserHolder>() {
+    private var items: List<BrowserItem> = emptyList()
     private var selectedPaths: Set<String> = emptySet()
 
-    fun submitItems(newItems: List<TreeItem>, selected: Set<String>) {
+    fun submitItems(newItems: List<BrowserItem>, selected: Set<String>) {
         items = newItems
         selectedPaths = selected
         notifyDataSetChanged()
     }
 
-    override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): TreeHolder {
+    override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): BrowserHolder {
         val view = android.view.LayoutInflater.from(parent.context)
-            .inflate(R.layout.item_tree, parent, false)
-        return TreeHolder(view)
+            .inflate(R.layout.item_browser, parent, false)
+        return BrowserHolder(view)
     }
 
-    override fun onBindViewHolder(holder: TreeHolder, position: Int) {
+    override fun onBindViewHolder(holder: BrowserHolder, position: Int) {
         holder.bind(items[position], selectedPaths.contains(items[position].relativePath))
     }
 
     override fun getItemCount(): Int = items.size
 
-    inner class TreeHolder(view: View) : RecyclerView.ViewHolder(view) {
-        private val icon: ImageView = view.findViewById(R.id.tree_icon)
-        private val name: TextView = view.findViewById(R.id.tree_name)
-        private val summary: TextView = view.findViewById(R.id.tree_summary)
+    inner class BrowserHolder(view: View) : RecyclerView.ViewHolder(view) {
+        private val icon: ImageView = view.findViewById(R.id.browser_icon)
+        private val name: TextView = view.findViewById(R.id.browser_name)
+        private val summary: TextView = view.findViewById(R.id.browser_summary)
         private val density = view.resources.displayMetrics.density
         private val touchSlop = ViewConfiguration.get(view.context).scaledTouchSlop
         private var downX = 0f
         private var downY = 0f
 
         private var swiping = false
-        fun bind(item: TreeItem, selected: Boolean) {
+        fun bind(item: BrowserItem, selected: Boolean) {
             val context = itemView.context
             icon.setImageDrawable(
                 ContextCompat.getDrawable(
@@ -70,11 +69,10 @@ class FileTreeAdapter(
             } else {
                 "${LanguageResolver.displayName(item.file)} · ${StorageUtils.formatBytes(item.file.length())}"
             }
-            itemView.setPadding(item.depth * (context.resources.displayMetrics.density * 18).toInt(), 0, 8, 0)
             itemView.setBackgroundColor(
                 ContextCompat.getColor(
                     context,
-                    if (selected) R.color.tree_selected else android.R.color.transparent,
+                    if (selected) R.color.browser_selected else android.R.color.transparent,
                 ),
             )
             itemView.setOnClickListener { onClick(item) }
@@ -152,7 +150,7 @@ class FileTreeAdapter(
         }
     }
 
-    override fun onViewRecycled(holder: TreeHolder) {
+    override fun onViewRecycled(holder: BrowserHolder) {
         holder.itemView.animate().cancel()
         holder.itemView.translationX = 0f
         super.onViewRecycled(holder)

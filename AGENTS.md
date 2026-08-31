@@ -6,7 +6,7 @@ Love2Droid 是单 `app` 模块 Android 应用，包名为 `top.wsdx233.love2droi
 
 ## 目录结构
 
-- `app/src/normal/`：产品编辑器界面和业务逻辑。`java/top/wsdx233/love2droid/` 包含编辑器、项目仓库、文件树、打包与校验代码；`res/` 包含编辑器和项目管理界面资源。
+- `app/src/normal/`：产品编辑器界面和业务逻辑。`java/top/wsdx233/love2droid/` 包含编辑器、项目仓库、文件浏览器、打包与校验代码；`res/` 包含编辑器和项目管理界面资源。
 - `app/src/main/java/top/wsdx233/love2droid/runtime/`：产品代码到 LÖVE Activity 的最小启动边界。
 - `app/src/main/java/org/love2d/android/`：上游 LÖVE Android/SDL Java 桥接代码。
 - `app/src/main/cpp/`：LÖVE、SDL3、megasource 和 CMake native 构建。`love/` 与 `megasource/` 视为上游代码。

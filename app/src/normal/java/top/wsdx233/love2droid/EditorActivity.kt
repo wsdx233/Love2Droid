@@ -60,13 +60,15 @@ class EditorActivity : AppCompatActivity() {
     private lateinit var welcomePage: View
     private lateinit var drawerProjectTitle: TextView
     private lateinit var drawerProjectPath: TextView
-    private lateinit var treeAdapter: FileTreeAdapter
+    private lateinit var drawerDirectoryMenu: View
+    private lateinit var browserAdapter: FileBrowserAdapter
 
     private val projectRepository by lazy { ProjectRepository(this) }
     private val editorSession = EditorSession()
     private val selectedPaths = linkedSetOf<String>()
-    private val expandedPaths = linkedSetOf<String>("")
     private var currentProject: Project? = null
+    private var currentDirectory: File? = null
+    private var visibleItems: List<BrowserItem> = emptyList()
     private var suppressEditorEvents = false
     private var selectionMode = false
     private var clipboardFiles: List<File> = emptyList()
@@ -102,6 +104,8 @@ class EditorActivity : AppCompatActivity() {
         welcomePage = findViewById(R.id.welcome_page)
         drawerProjectTitle = findViewById(R.id.drawer_project_title)
         drawerProjectPath = findViewById(R.id.drawer_project_path)
+        drawerDirectoryMenu = findViewById(R.id.drawer_directory_menu)
+        drawerDirectoryMenu.setOnClickListener(::showCurrentDirectoryMenu)
         findViewById<View>(R.id.welcome_open_file).setOnClickListener {
             drawer.openDrawer(GravityCompat.START)
         }
@@ -109,7 +113,7 @@ class EditorActivity : AppCompatActivity() {
 
         setupWindowInsets()
         toolbar.navigationIcon = ContextCompat.getDrawable(this, R.drawable.ic_menu)
-        toolbar.navigationContentDescription = getString(R.string.file_tree)
+        toolbar.navigationContentDescription = getString(R.string.file_browser)
         toolbar.setNavigationOnClickListener { drawer.openDrawer(GravityCompat.START) }
         toolbar.inflateMenu(R.menu.editor_menu)
         toolbar.setOnMenuItemClickListener(::onToolbarItemSelected)
@@ -117,6 +121,8 @@ class EditorActivity : AppCompatActivity() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 when {
+                    drawer.isDrawerOpen(GravityCompat.START) && selectionMode -> clearSelection()
+                    drawer.isDrawerOpen(GravityCompat.START) && navigateToParentDirectory() -> Unit
                     drawer.isDrawerOpen(GravityCompat.START) -> drawer.closeDrawer(GravityCompat.START)
                     selectionMode -> clearSelection()
                     else -> {
@@ -128,14 +134,14 @@ class EditorActivity : AppCompatActivity() {
         })
         setupSymbolBar()
         setupEditorInput()
-        treeAdapter = FileTreeAdapter(
-            onClick = ::onTreeItemClicked,
-            onLongClick = ::showTreeMenu,
+        browserAdapter = FileBrowserAdapter(
+            onClick = ::onBrowserItemClicked,
+            onLongClick = ::showBrowserItemMenu,
             onSwipe = ::toggleSelection,
         )
-        findViewById<RecyclerView>(R.id.file_tree).apply {
+        findViewById<RecyclerView>(R.id.file_list).apply {
             layoutManager = LinearLayoutManager(this@EditorActivity)
-            adapter = treeAdapter
+            adapter = browserAdapter
             setHasFixedSize(true)
         }
 
@@ -316,15 +322,16 @@ class EditorActivity : AppCompatActivity() {
         currentProject = projectRepository.markOpened(project)
         editorSession.clear()
         selectedPaths.clear()
-        expandedPaths.clear()
-        expandedPaths += ""
+        currentDirectory = currentProject?.root
+        visibleItems = emptyList()
+        browserAdapter.submitItems(emptyList(), emptySet())
         selectionMode = false
         toolbar.title = currentProject?.displayName.orEmpty()
         drawerProjectTitle.text = currentProject?.displayName
-        drawerProjectPath.text = currentProject?.root?.path
+        updateDirectoryHeader()
         refreshTabs()
         showEmptyEditor()
-        refreshTree()
+        refreshFileList()
     }
 
     private fun showEmptyEditor() {
@@ -334,87 +341,151 @@ class EditorActivity : AppCompatActivity() {
         welcomePage.visibility = View.VISIBLE
     }
 
-    private fun refreshTree() {
+    private fun refreshFileList() {
         val project = currentProject ?: run {
-            treeAdapter.submitItems(emptyList(), selectedPaths)
+            currentDirectory = null
+            visibleItems = emptyList()
+            drawerProjectTitle.text = getString(R.string.no_project)
+            drawerProjectPath.text = ""
+            drawerDirectoryMenu.isEnabled = false
+            browserAdapter.submitItems(emptyList(), emptySet())
             return
         }
+        val directory = currentDirectory
+            ?.takeIf { it.isDirectory && StorageUtils.isWithin(project.root, it) }
+            ?: project.root
+        currentDirectory = directory
+        updateDirectoryHeader()
         lifecycleScope.launch {
-            val items = withContext(Dispatchers.IO) { flattenTree(project.root) }
-            if (currentProject?.id == project.id) {
-                treeAdapter.submitItems(items, selectedPaths)
+            val items = withContext(Dispatchers.IO) { listDirectory(project.root, directory) }
+            if (currentProject?.id == project.id && currentDirectory?.absolutePath == directory.absolutePath) {
+                visibleItems = items
+                selectedPaths.retainAll(items.mapTo(hashSetOf()) { it.relativePath })
+                if (selectedPaths.isEmpty()) selectionMode = false
+                updateSelectionUi()
             }
         }
     }
 
-    private fun flattenTree(root: File): List<TreeItem> {
-        val result = mutableListOf<TreeItem>()
-        fun append(directory: File, relativeDirectory: String, depth: Int) {
-            val children = directory.listFiles()
-                ?.asSequence()
-                ?.filter { it.name != StorageUtils.METADATA_FILE }
-                ?.filter { StorageUtils.isWithin(root, it) }
-                ?.sortedWith(compareBy<File> { !it.isDirectory }.thenBy { it.name.lowercase() })
-                ?.toList()
-                ?: return
-            children.forEach { child ->
-                val relative = if (relativeDirectory.isBlank()) child.name else "$relativeDirectory/${child.name}"
-                val childCount = if (child.isDirectory) child.listFiles()?.count { it.name != StorageUtils.METADATA_FILE } ?: 0 else 0
-                result += TreeItem(child, relative, depth, child.isDirectory, childCount)
-                if (child.isDirectory && expandedPaths.contains(relative)) {
-                    append(child, relative, depth + 1)
+    private fun listDirectory(root: File, directory: File): List<BrowserItem> {
+        return directory.listFiles()
+            ?.asSequence()
+            ?.filter { it.name != StorageUtils.METADATA_FILE }
+            ?.filter { StorageUtils.isWithin(root, it) }
+            ?.sortedWith(compareBy<File> { !it.isDirectory }.thenBy { it.name.lowercase() })
+            ?.map { child ->
+                val childCount = if (child.isDirectory) {
+                    child.listFiles()?.count {
+                        it.name != StorageUtils.METADATA_FILE && StorageUtils.isWithin(root, it)
+                    } ?: 0
+                } else {
+                    0
                 }
+                BrowserItem(
+                    file = child,
+                    relativePath = StorageUtils.relativePath(root, child),
+                    directory = child.isDirectory,
+                    childCount = childCount,
+                )
             }
-        }
-        append(root, "", 0)
-        return result
+            ?.toList()
+            .orEmpty()
     }
 
-    private fun onTreeItemClicked(item: TreeItem) {
+    private fun updateDirectoryHeader() {
+        val project = currentProject
+        val directory = currentDirectory
+        if (project == null || directory == null) {
+            drawerProjectTitle.text = getString(R.string.no_project)
+            drawerProjectPath.text = ""
+            drawerDirectoryMenu.isEnabled = false
+            return
+        }
+        val relativePath = StorageUtils.relativePath(project.root, directory)
+        drawerProjectTitle.text = project.displayName
+        drawerProjectPath.text = if (relativePath.isBlank()) "/" else "/$relativePath"
+        drawerDirectoryMenu.isEnabled = true
+    }
+
+    private fun showCurrentDirectoryMenu(anchor: View) {
+        val directory = currentDirectory ?: return
+        val menu = PopupMenu(this, anchor)
+        menu.menu.add(0, MENU_NEW_FILE, 0, R.string.new_file)
+        menu.menu.add(0, MENU_NEW_FOLDER, 1, R.string.new_folder)
+        menu.menu.add(0, MENU_PASTE, 2, R.string.paste).isEnabled = clipboardFiles.isNotEmpty()
+        menu.menu.add(0, MENU_REFRESH, 3, R.string.refresh)
+        menu.setOnMenuItemClickListener { selected ->
+            when (selected.itemId) {
+                MENU_NEW_FILE -> createChild(directory, false)
+                MENU_NEW_FOLDER -> createChild(directory, true)
+                MENU_PASTE -> pasteInto(directory)
+                MENU_REFRESH -> refreshFileList()
+            }
+            true
+        }
+        menu.show()
+    }
+
+    private fun navigateToParentDirectory(): Boolean {
+        val project = currentProject ?: return false
+        val directory = currentDirectory ?: return false
+        if (StorageUtils.relativePath(project.root, directory).isBlank()) return false
+        val parent = directory.parentFile
+            ?.takeIf { it.isDirectory && StorageUtils.isWithin(project.root, it) }
+            ?: project.root
+        navigateToDirectory(parent)
+        return true
+    }
+
+    private fun navigateToDirectory(directory: File) {
+        val project = currentProject ?: return
+        if (!directory.isDirectory || !StorageUtils.isWithin(project.root, directory)) return
+        selectedPaths.clear()
+        selectionMode = false
+        visibleItems = emptyList()
+        browserAdapter.submitItems(emptyList(), emptySet())
+        currentDirectory = directory
+        updateSelectionTitle()
+        refreshFileList()
+    }
+
+    private fun onBrowserItemClicked(item: BrowserItem) {
         if (selectionMode) {
             toggleSelection(item)
-            return
+        } else {
+            openBrowserItem(item)
         }
+    }
+
+    private fun openBrowserItem(item: BrowserItem) {
         if (item.directory) {
-            if (!expandedPaths.add(item.relativePath)) expandedPaths.remove(item.relativePath)
-            refreshTree()
+            navigateToDirectory(item.file)
         } else {
             openFile(item.file)
             drawer.closeDrawer(GravityCompat.START)
         }
     }
 
-    private fun toggleSelection(item: TreeItem) {
+    private fun toggleSelection(item: BrowserItem) {
         selectionMode = true
         if (!selectedPaths.add(item.relativePath)) selectedPaths.remove(item.relativePath)
         if (selectedPaths.isEmpty()) selectionMode = false
-        toolbar.title = if (selectionMode) "已选择 ${selectedPaths.size} 项" else currentProject?.displayName.orEmpty()
-        treeAdapter.submitItems(flattenTree(currentProject?.root ?: return), selectedPaths)
+        updateSelectionUi()
     }
 
-    private fun showTreeMenu(item: TreeItem, anchor: View) {
-        selectionMode = true
+    private fun showBrowserItemMenu(item: BrowserItem, anchor: View) {
         val menu = PopupMenu(this, anchor)
-        if (!item.directory) {
-            menu.menu.add(0, MENU_OPEN, 0, "打开")
-        } else {
-            menu.menu.add(0, MENU_NEW_FILE, 0, R.string.new_file)
-            menu.menu.add(0, MENU_NEW_FOLDER, 1, R.string.new_folder)
-            if (clipboardFiles.isNotEmpty()) menu.menu.add(0, MENU_PASTE, 2, R.string.paste)
-        }
-        menu.menu.add(0, MENU_RENAME, 3, R.string.rename)
-        menu.menu.add(0, MENU_COPY, 4, R.string.copy)
-        menu.menu.add(0, MENU_CUT, 5, R.string.cut)
-        menu.menu.add(0, MENU_DELETE, 6, R.string.delete)
-        menu.menu.add(0, MENU_DETAILS, 7, R.string.details)
-        if (selectedPaths.size == 2) menu.menu.add(0, MENU_RANGE, 8, R.string.select_range)
-        if (selectionMode) menu.menu.add(0, MENU_CLEAR_SELECTION, 9, R.string.clear_selection)
+        menu.menu.add(0, MENU_OPEN, 0, R.string.open)
+        menu.menu.add(0, MENU_RENAME, 1, R.string.rename)
+        menu.menu.add(0, MENU_COPY, 2, R.string.copy)
+        menu.menu.add(0, MENU_CUT, 3, R.string.cut)
+        menu.menu.add(0, MENU_DELETE, 4, R.string.delete)
+        menu.menu.add(0, MENU_DETAILS, 5, R.string.details)
+        if (selectedPaths.size == 2) menu.menu.add(0, MENU_RANGE, 6, R.string.select_range)
+        if (selectionMode) menu.menu.add(0, MENU_CLEAR_SELECTION, 7, R.string.clear_selection)
         menu.setOnMenuItemClickListener { selected ->
             when (selected.itemId) {
-                MENU_OPEN -> openFile(item.file)
-                MENU_NEW_FILE -> createChild(item.file, false)
-                MENU_NEW_FOLDER -> createChild(item.file, true)
-                MENU_PASTE -> pasteInto(if (item.directory) item.file else item.file.parentFile)
+                MENU_OPEN -> openBrowserItem(item)
                 MENU_RENAME -> rename(item.file)
                 MENU_COPY -> copySelection(item.file, false)
                 MENU_CUT -> copySelection(item.file, true)
@@ -435,28 +506,24 @@ class EditorActivity : AppCompatActivity() {
         updateSelectionUi()
     }
 
-    private fun updateSelectionUi() {
+    private fun updateSelectionTitle() {
         toolbar.title = if (selectionMode) "已选择 ${selectedPaths.size} 项" else currentProject?.displayName.orEmpty()
-        currentProject?.root?.let { treeAdapter.submitItems(flattenTree(it), selectedPaths) }
+    }
+
+    private fun updateSelectionUi() {
+        updateSelectionTitle()
+        browserAdapter.submitItems(visibleItems, selectedPaths)
     }
 
     private fun selectRange() {
-        val project = currentProject ?: return
         if (selectedPaths.size != 2) return
         val paths = selectedPaths.toList()
-        val parentA = paths[0].substringBeforeLast('/', "")
-        val parentB = paths[1].substringBeforeLast('/', "")
-        if (parentA != parentB) {
-            toast("区间选择需要位于同一目录")
-            return
-        }
-        val siblings = flattenTree(project.root)
-            .filter { it.relativePath.substringBeforeLast('/', "") == parentA }
-        val first = siblings.indexOfFirst { it.relativePath == paths[0] }
-        val second = siblings.indexOfFirst { it.relativePath == paths[1] }
+        val first = visibleItems.indexOfFirst { it.relativePath == paths[0] }
+        val second = visibleItems.indexOfFirst { it.relativePath == paths[1] }
         if (first < 0 || second < 0) return
         selectedPaths.clear()
-        siblings.subList(minOf(first, second), maxOf(first, second) + 1).forEach { selectedPaths += it.relativePath }
+        visibleItems.subList(minOf(first, second), maxOf(first, second) + 1)
+            .forEach { selectedPaths += it.relativePath }
         updateSelectionUi()
     }
 
@@ -479,7 +546,7 @@ class EditorActivity : AppCompatActivity() {
                     target.parentFile?.mkdirs()
                     require(target.createNewFile())
                 }
-                refreshTree()
+                refreshFileList()
                 if (!directory) openFile(target)
             } catch (error: IOException) {
                 toast(error.message ?: "创建失败")
@@ -507,7 +574,7 @@ class EditorActivity : AppCompatActivity() {
                 val index = editorSession.tabs.indexOf(tab)
                 editorSession.remove(index)
             }
-            refreshTree()
+            refreshFileList()
             refreshTabs()
         }
     }
@@ -524,21 +591,32 @@ class EditorActivity : AppCompatActivity() {
 
     private fun pasteInto(targetDirectory: File?) {
         val project = currentProject ?: return
-        if (targetDirectory == null || !targetDirectory.isDirectory || !StorageUtils.isWithin(project.root, targetDirectory)) return
-        try {
-            clipboardFiles.forEach { source ->
-                if (!source.exists() || !StorageUtils.isWithin(project.root, source)) return@forEach
-                val target = File(targetDirectory, source.name)
-                require(!target.exists()) { "目标已存在：${source.name}" }
-                require(StorageUtils.isWithin(project.root, target))
-                StorageUtils.copyRecursively(source, target)
-                if (clipboardIsCut) StorageUtils.deleteRecursively(source)
+        val destination = targetDirectory
+            ?.takeIf { it.isDirectory && StorageUtils.isWithin(project.root, it) }
+            ?: return
+        val sources = clipboardFiles.toList()
+        val cut = clipboardIsCut
+        lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    sources.forEach { source ->
+                        if (!source.exists() || !StorageUtils.isWithin(project.root, source)) return@forEach
+                        require(!source.isDirectory || !StorageUtils.isWithin(source, destination)) {
+                            "不能粘贴到文件夹自身或其子目录"
+                        }
+                        val target = File(destination, source.name)
+                        require(!target.exists()) { "目标已存在：${source.name}" }
+                        require(StorageUtils.isWithin(project.root, target))
+                        StorageUtils.copyRecursively(source, target)
+                        if (cut) StorageUtils.deleteRecursively(source)
+                    }
+                }
+                clipboardFiles = emptyList()
+                refreshFileList()
+                toast("粘贴完成")
+            } catch (error: Exception) {
+                toast(error.message ?: "粘贴失败")
             }
-            clipboardFiles = emptyList()
-            refreshTree()
-            toast("粘贴完成")
-        } catch (error: Exception) {
-            toast(error.message ?: "粘贴失败")
         }
     }
 
@@ -552,9 +630,14 @@ class EditorActivity : AppCompatActivity() {
             .setMessage(getString(R.string.delete_warning) + "\n" + files.joinToString { it.name })
             .setNegativeButton(R.string.cancel, null)
             .setPositiveButton(R.string.delete) { _, _ ->
-                runCatching { files.forEach(StorageUtils::deleteRecursively) }
-                    .onSuccess { clearSelection(); refreshTree() }
-                    .onFailure { toast(it.message ?: "删除失败") }
+                lifecycleScope.launch {
+                    runCatching {
+                        withContext(Dispatchers.IO) { files.forEach(StorageUtils::deleteRecursively) }
+                    }.onSuccess {
+                        clearSelection()
+                        refreshFileList()
+                    }.onFailure { toast(it.message ?: "删除失败") }
+                }
             }
             .show()
     }
@@ -785,7 +868,11 @@ class EditorActivity : AppCompatActivity() {
             toast(getString(R.string.no_active_document))
             return
         }
-        if (tab.file == null) saveTabAs(tab) else saveTabBlocking(tab)
+        if (tab.file == null) {
+            saveTabAs(tab)
+        } else if (saveTabBlocking(tab)) {
+            refreshTabs()
+        }
     }
 
     private fun saveActiveDocumentAs() {
@@ -817,7 +904,7 @@ class EditorActivity : AppCompatActivity() {
                 if (editorSession.activeTab === tab) setEditorLanguage(tab.languageScope)
             }.onSuccess {
                 refreshTabs()
-                refreshTree()
+                refreshFileList()
                 onSaved()
             }.onFailure { toast(it.message ?: "保存失败") }
         }
@@ -837,7 +924,9 @@ class EditorActivity : AppCompatActivity() {
             toast("存在未命名未保存文件，请先另存为")
             return false
         }
-        return editorSession.tabs.filter { it.file != null }.all(::saveTabBlocking)
+        val saved = editorSession.tabs.filter { it.file != null }.all(::saveTabBlocking)
+        if (saved) refreshTabs()
+        return saved
     }
 
     private fun playCurrentProject() {
@@ -922,6 +1011,7 @@ class EditorActivity : AppCompatActivity() {
         private const val MENU_DETAILS = 9
         private const val MENU_RANGE = 10
         private const val MENU_CLEAR_SELECTION = 11
+        private const val MENU_REFRESH = 12
         private const val MAX_TAB_NAME_CHARS = 15
     }
 }
