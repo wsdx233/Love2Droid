@@ -28,8 +28,9 @@
         <activity
             android:name="top.wsdx233.love2droid.runtime.LoveGameActivity"
             android:exported="false"
+            android:launchMode="standard"
             android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
-            tools:replace="android:exported,android:theme">
+            tools:replace="android:exported,android:launchMode,android:theme">
             <intent-filter tools:node="removeAll" />
         </activity>
 
