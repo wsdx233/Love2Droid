@@ -61,15 +61,52 @@
                 android:paddingBottom="8dp"
                 android:textSize="14sp" />
 
-            <TextView
-                android:id="@+id/empty_editor"
+            <LinearLayout
+                android:id="@+id/welcome_page"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:gravity="center"
-                android:padding="32dp"
-                android:text="@string/no_project"
-                android:textColor="#A1A1AA"
-                android:textSize="18sp" />
+                android:orientation="vertical"
+                android:padding="32dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/welcome_title"
+                    android:textColor="#E4E4E7"
+                    android:textSize="22sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:gravity="center"
+                    android:text="@string/welcome_message"
+                    android:textColor="#A1A1AA"
+                    android:textSize="14sp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/welcome_open_file"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="24dp"
+                    android:minWidth="180dp"
+                    android:text="@string/open_file"
+                    app:icon="@drawable/ic_folder"
+                    app:iconGravity="textStart" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/welcome_new_file"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:minWidth="180dp"
+                    android:text="@string/new_file"
+                    app:icon="@drawable/ic_add"
+                    app:iconGravity="textStart" />
+            </LinearLayout>
         </FrameLayout>
         <HorizontalScrollView
             android:id="@+id/symbol_scroll"

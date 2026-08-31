@@ -29,8 +29,7 @@ class EditorSession {
 
     fun add(tab: EditorTab): Int {
         tabs += tab
-        activeIndex = tabs.lastIndex
-        return activeIndex
+        return tabs.lastIndex
     }
 
     fun select(index: Int) {

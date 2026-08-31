@@ -54,4 +54,19 @@ class StorageAndPackagingTest {
         assertEquals(null, LanguageResolver.scopeFor(File("notes.txt")))
         assertEquals("JSON", LanguageResolver.displayName(File("data.json")))
     }
+    @Test
+    fun addingLoadedTabKeepsCurrentTabUntilExplicitSelection() {
+        val session = EditorSession()
+        val current = EditorTab(File("current.lua"), "current", "source.lua")
+        val currentIndex = session.add(current)
+        session.select(currentIndex)
+
+        val loaded = EditorTab(File("loaded.lua"), "print('loaded')", "source.lua")
+        val loadedIndex = session.add(loaded)
+
+        assertTrue(session.activeTab === current)
+        session.select(loadedIndex)
+        assertTrue(session.activeTab === loaded)
+        assertEquals("print('loaded')", session.activeTab?.text)
+    }
 }

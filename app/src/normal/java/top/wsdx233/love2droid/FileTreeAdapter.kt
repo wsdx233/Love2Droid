@@ -1,13 +1,16 @@
 package top.wsdx233.love2droid
 
 import android.view.MotionEvent
+import android.view.ViewConfiguration
 import android.view.View
 import android.widget.ImageView
 import android.widget.TextView
+import android.view.animation.DecelerateInterpolator
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import java.io.File
 import kotlin.math.abs
+import kotlin.math.sign
 
  data class TreeItem(
     val file: File,
@@ -47,9 +50,12 @@ class FileTreeAdapter(
         private val icon: ImageView = view.findViewById(R.id.tree_icon)
         private val name: TextView = view.findViewById(R.id.tree_name)
         private val summary: TextView = view.findViewById(R.id.tree_summary)
+        private val density = view.resources.displayMetrics.density
+        private val touchSlop = ViewConfiguration.get(view.context).scaledTouchSlop
         private var downX = 0f
         private var downY = 0f
 
+        private var swiping = false
         fun bind(item: TreeItem, selected: Boolean) {
             val context = itemView.context
             icon.setImageDrawable(
@@ -77,25 +83,85 @@ class FileTreeAdapter(
                 true
             }
             itemView.setOnTouchListener { _, event ->
+                val dx = event.x - downX
+                val dy = event.y - downY
                 when (event.actionMasked) {
                     MotionEvent.ACTION_DOWN -> {
+                        itemView.animate().cancel()
+                        itemView.translationX = 0f
                         downX = event.x
                         downY = event.y
+                        swiping = false
+                        itemView.parent.requestDisallowInterceptTouchEvent(true)
                         false
                     }
-                    MotionEvent.ACTION_UP -> {
-                        val dx = event.x - downX
-                        val dy = event.y - downY
-                        if (abs(dx) > 48 * context.resources.displayMetrics.density && abs(dx) > abs(dy) * 1.4f) {
-                            onSwipe(item)
+                    MotionEvent.ACTION_MOVE -> {
+                        if (!swiping &&
+                            abs(dx) > touchSlop &&
+                            isHorizontalSwipe(dx, dy)
+                        ) {
+                            swiping = true
+                            itemView.cancelLongPress()
+                            itemView.isPressed = false
+                            itemView.parent.requestDisallowInterceptTouchEvent(true)
+                        }
+                        if (swiping) {
+                            val limit = MAX_SWIPE_OFFSET_DP * density
+                            val resistedOffset = abs(dx).coerceAtMost(limit) * dx.sign
+                            itemView.translationX = resistedOffset
                             true
                         } else {
+                            if (abs(dy) > touchSlop) {
+                                itemView.parent.requestDisallowInterceptTouchEvent(false)
+                            }
                             false
                         }
+                    }
+                    MotionEvent.ACTION_UP -> {
+                        val completed = swiping &&
+                            abs(dx) >= SWIPE_TRIGGER_DP * density &&
+                            isHorizontalSwipe(dx, dy)
+                        val handled = swiping
+                        finishSwipe()
+                        if (completed) onSwipe(item)
+                        handled
+                    }
+                    MotionEvent.ACTION_CANCEL -> {
+                        val handled = swiping
+                        finishSwipe()
+                        handled
                     }
                     else -> false
                 }
             }
         }
+
+        private fun isHorizontalSwipe(dx: Float, dy: Float): Boolean {
+            return abs(dx) > abs(dy) * HORIZONTAL_DRIFT_RATIO
+        }
+
+        private fun finishSwipe() {
+            swiping = false
+            itemView.parent?.requestDisallowInterceptTouchEvent(false)
+            itemView.isPressed = false
+            itemView.animate()
+                .translationX(0f)
+                .setDuration(SWIPE_RETURN_DURATION_MS)
+                .setInterpolator(DecelerateInterpolator())
+                .start()
+        }
+    }
+
+    override fun onViewRecycled(holder: TreeHolder) {
+        holder.itemView.animate().cancel()
+        holder.itemView.translationX = 0f
+        super.onViewRecycled(holder)
+    }
+
+    private companion object {
+        const val SWIPE_TRIGGER_DP = 48f
+        const val MAX_SWIPE_OFFSET_DP = 64f
+        const val HORIZONTAL_DRIFT_RATIO = 0.7f
+        const val SWIPE_RETURN_DURATION_MS = 90L
     }
 }

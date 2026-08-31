@@ -3,7 +3,8 @@
     android:id="@+id/tree_row"
     android:layout_width="match_parent"
     android:layout_height="60dp"
-    android:background="?attr/selectableItemBackground"
+    android:background="@android:color/transparent"
+    android:foreground="?attr/selectableItemBackground"
     android:gravity="center_vertical"
     android:orientation="horizontal"
     android:paddingEnd="12dp">

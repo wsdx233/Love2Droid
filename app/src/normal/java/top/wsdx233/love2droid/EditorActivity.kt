@@ -56,7 +56,7 @@ class EditorActivity : AppCompatActivity() {
     private lateinit var symbolBar: LinearLayout
     private lateinit var symbolScroll: View
     private lateinit var editor: CodeEditor
-    private lateinit var emptyEditor: TextView
+    private lateinit var welcomePage: View
     private lateinit var drawerProjectTitle: TextView
     private lateinit var drawerProjectPath: TextView
     private lateinit var treeAdapter: FileTreeAdapter
@@ -98,9 +98,13 @@ class EditorActivity : AppCompatActivity() {
         editorTopInset = findViewById(R.id.editor_top_inset)
         drawerTopInset = findViewById(R.id.drawer_top_inset)
         editor = findViewById(R.id.code_editor)
-        emptyEditor = findViewById(R.id.empty_editor)
+        welcomePage = findViewById(R.id.welcome_page)
         drawerProjectTitle = findViewById(R.id.drawer_project_title)
         drawerProjectPath = findViewById(R.id.drawer_project_path)
+        findViewById<View>(R.id.welcome_open_file).setOnClickListener {
+            drawer.openDrawer(GravityCompat.START)
+        }
+        findViewById<View>(R.id.welcome_new_file).setOnClickListener { newDocument() }
 
         setupWindowInsets()
         toolbar.navigationIcon = ContextCompat.getDrawable(this, R.drawable.ic_menu)
@@ -277,11 +281,10 @@ class EditorActivity : AppCompatActivity() {
     }
 
     private fun showEmptyEditor() {
-        suppressEditorEvents = true
-        editor.setText("")
-        suppressEditorEvents = false
-        editor.visibility = View.VISIBLE
-        emptyEditor.visibility = View.VISIBLE
+        editor.clearFocus()
+        editor.visibility = View.GONE
+        symbolScroll.visibility = View.GONE
+        welcomePage.visibility = View.VISIBLE
     }
 
     private fun refreshTree() {
@@ -591,7 +594,8 @@ class EditorActivity : AppCompatActivity() {
         editor.scroller.abortAnimation()
         suppressEditorEvents = false
         editor.visibility = View.VISIBLE
-        emptyEditor.visibility = View.GONE
+        symbolScroll.visibility = View.VISIBLE
+        welcomePage.visibility = View.GONE
         refreshTabs()
     }
 
@@ -648,7 +652,7 @@ class EditorActivity : AppCompatActivity() {
                 textSize = 13f
                 gravity = Gravity.CENTER
                 maxLines = 1
-                setPadding(dp(8), 0, dp(4), 0)
+                setPadding(dp(16), 0, dp(8), 0)
             }
             val close = ImageButton(this).apply {
                 setImageResource(R.drawable.ic_close)
