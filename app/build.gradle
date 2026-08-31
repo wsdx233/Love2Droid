@@ -1,0 +1,194 @@
+import java.nio.charset.StandardCharsets
+
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace "top.wsdx233.love2droid"
+    ndkVersion '27.3.13750724'
+
+    defaultConfig {
+        applicationId project.properties["app.application_id"]
+        versionCode project.properties["app.version_code"].toInteger()
+        versionName project.properties["app.version_name"]
+        minSdk 23
+        compileSdk = 37
+        targetSdk = 37
+
+        externalNativeBuild {
+            cmake {
+                arguments "-DANDROID_STL=c++_shared", "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=1", "-DCMAKE_POLICY_VERSION_MINIMUM=3.5", "-DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON", "-DCMAKE_BUILD_TYPE=RelWithDebInfo"
+                // https://issuetracker.google.com/issues/274493986
+                // Transitive shared library that's added through `add_dependencies` is not taken into
+                // account. This result in liboboe.so and libluajit.so not get included into the final
+                // APK. "love" target depends on LuaJIT, and "OpenAL" target depends on oboe::oboe
+                // (which provides liboboe.so). So, add "OpenAL" and "love" target.
+                targets "love_android", "OpenAL", "love"
+            }
+        }
+
+        ndk {
+            //noinspection ChromeOsAbiSupport
+            abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86_64'
+            debugSymbolLevel 'full'
+        }
+
+        def getAppName = {
+            def nameArray = project.properties["app.name_byte_array"]
+            def name = project.properties["app.name"]
+            if (name != null && nameArray != null) {
+                throw new Exception("Only define either `app.name` or `app.name_byte_array` in gradle.properties, but not both!")
+            }
+
+            if (name == null) {
+                def nameArraySplit = nameArray.split(",")
+                def nameBytes = new byte[nameArraySplit.length]
+                def count = 0
+                for (String s: nameArraySplit) {
+                    nameBytes[count++] = (byte) Integer.parseInt(s)
+                }
+                return new String(nameBytes, StandardCharsets.UTF_8)
+            }
+            return name
+        }
+
+        manifestPlaceholders = [
+            NAME:getAppName(),
+            ORIENTATION:project.properties["app.orientation"],
+        ]
+    }
+
+    def retrieveAll3pModules = { ->
+        def modules = []
+
+        fileTree("src/main/cpp/lua-modules/").visit { FileVisitDetails details ->
+            if (details.isDirectory()) {
+                if (file(details.file.path + "/Android.mk").exists() ||
+                        file(details.file.path + "/CMakeLists.mk").exists()) {
+                    def logger = project.getLogger()
+                    logger.lifecycle("3rd-party module: " + details.file.path)
+
+                    def javainfo = file(details.file.path + "/java.txt")
+                    if (javainfo.exists()) {
+                        def fstream = new FileInputStream(javainfo)
+                        def infile = new BufferedReader(new InputStreamReader(fstream))
+                        def javapath = infile.readLine().replace("\\", "/")
+                        def mpath = null
+
+                        if (javapath[0] != '/') {
+                            mpath = details.file.path + "/" + javapath
+                        } else {
+                            mpath = details.file.path + javapath
+                        }
+
+                        modules << mpath
+
+                        logger.lifecycle("Registered path " + mpath)
+                        infile.close()
+                    }
+                }
+            }
+        }
+
+        return modules
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    buildFeatures {
+        prefab true
+    }
+
+    flavorDimensions = ['mode', 'recording']
+    productFlavors {
+        normal {
+            dimension 'mode'
+        }
+        embed {
+            dimension 'mode'
+        }
+        record {
+            dimension 'recording'
+        }
+        noRecord {
+            dimension 'recording'
+        }
+    }
+
+    sourceSets {
+        main {
+            java {
+                srcDir 'src/main/cpp/megasource/libs/SDL3/android-project/app/src/main/java'
+                srcDir 'src/main/java'
+                srcDir 'src/main/cpp/love/src/libraries/luahttps/src/android/java'
+                srcDirs += retrieveAll3pModules()
+            }
+        }
+        normal {
+            java {
+                srcDir 'src/normal/java'
+            }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+        coreLibraryDesugaringEnabled true
+    }
+    buildFeatures {
+        viewBinding true
+    }
+    externalNativeBuild {
+        cmake {
+            path file('src/main/cpp/CMakeLists.txt')
+            // '+' notation apparently has been supported long time ago
+            // https://issuetracker.google.com/issues/110693527#comment22
+            // We require CMake 3.21 because r23 has important fixes
+            // that's only fixed if CMake 3.21 is used.
+            // https://github.com/android/ndk/issues/463
+            version '3.21.0+'
+        }
+    }
+    packagingOptions {
+        jniLibs {
+            excludes += [
+                'lib/armeabi-v7a/libOpenSLES.so',
+                'lib/arm64-v8a/libOpenSLES.so',
+                'lib/x86/libOpenSLES.so',
+                'lib/x86_64/libOpenSLES.so'
+            ]
+        }
+    }
+}
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+    }
+}
+
+dependencies {
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
+    implementation 'androidx.core:core-ktx:1.19.0'
+    implementation 'androidx.activity:activity-ktx:1.12.1'
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.11.0'
+    implementation 'androidx.drawerlayout:drawerlayout:1.2.0'
+    implementation 'com.google.android.material:material:1.14.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.2.2'
+    implementation 'androidx.recyclerview:recyclerview:1.4.0'
+    implementation 'com.google.oboe:oboe:1.9.3'
+    implementation 'io.github.rosemoe:editor:0.24.6'
+    implementation 'io.github.rosemoe:language-textmate:0.24.6'
+    testImplementation 'junit:junit:4.13.2'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0'
+}
+
+configurations.implementation {
+    exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
+}

@@ -1,0 +1,13 @@
+{
+  "name": "JSON",
+  "scopeName": "source.json",
+  "patterns": [
+    { "name": "string.quoted.double.json", "begin": "\\\"", "end": "\\\"", "patterns": [
+      { "name": "constant.character.escape.json", "match": "\\\\(?:[\\\"/bfnrt]|u[0-9a-fA-F]{4})" }
+    ] },
+    { "name": "constant.language.json", "match": "\\b(?:true|false|null)\\b" },
+    { "name": "constant.numeric.json", "match": "-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?" },
+    { "name": "punctuation.separator.json", "match": "[,.:]" },
+    { "name": "punctuation.definition.structure.json", "match": "[{}\\[\\]]" }
+  ]
+}

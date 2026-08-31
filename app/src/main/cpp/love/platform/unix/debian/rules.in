@@ -1,0 +1,23 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@ --parallel
+
+override_dh_auto_clean:
+	dh_auto_clean
+	rm -f platform/unix/love-unstable.6
+
+override_dh_installdocs:
+	dh_installdocs --link-doc=@LOVE_LIB_NAME@0
+
+override_dh_installchangelogs:
+	dh_installchangelogs changes.txt
+
+override_dh_installman:
+	cp -f platform/unix/love.6 platform/unix/love-unstable.6
+	dh_installman
+
+override_dh_strip:
+	dh_strip -p@LOVE_LIB_NAME@0 --dbg-package=@LOVE_LIB_NAME@-dbg
+	dh_strip --remaining-packages
+

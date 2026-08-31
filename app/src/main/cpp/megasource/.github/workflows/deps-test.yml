@@ -1,0 +1,34 @@
+name: build
+on: [push, pull_request]
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [Win32, x64]
+    defaults:
+      run:
+        shell: cmd
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        path: megasource
+    - name: Checkout LÖVE
+      uses: actions/checkout@v4
+      with:
+        path: megasource/libs/love
+        repository: love2d/love
+        ref: main
+    - name: Remove Strawbery Perl From Path
+      run: |
+        move /y C:\Strawberry C:\Strawberry_not_in_PATH
+        exit /b 0
+    - name: Configure
+      env:
+        PLATFORM: ${{ matrix.platform }}
+      run: cmake -Bbuild -Smegasource -T v142 -A %PLATFORM%,version=10.0.26100.0 --install-prefix %CD%\install
+    - name: Install
+      run: cmake --build build --config Release --target install -j2

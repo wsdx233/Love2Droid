@@ -1,0 +1,28 @@
+# Gradle and Android build output
+.gradle/
+.kotlin/
+**/build/
+**/.cxx/
+.externalNativeBuild/
+local.properties
+
+# IDE files
+.idea/
+*.iml
+captures/
+
+# Runtime and crash artifacts
+*.hprof
+hs_err_pid*
+
+# Local reference repositories
+/ref/
+
+# Signing material
+*.jks
+*.keystore
+keystore.properties
+
+# OS metadata
+.DS_Store
+Thumbs.db
