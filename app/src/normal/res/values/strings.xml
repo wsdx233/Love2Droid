@@ -36,4 +36,6 @@
     <string name="syntax_highlighting_failed">语法高亮加载失败：%1$s</string>
     <string name="dirty_tab_label">• %1$s</string>
     <string name="unsaved_file_title">%1$s 有未保存修改</string>
+    <string name="find_replace">查找和替换</string>
+    <string name="word_wrap">自动换行</string>
 </resources>

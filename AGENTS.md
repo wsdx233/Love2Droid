@@ -45,4 +45,4 @@ APK 输出：
 app/build/outputs/apk/normalNoRecord/debug/app-normal-noRecord-debug.apk
 ```
 
-逻辑行为变化还应运行对应的聚焦测试；涉及界面、输入法、文件系统或 LÖVE runtime 的变化应在 Android 设备或模拟器上验证实际路径。不要用跳过任务、关闭检查或吞掉异常的方式换取构建成功。
+逻辑行为变化还应运行对应的聚焦测试。不得使用 Android 模拟器进行测试；涉及界面、输入法、文件系统或 LÖVE runtime 的实际交互由用户在真机验证，本地只执行构建和不依赖 Android runtime 的测试。不要用跳过任务、关闭检查或吞掉异常的方式换取构建成功。

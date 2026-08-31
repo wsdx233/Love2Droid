@@ -42,6 +42,7 @@ import org.eclipse.tm4e.core.registry.IThemeSource
 import io.github.rosemoe.sora.langs.textmate.registry.model.ThemeModel
 import io.github.rosemoe.sora.langs.textmate.registry.provider.AssetsFileResolver
 import io.github.rosemoe.sora.widget.CodeEditor
+import io.github.rosemoe.sora.widget.SelectionMovement
 import io.github.rosemoe.sora.widget.subscribeAlways
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -183,11 +184,10 @@ class EditorActivity : AppCompatActivity() {
             attributes.recycle()
             drawable
         }
-        listOf(
-            "(", ")", "[", "]", "{", "}", "\"", "=", ":", ".", ",", "_", "+", "-", "*", "/", "\\", "%", "#", "^", "$", "?", "&", "|", "<", ">", "~", ";", "'",
-        ).forEach { symbol ->
+
+        fun addButton(label: String, action: () -> Unit) {
             val button = TextView(this).apply {
-                text = symbol
+                text = label
                 textSize = 18f
                 typeface = Typeface.MONOSPACE
                 gravity = Gravity.CENTER
@@ -195,11 +195,20 @@ class EditorActivity : AppCompatActivity() {
                 minHeight = dp(48)
                 setTextColor(Color.LTGRAY)
                 background = selectableBackground?.constantState?.newDrawable()
-                contentDescription = symbol
-                setOnClickListener { insertSymbol(symbol) }
+                contentDescription = label
+                setOnClickListener { action() }
             }
             symbolBar.addView(button, LinearLayout.LayoutParams(dp(44), ViewGroup.LayoutParams.MATCH_PARENT))
         }
+
+        addButton("←") { moveCursor(SelectionMovement.LEFT) }
+        addButton("→") { moveCursor(SelectionMovement.RIGHT) }
+        addButton("fun") { insertSymbol("function") }
+        addButton("(") { insertSymbolPair("(", ")") }
+        addButton("[") { insertSymbolPair("[", "]") }
+        addButton("{") { insertSymbolPair("{", "}") }
+        listOf("\"", "=", ":", ".", ",", "_", "+", "-", "*", "/", "\\", "%", "#", "^", "$", "?", "&", "|", "<", ">", "~", ";", "'")
+            .forEach { symbol -> addButton(symbol) { insertSymbol(symbol) } }
     }
 
     private fun setupEditorInput() {
@@ -219,6 +228,31 @@ class EditorActivity : AppCompatActivity() {
         editor.text.replace(start, end, symbol)
         val position = editor.text.indexer.getCharPosition(start + symbol.length)
         editor.setSelection(position.line, position.column)
+        editor.requestFocus()
+        editor.showSoftInput()
+    }
+
+    private fun insertSymbolPair(opening: String, closing: String) {
+        if (!editor.isShown) return
+        val start = editor.cursor.left
+        val end = editor.cursor.right
+        val selectedText = if (start == end) "" else editor.text.substring(start, end)
+        val replacement = buildString(opening.length + selectedText.length + closing.length) {
+            append(opening)
+            append(selectedText)
+            append(closing)
+        }
+        editor.text.replace(start, end, replacement)
+        val cursorIndex = if (start == end) start + opening.length else start + replacement.length
+        val position = editor.text.indexer.getCharPosition(cursorIndex)
+        editor.setSelection(position.line, position.column)
+        editor.requestFocus()
+        editor.showSoftInput()
+    }
+
+    private fun moveCursor(movement: SelectionMovement) {
+        if (!editor.isShown) return
+        editor.moveSelection(movement)
         editor.requestFocus()
         editor.showSoftInput()
     }
@@ -247,6 +281,19 @@ class EditorActivity : AppCompatActivity() {
             }
             R.id.action_save_as -> {
                 saveActiveDocumentAs()
+                true
+            }
+            R.id.action_find_replace -> {
+                if (editor.isShown) {
+                    editor.beginSearchMode()
+                } else {
+                    toast(getString(R.string.no_active_document))
+                }
+                true
+            }
+            R.id.action_word_wrap -> {
+                editor.isWordwrap = !editor.isWordwrap
+                item.isChecked = editor.isWordwrap
                 true
             }
             R.id.action_projects -> {
