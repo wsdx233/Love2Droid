@@ -14,6 +14,10 @@ object ProotRuntime {
         "/opt/lua-language-server/meta/3rd/love2d/library"
     private const val OMP_GUEST_PATH = "/root/.local/bin/omp"
     private const val OMP_BASHRC_ENTRY = "export PATH=\"/root/.local/bin:\$PATH\""
+    internal const val BASH_PROMPT_GUEST_PATH = "/root/.local/share/bash-prompt/prompt.sh"
+    internal const val BASH_PROMPT_BASHRC_SOURCE = ". /root/.local/share/bash-prompt/prompt.sh"
+    internal const val BASH_PROMPT_DIRTRIM_ENTRY = "PROMPT_DIRTRIM=1"
+    internal const val BASH_PROMPT_PS1_ENTRY = "PS1=\"\$(prompt_get_ps1)\""
     private const val READY_MARKER_NAME = ".setup-complete"
 
     data class LaunchSpec(
@@ -53,7 +57,8 @@ object ProotRuntime {
             rootfsDir(context).isDirectory &&
             readyMarker(context).isFile &&
             luaLanguageServer(context).isFile &&
-            isOmpReady(context)
+            isOmpReady(context) &&
+            isBashPromptReady(context)
     }
 
     fun ompBinary(context: Context): File =
@@ -68,6 +73,27 @@ object ProotRuntime {
             bashrc.isFile &&
             bashrc.useLines { lines -> lines.any { it.trim() == OMP_BASHRC_ENTRY } }
     }
+    fun bashPromptScript(context: Context): File =
+        File(rootfsDir(context), BASH_PROMPT_GUEST_PATH.removePrefix("/"))
+
+    fun isBashPromptReady(context: Context): Boolean {
+        val bashrc = rootBashrc(context)
+        if (!bashPromptScript(context).isFile || !bashrc.isFile) return false
+        var hasSource = false
+        var hasDirTrim = false
+        var hasPrompt = false
+        bashrc.useLines { lines ->
+            lines.forEach { line ->
+                when (line.trim()) {
+                    BASH_PROMPT_BASHRC_SOURCE -> hasSource = true
+                    BASH_PROMPT_DIRTRIM_ENTRY -> hasDirTrim = true
+                    BASH_PROMPT_PS1_ENTRY -> hasPrompt = true
+                }
+            }
+        }
+        return hasSource && hasDirTrim && hasPrompt
+    }
+
 
     fun terminalLaunch(context: Context, projectRoot: File?): TerminalLaunchSpec {
         check(isEnvironmentReady(context)) { "Proot environment is not ready" }

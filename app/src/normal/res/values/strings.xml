@@ -63,8 +63,9 @@
     <string name="proot_install_configuring">正在配置 Ubuntu proot 环境…</string>
     <string name="proot_install_packages">正在 Ubuntu 中安装 Lua Language Server…</string>
     <string name="proot_install_omp">正在安装 omp…</string>
-    <string name="proot_install_verifying">正在验证 Lua Language Server 与 omp…</string>
-    <string name="proot_install_done">Ubuntu proot、Lua Language Server 与 omp 已安装完成</string>
+    <string name="proot_install_bash_prompt">正在安装 bash-prompt 美化插件并缩短目录提示…</string>
+    <string name="proot_install_verifying">正在验证 Lua Language Server、omp 与 bash-prompt…</string>
+    <string name="proot_install_done">Ubuntu proot、Lua Language Server、omp 与 bash-prompt 已安装完成</string>
     <string name="proot_install_failed">安装失败：%1$s</string>
     <string name="proot_log_library_path">使用 APK native 库：%1$s</string>
     <string name="proot_log_rootfs_reused">复用已解压的 Ubuntu Base。</string>
@@ -76,6 +77,9 @@
     <string name="proot_log_completed">安装流程全部完成。</string>
     <string name="proot_log_permissions_repaired">已修复 Ubuntu 可执行文件权限。</string>
     <string name="proot_log_lsp_reused">复用已安装的 Lua Language Server。</string>
+    <string name="proot_log_bash_prompt_installed">bash-prompt 已安装并启用，目录提示已缩短。</string>
+    <string name="proot_log_bash_prompt_reused">复用已安装并启用的 bash-prompt。</string>
+    <string name="proot_log_omp_reused">复用已安装并配置好的 omp。</string>
     <string name="proot_log_omp_installed">omp 已安装到 /root/.local/bin，并已写入 ~/.bashrc。</string>
     <string name="proot_log_failed">安装失败：%1$s</string>
     <string name="lua_lsp_connection_failed">Lua Language Server 连接失败：%1$s</string>

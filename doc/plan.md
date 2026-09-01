@@ -350,17 +350,17 @@ app/src/main/java/top/wsdx233/love2droid/runtime/
 
 - 单 App module，LÖVE native runtime 与编辑器同 APK；不先拆成复杂多模块。
 - Play 使用 `.love` 临时快照 + `FileProvider` content URI；不申请广泛存储权限。
-- arm64 首次启动安装 Ubuntu Base 24.04.4、proot 和 LuaLS；文件与终端共用多标签栏；Lua 文件启用完整 LSP 客户端；新建项目自动生成 `.luarc.json`，加载 LuaJIT 和 LuaLS 内置 LÖVE 11.5 API library。
+- arm64 首次启动安装 Ubuntu Base 24.04.4、proot、LuaLS、omp 和 bash-prompt；文件与终端共用多标签栏；Lua 文件启用完整 LSP 客户端；新建项目自动生成 `.luarc.json`，加载 LuaJIT 和 LuaLS 内置 LÖVE 11.5 API library。bash-prompt 默认启用 `PROMPT_DIRTRIM=1`，避免终端目录显示完整的 Android/data 长路径。
 - 初始语法高亮覆盖 Lua、Java、Kotlin、JavaScript/TypeScript、Python、HTML、XML、Markdown、JSON、CSS、Shell；无 grammar 时纯文本回退。
 - 长按提供常见文件操作；区间选择限定为同一父目录的可见同级节点。
-- arm64 首次启动安装 Ubuntu Base 24.04.4、proot 和 LuaLS；文件与终端共用多标签栏；Lua 文件启用完整 LSP 客户端。
-- 调试器、Git、云同步和插件系统仍不在当前阶段。
+- arm64 首次启动安装 Ubuntu Base 24.04.4、proot、LuaLS、omp 和 bash-prompt；文件与终端共用多标签栏；Lua 文件启用完整 LSP 客户端；终端目录提示默认只保留末级目录。
+- 调试器、Git、云同步和通用插件系统仍不在当前阶段。
 
 本文件随实现状态维护；后续变更以用户最新要求为准。
 
 ## 11. 当前实现状态
 
-基础框架已实现：LÖVE Android runtime、应用专属项目目录与项目管理、Drawer 单目录文件浏览器及文件操作、Sora Editor、文件/终端混合多标签、Termux 终端快捷键栏、arm64 proot、Ubuntu Base 首次安装流程、LuaLS 编辑器接入、TextMate 语法资源注册、`.love` 打包与 Play 启动链路。
+基础框架已实现：LÖVE Android runtime、应用专属项目目录与项目管理、Drawer 单目录文件浏览器及文件操作、Sora Editor、文件/终端混合多标签、Termux 终端快捷键栏、arm64 proot、Ubuntu Base 首次安装流程、LuaLS 编辑器接入、TextMate 语法资源注册、`.love` 打包与 Play 启动链路；首次安装还会固定版本下载并启用 bash-prompt，将终端目录提示缩短为末级目录。
 
 后续界面调整以用户最新要求为准：标签栏高度为 24dp；标签宽度随文件名自适应；文件名超过 15 个字符时显示前 15 个字符和 `...`；标签、关闭按钮和新建按钮均使用波纹反馈；活动标签底线使用主题色，其他标签使用灰色。该调整覆盖第 4.1 节原有的通用触控目标建议。
 

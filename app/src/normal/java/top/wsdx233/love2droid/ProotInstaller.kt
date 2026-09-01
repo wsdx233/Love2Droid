@@ -40,6 +40,10 @@ private const val LUA_LS_URL =
 private const val LUA_LS_SHA256 =
     "abd2572e8fc929dc838a81ffb8473c5bce0bf39bfe8edb4b120b3b623176ce83"
 private const val OMP_INSTALL_URL = "https://omp.sh/install"
+private const val BASH_PROMPT_URL =
+    "https://raw.githubusercontent.com/Freed-Wu/bash-prompt/524ee94882449ff56fdd8a3bc7ae718ec78e4ed2/prompt.sh"
+private const val BASH_PROMPT_SHA256 =
+    "2ae4ed25865111035b5e15c53ead9b10af7bcd731d7cb237d04aaf53d74c03e6"
 
 
 data class ProotInstallState(
@@ -125,7 +129,17 @@ object ProotInstaller {
                     } else {
                         installLuaLanguageServer(appContext)
                     }
-                    installOmp(appContext)
+                    if (ProotRuntime.isOmpReady(appContext)) {
+                        appendLog(appContext.getString(R.string.proot_log_omp_reused))
+                    } else {
+                        installOmp(appContext)
+                    }
+                    if (ProotRuntime.isBashPromptReady(appContext)) {
+                        appendLog(appContext.getString(R.string.proot_log_bash_prompt_reused))
+                    } else {
+                        installBashPrompt(appContext)
+                    }
+
                     writeReadyMarker(appContext)
                     File(appContext.cacheDir, "proot/$UBUNTU_BASE_FILE").delete()
                     update(
@@ -468,10 +482,58 @@ object ProotInstaller {
         }
         update(
             ProotInstallState.Status.INSTALLING,
-            97,
+            90,
             context.getString(R.string.proot_install_verifying),
         )
         appendLog(context.getString(R.string.proot_log_omp_installed))
+    }
+
+    private fun installBashPrompt(context: Context) {
+        update(
+            ProotInstallState.Status.INSTALLING,
+            92,
+            context.getString(R.string.proot_install_bash_prompt),
+        )
+        val script = """
+            set -eu
+            export HOME=/root
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update
+            apt-get install -y --no-install-recommends ncurses-bin
+            plugin_dir=/root/.local/share/bash-prompt
+            plugin_file="${'$'}plugin_dir/prompt.sh"
+            plugin_tmp="${'$'}plugin_dir/.prompt.sh.part"
+            mkdir -p "${'$'}plugin_dir"
+            rm -f "${'$'}plugin_tmp"
+            curl --fail --location --retry 3 '$BASH_PROMPT_URL' -o "${'$'}plugin_tmp"
+            test -s "${'$'}plugin_tmp"
+            printf '%s  %s\n' '${BASH_PROMPT_SHA256}' "${'$'}plugin_tmp" | sha256sum -c -
+            bash -n "${'$'}plugin_tmp"
+            chmod 0644 "${'$'}plugin_tmp"
+            mv -f "${'$'}plugin_tmp" "${'$'}plugin_file"
+            mkdir -p /root
+            touch /root/.bashrc
+            if ! grep -Fqx '${ProotRuntime.BASH_PROMPT_BASHRC_SOURCE}' /root/.bashrc; then
+                printf '\n${ProotRuntime.BASH_PROMPT_BASHRC_SOURCE}\n' >> /root/.bashrc
+            fi
+            if ! grep -Fqx '${ProotRuntime.BASH_PROMPT_DIRTRIM_ENTRY}' /root/.bashrc; then
+                printf '${ProotRuntime.BASH_PROMPT_DIRTRIM_ENTRY}\n' >> /root/.bashrc
+            fi
+            if ! grep -Fqx '${ProotRuntime.BASH_PROMPT_PS1_ENTRY}' /root/.bashrc; then
+                printf '${ProotRuntime.BASH_PROMPT_PS1_ENTRY}\n' >> /root/.bashrc
+            fi
+            test -s "${'$'}plugin_file"
+        """.trimIndent()
+        runProotCommand(context, script)
+        check(ProotRuntime.isBashPromptReady(context)) {
+            "bash-prompt was not installed or enabled"
+        }
+        update(
+            ProotInstallState.Status.INSTALLING,
+            97,
+            context.getString(R.string.proot_install_verifying),
+        )
+        appendLog(context.getString(R.string.proot_log_bash_prompt_installed))
     }
 
     private fun runProotCommand(context: Context, script: String) {
@@ -496,10 +558,9 @@ object ProotInstaller {
 
     private fun writeReadyMarker(context: Context) {
         ProotRuntime.readyMarker(context).writeText(
-            "ubuntu=24.04.4\nlua-language-server=$LUA_LS_VERSION\nomp=/root/.local/bin/omp\nabi=${ProotRuntime.SUPPORTED_ABI}\n",
+            "ubuntu=24.04.4\nlua-language-server=$LUA_LS_VERSION\nomp=/root/.local/bin/omp\nbash-prompt=524ee94882449ff56fdd8a3bc7ae718ec78e4ed2\nabi=${ProotRuntime.SUPPORTED_ABI}\n",
         )
     }
-
     private fun replaceTextFile(file: File, content: String) {
         file.parentFile?.mkdirs()
         file.delete()
