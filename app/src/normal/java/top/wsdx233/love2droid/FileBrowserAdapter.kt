@@ -120,7 +120,7 @@ class FileBrowserAdapter(
                             downX = event.x
                             downY = event.y
                             swiping = false
-                            itemView.parent.requestDisallowInterceptTouchEvent(true)
+                            itemView.parent?.requestDisallowInterceptTouchEvent(true)
                             false
                         }
                         MotionEvent.ACTION_MOVE -> {
@@ -131,7 +131,7 @@ class FileBrowserAdapter(
                                 swiping = true
                                 itemView.cancelLongPress()
                                 itemView.isPressed = false
-                                itemView.parent.requestDisallowInterceptTouchEvent(true)
+                                itemView.parent?.requestDisallowInterceptTouchEvent(true)
                             }
                             if (swiping) {
                                 val limit = MAX_SWIPE_OFFSET_DP * density
@@ -140,7 +140,7 @@ class FileBrowserAdapter(
                                 true
                             } else {
                                 if (abs(dy) > touchSlop) {
-                                    itemView.parent.requestDisallowInterceptTouchEvent(false)
+                                    itemView.parent?.requestDisallowInterceptTouchEvent(false)
                                 }
                                 false
                             }
