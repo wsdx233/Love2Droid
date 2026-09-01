@@ -3,6 +3,7 @@ package top.wsdx233.love2droid
 import android.content.Context
 import android.os.Build
 import android.os.Process
+import android.system.Os
 import org.json.JSONObject
 import java.io.File
 object ProotRuntime {
@@ -13,6 +14,9 @@ object ProotRuntime {
     internal const val LUA_LSP_LOVE_LIBRARY_GUEST_PATH =
         "/opt/lua-language-server/meta/3rd/love2d/library"
     private const val OMP_GUEST_PATH = "/root/.local/bin/omp"
+    private const val OMP_SESSIONS_GUEST_ROOT = "/root/.omp/agent/sessions"
+    private const val OMP_TERMINAL_SESSIONS_HOST_PATH = "root/.omp/agent/terminal-sessions"
+    private const val OMP_TERMINAL_BREADCRUMB_MAX_BYTES = 4L * 1024
     private const val OMP_BASHRC_ENTRY = "export PATH=\"/root/.local/bin:\$PATH\""
     internal const val BASH_PROMPT_GUEST_PATH = "/root/.local/share/bash-prompt/prompt.sh"
     internal const val BASH_PROMPT_BASHRC_SOURCE = ". /root/.local/share/bash-prompt/prompt.sh"
@@ -83,6 +87,32 @@ object ProotRuntime {
             .takeIf { it.isNotEmpty() && it.length <= 256 && it.all { char -> char.isLetterOrDigit() || char in "-_.:" } }
     }
 
+    internal fun ompTerminalIdFromTtyPath(ttyPath: String): String? {
+        if (!ttyPath.startsWith("/dev/")) return null
+        return ttyPath.removePrefix("/dev/")
+            .replace('/', '-')
+            .takeIf { terminalId ->
+                terminalId.isNotEmpty() && terminalId.length <= 128 &&
+                    terminalId.all { it.isLetterOrDigit() || it in "-_." }
+            }
+    }
+
+    internal fun ompSessionIdFromTerminalBreadcrumb(
+        content: String,
+        expectedDirectory: String,
+    ): String? {
+        val lines = content.lineSequence()
+            .take(2)
+            .map { it.removeSuffix("\r") }
+            .toList()
+        if (lines.size < 2 || lines[0] != expectedDirectory) return null
+        val relativePath = lines[1].removePrefix("$OMP_SESSIONS_GUEST_ROOT/")
+        if (relativePath == lines[1]) return null
+        val parts = relativePath.split('/')
+        if (parts.size != 2 || parts.any { it.isEmpty() || it == "." || it == ".." }) return null
+        return ompSessionIdFromFileName(parts.last())
+    }
+
     fun ompSessionFiles(context: Context): List<File> {
         val sessionsRoot = File(rootfsDir(context), "root/.omp/agent/sessions")
         return sessionsRoot.listFiles()
@@ -105,8 +135,12 @@ object ProotRuntime {
         workingDirectory: File?,
         notBeforeMillis: Long,
         excludedSessionIds: Set<String> = emptySet(),
+        terminalPid: Int = 0,
     ): String? {
         val expectedDirectory = workingDirectory?.canonicalFile?.path ?: "/root"
+        findOmpSessionIdFromTerminalBreadcrumb(context, terminalPid, expectedDirectory)
+            ?.takeUnless { it in excludedSessionIds }
+            ?.let { return it }
         return ompSessionFiles(context)
             .asSequence()
             .filter { it.lastModified() >= notBeforeMillis - OMP_SESSION_MTIME_TOLERANCE_MS }
@@ -117,6 +151,27 @@ object ProotRuntime {
                 if (cwd == expectedDirectory) id else null
             }
             .firstOrNull()
+    }
+
+    private fun findOmpSessionIdFromTerminalBreadcrumb(
+        context: Context,
+        terminalPid: Int,
+        expectedDirectory: String,
+    ): String? {
+        if (terminalPid <= 0) return null
+        val ttyPath = runCatching { Os.readlink("/proc/$terminalPid/fd/0") }.getOrNull() ?: return null
+        val terminalId = ompTerminalIdFromTtyPath(ttyPath) ?: return null
+        val breadcrumb = File(rootfsDir(context), "$OMP_TERMINAL_SESSIONS_HOST_PATH/$terminalId")
+        if (!breadcrumb.isFile || breadcrumb.length() !in 1..OMP_TERMINAL_BREADCRUMB_MAX_BYTES) return null
+        val content = runCatching { breadcrumb.readText(Charsets.UTF_8) }.getOrNull() ?: return null
+        val guestSessionPath = content.lineSequence().drop(1).firstOrNull()?.removeSuffix("\r") ?: return null
+        val relativeSessionPath = guestSessionPath.removePrefix("$OMP_SESSIONS_GUEST_ROOT/")
+        if (relativeSessionPath == guestSessionPath) return null
+        val pathParts = relativeSessionPath.split('/')
+        if (pathParts.size != 2 || pathParts.any { it.isEmpty() || it == "." || it == ".." }) return null
+        if (!File(rootfsDir(context), "root/.omp/agent/sessions/$relativeSessionPath").isFile) return null
+        return ompSessionIdFromTerminalBreadcrumb(content, expectedDirectory)
+
     }
     private fun readOmpSessionCwd(file: File): String? {
         return runCatching {

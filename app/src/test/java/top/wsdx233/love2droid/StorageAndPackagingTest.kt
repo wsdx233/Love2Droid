@@ -104,4 +104,20 @@ class StorageAndPackagingTest {
         assertEquals(null, ProotRuntime.ompSessionIdFromFileName("not-a-session.txt"))
         assertEquals(null, ProotRuntime.ompSessionIdFromFileName("session.jsonl"))
     }
+
+    @Test
+    fun ompSessionIdComesFromMatchingTerminalBreadcrumb() {
+        val cwd = "/data/user/0/top.wsdx233.love2droid/files/projects/demo"
+        val sessionId = "01a05bf3-0bc9-7147-af78-4c97af3c1e74"
+        val breadcrumb = buildString {
+            appendLine(cwd)
+            appendLine("/root/.omp/agent/sessions/--demo--/2026-09-01T07-50-50-057Z_$sessionId.jsonl")
+            appendLine("fresh")
+        }
+
+        assertEquals(sessionId, ProotRuntime.ompSessionIdFromTerminalBreadcrumb(breadcrumb, cwd))
+        assertEquals(null, ProotRuntime.ompSessionIdFromTerminalBreadcrumb(breadcrumb, "/root"))
+        assertEquals("pts-7", ProotRuntime.ompTerminalIdFromTtyPath("/dev/pts/7"))
+        assertEquals(null, ProotRuntime.ompTerminalIdFromTtyPath("/proc/self/fd/0"))
+    }
 }

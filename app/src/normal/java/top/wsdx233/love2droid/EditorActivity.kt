@@ -13,6 +13,7 @@ import android.os.FileObserver
 import android.os.Handler
 import android.os.Looper
 import android.os.Bundle
+import android.os.SystemClock
 import android.text.InputType
 import android.view.Gravity
 import android.util.TypedValue
@@ -125,6 +126,7 @@ class EditorActivity : AppCompatActivity() {
             if (::terminalView.isInitialized && terminalView.mTermSession === changedSession) {
                 terminalView.onScreenUpdated()
             }
+            observeOmpSession(changedSession)
         }
 
         override fun onTitleChanged(changedSession: TerminalSession) {
@@ -138,6 +140,7 @@ class EditorActivity : AppCompatActivity() {
         }
 
         override fun onSessionFinished(finishedSession: TerminalSession) {
+            observeOmpSession(finishedSession)
             editorSession.tabs.filterIsInstance<TerminalTab>()
                 .firstOrNull { it.session === finishedSession }
                 ?.let { tab ->
@@ -162,7 +165,26 @@ class EditorActivity : AppCompatActivity() {
         override fun onBell(session: TerminalSession) = Unit
         override fun onColorsChanged(session: TerminalSession) = Unit
         override fun onTerminalCursorStateChange(state: Boolean) = Unit
-        override fun setTerminalShellPid(session: TerminalSession, pid: Int) = Unit
+        override fun setTerminalShellPid(session: TerminalSession, pid: Int) {
+            val tab = editorSession.tabs.filterIsInstance<TerminalTab>()
+                .firstOrNull { it.session === session }
+                ?: return
+            if (pid <= 0) return
+            tab.shellPid = pid
+            if (tab.pendingStartupCommand != null && tab.isOmp && tab.ompSessionId == null) {
+                tab.ompStartedAtMillis = System.currentTimeMillis()
+            }
+            tab.pendingStartupCommand?.let { command ->
+                tab.pendingStartupCommand = null
+                session.write("$command\n")
+            }
+            if (tab.isOmp && tab.ompSessionId == null) {
+                terminalView.postDelayed(
+                    { observeOmpSession(session) },
+                    OMP_SESSION_DISCOVERY_INTERVAL_MS,
+                )
+            }
+        }
         override fun getTerminalCursorStyle(): Int = 0
         override fun logError(tag: String?, message: String?) = Unit
         override fun logWarn(tag: String?, message: String?) = Unit
@@ -557,7 +579,6 @@ class EditorActivity : AppCompatActivity() {
         title: String? = null,
         selectAfterCreate: Boolean,
     ): Int {
-        val sessionCreatedAt = System.currentTimeMillis()
         val launch = ProotRuntime.terminalLaunch(this, projectRoot)
         val session = TerminalSession(
             launch.executable,
@@ -577,74 +598,79 @@ class EditorActivity : AppCompatActivity() {
                 },
                 ompSessionId = ompSessionId,
                 isOmp = isOmp,
+                pendingStartupCommand = startupCommand,
             ),
         )
         if (selectAfterCreate) selectTab(index)
-        if (!startupCommand.isNullOrBlank()) {
-            sendTerminalStartupCommand(session, index, startupCommand, 0)
-        }
-        if (isOmp && ompSessionId == null) {
-            observeOmpSession(index, session, projectRoot, sessionCreatedAt, 0)
-        }
         return index
     }
 
-    private fun observeOmpSession(
-        index: Int,
-        session: TerminalSession,
-        workingDirectory: File?,
-        notBeforeMillis: Long,
-        attempt: Int,
-    ) {
-        val tab = editorSession.tabs.getOrNull(index) as? TerminalTab
-        if (tab?.session !== session || !tab.isOmp || tab.ompSessionId != null) return
+    private fun observeOmpSession(session: TerminalSession) {
+        val tab = editorSession.tabs.filterIsInstance<TerminalTab>()
+            .firstOrNull { it.session === session }
+            ?: return
+        if (!tab.isOmp || tab.ompSessionId != null) return
+        val now = SystemClock.elapsedRealtime()
+        val elapsed = now - tab.lastOmpSessionDiscoveryAtMillis
+        if (tab.ompSessionDiscoveryInFlight || elapsed < OMP_SESSION_DISCOVERY_INTERVAL_MS) {
+            if (!tab.ompSessionDiscoveryScheduled) {
+                tab.ompSessionDiscoveryScheduled = true
+                terminalView.postDelayed({
+                    tab.ompSessionDiscoveryScheduled = false
+                    observeOmpSession(session)
+                }, (OMP_SESSION_DISCOVERY_INTERVAL_MS - elapsed).coerceAtLeast(1L))
+            }
+            return
+        }
+        tab.lastOmpSessionDiscoveryAtMillis = now
+        tab.ompSessionDiscoveryInFlight = true
+        val workingDirectory = terminalWorkingDirectory(tab)
         val usedSessionIds = editorSession.tabs
             .filterIsInstance<TerminalTab>()
             .mapNotNull { it.ompSessionId }
             .toSet()
         lifecycleScope.launch {
-            val sessionId = withContext(Dispatchers.IO) {
-                ProotRuntime.findOmpSessionId(
-                    this@EditorActivity,
-                    workingDirectory,
-                    notBeforeMillis,
-                    usedSessionIds,
-                )
-            }
-            val claimedByAnotherTab = sessionId != null && editorSession.tabs
-                .filterIsInstance<TerminalTab>()
-                .any { it !== tab && it.ompSessionId == sessionId }
-            if (sessionId != null && !claimedByAnotherTab) {
-                tab.ompSessionId = sessionId
-                persistWorkspace()
-                refreshTabs()
-            } else if (attempt < OMP_SESSION_DISCOVERY_ATTEMPTS) {
-                terminalView.postDelayed(
-                    { observeOmpSession(index, session, workingDirectory, notBeforeMillis, attempt + 1) },
-                    OMP_SESSION_DISCOVERY_INTERVAL_MS,
-                )
+            try {
+                val sessionId = withContext(Dispatchers.IO) {
+                    ProotRuntime.findOmpSessionId(
+                        this@EditorActivity,
+                        workingDirectory,
+                        tab.ompStartedAtMillis,
+                        usedSessionIds,
+                        tab.shellPid,
+                    )
+                }
+                val currentTab = editorSession.tabs.filterIsInstance<TerminalTab>()
+                    .firstOrNull { it.session === session }
+                val claimedByAnotherTab = sessionId != null && editorSession.tabs
+                    .filterIsInstance<TerminalTab>()
+                    .any { it !== tab && it.ompSessionId == sessionId }
+                if (currentTab === tab && sessionId != null && !claimedByAnotherTab) {
+                    tab.ompSessionId = sessionId
+                    persistWorkspace()
+                    refreshTabs()
+                }
+            } finally {
+                tab.ompSessionDiscoveryInFlight = false
+                if (tab.ompSessionDiscoveryScheduled) {
+                    terminalView.post { observeOmpSession(session) }
+                }
             }
         }
     }
+
+    private fun terminalWorkingDirectory(tab: TerminalTab): File? {
+        val project = currentProject ?: return null
+        val relativeDirectory = tab.workingDirectory ?: return null
+        return runCatching { StorageUtils.resolveChild(project.root, relativeDirectory) }
+            .getOrNull()
+            ?.takeIf { it.isDirectory }
+    }
+
     private fun isSafeOmpSessionId(value: String): Boolean {
         return ProotRuntime.ompSessionIdFromFileName("session_$value.jsonl") == value
     }
 
-    private fun sendTerminalStartupCommand(
-        session: TerminalSession,
-        index: Int,
-        command: String,
-        attempt: Int,
-    ) {
-        if ((editorSession.tabs.getOrNull(index) as? TerminalTab)?.session !== session) return
-        if (session.isRunning) {
-            session.write("$command\n")
-        } else if (attempt < 20) {
-            terminalView.postDelayed({
-                sendTerminalStartupCommand(session, index, command, attempt + 1)
-            }, 100L)
-        }
-    }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
     private fun sp(value: Float): Float =
@@ -1715,7 +1741,6 @@ class EditorActivity : AppCompatActivity() {
         private const val MENU_CLEAR_SELECTION = 11
         private const val MENU_REFRESH = 12
         private const val MAX_TAB_NAME_CHARS = 15
-        private const val OMP_SESSION_DISCOVERY_ATTEMPTS = 30
         private const val OMP_SESSION_DISCOVERY_INTERVAL_MS = 500L
         private const val TERMINAL_KEY_COLOR = 0xFF424242.toInt()
         private const val TERMINAL_MODIFIER_COLOR = 0xFF5C6BC0.toInt()
