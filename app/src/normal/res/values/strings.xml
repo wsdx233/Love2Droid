@@ -41,4 +41,5 @@
     <string name="word_wrap">自动换行</string>
     <string name="directory_operations">当前目录操作</string>
     <string name="refresh">刷新</string>
+    <string name="parent_directory">返回上级目录</string>
 </resources>

@@ -17,6 +17,7 @@ data class BrowserItem(
     val relativePath: String,
     val directory: Boolean,
     val childCount: Int,
+    val parentNavigation: Boolean = false,
 )
 
 class FileBrowserAdapter(
@@ -60,14 +61,18 @@ class FileBrowserAdapter(
             icon.setImageDrawable(
                 ContextCompat.getDrawable(
                     context,
-                    if (item.directory) R.drawable.ic_folder else R.drawable.ic_file,
+                    when {
+                        item.parentNavigation -> R.drawable.ic_arrow_back
+                        item.directory -> R.drawable.ic_folder
+                        else -> R.drawable.ic_file
+                    },
                 ),
             )
-            name.text = item.file.name
-            summary.text = if (item.directory) {
-                "${item.childCount} 项"
-            } else {
-                "${LanguageResolver.displayName(item.file)} · ${StorageUtils.formatBytes(item.file.length())}"
+            name.text = if (item.parentNavigation) ".." else item.file.name
+            summary.text = when {
+                item.parentNavigation -> context.getString(R.string.parent_directory)
+                item.directory -> "${item.childCount} 项"
+                else -> "${LanguageResolver.displayName(item.file)} · ${StorageUtils.formatBytes(item.file.length())}"
             }
             itemView.setBackgroundColor(
                 ContextCompat.getColor(
@@ -76,60 +81,65 @@ class FileBrowserAdapter(
                 ),
             )
             itemView.setOnClickListener { onClick(item) }
-            itemView.setOnLongClickListener {
-                onLongClick(item, itemView)
-                true
-            }
-            itemView.setOnTouchListener { _, event ->
-                val dx = event.x - downX
-                val dy = event.y - downY
-                when (event.actionMasked) {
-                    MotionEvent.ACTION_DOWN -> {
-                        itemView.animate().cancel()
-                        itemView.translationX = 0f
-                        downX = event.x
-                        downY = event.y
-                        swiping = false
-                        itemView.parent.requestDisallowInterceptTouchEvent(true)
-                        false
-                    }
-                    MotionEvent.ACTION_MOVE -> {
-                        if (!swiping &&
-                            abs(dx) > touchSlop &&
-                            isHorizontalSwipe(dx, dy)
-                        ) {
-                            swiping = true
-                            itemView.cancelLongPress()
-                            itemView.isPressed = false
+            if (item.parentNavigation) {
+                itemView.setOnLongClickListener(null)
+                itemView.setOnTouchListener(null)
+            } else {
+                itemView.setOnLongClickListener {
+                    onLongClick(item, itemView)
+                    true
+                }
+                itemView.setOnTouchListener { _, event ->
+                    val dx = event.x - downX
+                    val dy = event.y - downY
+                    when (event.actionMasked) {
+                        MotionEvent.ACTION_DOWN -> {
+                            itemView.animate().cancel()
+                            itemView.translationX = 0f
+                            downX = event.x
+                            downY = event.y
+                            swiping = false
                             itemView.parent.requestDisallowInterceptTouchEvent(true)
-                        }
-                        if (swiping) {
-                            val limit = MAX_SWIPE_OFFSET_DP * density
-                            val resistedOffset = abs(dx).coerceAtMost(limit) * dx.sign
-                            itemView.translationX = resistedOffset
-                            true
-                        } else {
-                            if (abs(dy) > touchSlop) {
-                                itemView.parent.requestDisallowInterceptTouchEvent(false)
-                            }
                             false
                         }
+                        MotionEvent.ACTION_MOVE -> {
+                            if (!swiping &&
+                                abs(dx) > touchSlop &&
+                                isHorizontalSwipe(dx, dy)
+                            ) {
+                                swiping = true
+                                itemView.cancelLongPress()
+                                itemView.isPressed = false
+                                itemView.parent.requestDisallowInterceptTouchEvent(true)
+                            }
+                            if (swiping) {
+                                val limit = MAX_SWIPE_OFFSET_DP * density
+                                val resistedOffset = abs(dx).coerceAtMost(limit) * dx.sign
+                                itemView.translationX = resistedOffset
+                                true
+                            } else {
+                                if (abs(dy) > touchSlop) {
+                                    itemView.parent.requestDisallowInterceptTouchEvent(false)
+                                }
+                                false
+                            }
+                        }
+                        MotionEvent.ACTION_UP -> {
+                            val completed = swiping &&
+                                abs(dx) >= SWIPE_TRIGGER_DP * density &&
+                                isHorizontalSwipe(dx, dy)
+                            val handled = swiping
+                            finishSwipe()
+                            if (completed) onSwipe(item)
+                            handled
+                        }
+                        MotionEvent.ACTION_CANCEL -> {
+                            val handled = swiping
+                            finishSwipe()
+                            handled
+                        }
+                        else -> false
                     }
-                    MotionEvent.ACTION_UP -> {
-                        val completed = swiping &&
-                            abs(dx) >= SWIPE_TRIGGER_DP * density &&
-                            isHorizontalSwipe(dx, dy)
-                        val handled = swiping
-                        finishSwipe()
-                        if (completed) onSwipe(item)
-                        handled
-                    }
-                    MotionEvent.ACTION_CANCEL -> {
-                        val handled = swiping
-                        finishSwipe()
-                        handled
-                    }
-                    else -> false
                 }
             }
         }

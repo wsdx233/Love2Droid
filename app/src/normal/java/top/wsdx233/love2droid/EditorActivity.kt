@@ -367,13 +367,28 @@ class EditorActivity : AppCompatActivity() {
         }
     }
 
-    private fun listDirectory(root: File, directory: File): List<BrowserItem> {
-        return directory.listFiles()
+    private fun listDirectory(root: File, directory: File): List<BrowserItem> = buildList {
+        if (StorageUtils.relativePath(root, directory).isNotBlank()) {
+            directory.parentFile
+                ?.takeIf { it.isDirectory && StorageUtils.isWithin(root, it) }
+                ?.let { parent ->
+                    add(
+                        BrowserItem(
+                            file = parent,
+                            relativePath = StorageUtils.relativePath(root, parent),
+                            directory = true,
+                            childCount = 0,
+                            parentNavigation = true,
+                        ),
+                    )
+                }
+        }
+        directory.listFiles()
             ?.asSequence()
             ?.filter { it.name != StorageUtils.METADATA_FILE }
             ?.filter { StorageUtils.isWithin(root, it) }
             ?.sortedWith(compareBy<File> { !it.isDirectory }.thenBy { it.name.lowercase() })
-            ?.map { child ->
+            ?.forEach { child ->
                 val childCount = if (child.isDirectory) {
                     child.listFiles()?.count {
                         it.name != StorageUtils.METADATA_FILE && StorageUtils.isWithin(root, it)
@@ -381,15 +396,15 @@ class EditorActivity : AppCompatActivity() {
                 } else {
                     0
                 }
-                BrowserItem(
-                    file = child,
-                    relativePath = StorageUtils.relativePath(root, child),
-                    directory = child.isDirectory,
-                    childCount = childCount,
+                add(
+                    BrowserItem(
+                        file = child,
+                        relativePath = StorageUtils.relativePath(root, child),
+                        directory = child.isDirectory,
+                        childCount = childCount,
+                    ),
                 )
             }
-            ?.toList()
-            .orEmpty()
     }
 
     private fun updateDirectoryHeader() {
@@ -450,7 +465,9 @@ class EditorActivity : AppCompatActivity() {
     }
 
     private fun onBrowserItemClicked(item: BrowserItem) {
-        if (selectionMode) {
+        if (item.parentNavigation) {
+            navigateToDirectory(item.file)
+        } else if (selectionMode) {
             toggleSelection(item)
         } else {
             openBrowserItem(item)
