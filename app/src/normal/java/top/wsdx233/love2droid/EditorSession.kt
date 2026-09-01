@@ -20,6 +20,9 @@ class EditorTab(
 class TerminalTab(
     val session: TerminalSession,
     var title: String,
+    val workingDirectory: String? = null,
+    var ompSessionId: String? = null,
+    val isOmp: Boolean = false,
 ) : WorkspaceTab
 
 class EditorSession {

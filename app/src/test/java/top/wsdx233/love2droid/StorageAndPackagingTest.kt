@@ -93,4 +93,15 @@ class StorageAndPackagingTest {
 
         assertFalse(logged)
     }
+    @Test
+    fun ompSessionIdComesFromGeneratedTranscriptName() {
+        assertEquals(
+            "01a05bf3-0bc9-7147-af78-4c97af3c1e74",
+            ProotRuntime.ompSessionIdFromFileName(
+                "2026-09-01T07-50-50-057Z_01a05bf3-0bc9-7147-af78-4c97af3c1e74.jsonl",
+            ),
+        )
+        assertEquals(null, ProotRuntime.ompSessionIdFromFileName("not-a-session.txt"))
+        assertEquals(null, ProotRuntime.ompSessionIdFromFileName("session.jsonl"))
+    }
 }

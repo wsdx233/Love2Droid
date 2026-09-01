@@ -3,11 +3,11 @@ package top.wsdx233.love2droid
 import android.content.Context
 import android.os.Build
 import android.os.Process
+import org.json.JSONObject
 import java.io.File
-
 object ProotRuntime {
     const val SUPPORTED_ABI = "arm64-v8a"
-
+    private const val OMP_SESSION_MTIME_TOLERANCE_MS = 2_000L
     private const val PROOT_LIBRARY_NAME = "libproot.so"
     private const val LUA_LANGUAGE_SERVER_GUEST_PATH = "/opt/lua-language-server/bin/lua-language-server"
     internal const val LUA_LSP_LOVE_LIBRARY_GUEST_PATH =
@@ -70,7 +70,65 @@ object ProotRuntime {
             .firstOrNull(File::isFile)
             ?: File(directory, "models.yml")
     }
+    /**
+     * OMP names its top-level transcript `<timestamp>_<session-id>.jsonl`.
+     * Read only the generated filename; do not invent an ID that `-r` cannot resume.
+     */
+    internal fun ompSessionIdFromFileName(name: String): String? {
+        if (!name.endsWith(".jsonl")) return null
+        val stem = name.removeSuffix(".jsonl")
+        val separator = stem.lastIndexOf('_')
+        if (separator < 0 || separator == stem.lastIndex) return null
+        return stem.substring(separator + 1)
+            .takeIf { it.isNotEmpty() && it.length <= 256 && it.all { char -> char.isLetterOrDigit() || char in "-_.:" } }
+    }
 
+    fun ompSessionFiles(context: Context): List<File> {
+        val sessionsRoot = File(rootfsDir(context), "root/.omp/agent/sessions")
+        return sessionsRoot.listFiles()
+            ?.asSequence()
+            ?.filter(File::isDirectory)
+            ?.flatMap { directory ->
+                directory.listFiles()
+                    ?.asSequence()
+                    ?.filter { it.isFile && it.name.endsWith(".jsonl") }
+                    ?: emptySequence()
+            }
+            ?.sortedByDescending(File::lastModified)
+            ?.toList()
+            ?: emptyList()
+    }
+
+    /** Finds a newly created OMP session for this terminal's working directory. */
+    fun findOmpSessionId(
+        context: Context,
+        workingDirectory: File?,
+        notBeforeMillis: Long,
+        excludedSessionIds: Set<String> = emptySet(),
+    ): String? {
+        val expectedDirectory = workingDirectory?.canonicalFile?.path ?: "/root"
+        return ompSessionFiles(context)
+            .asSequence()
+            .filter { it.lastModified() >= notBeforeMillis - OMP_SESSION_MTIME_TOLERANCE_MS }
+            .mapNotNull { file ->
+                val id = ompSessionIdFromFileName(file.name) ?: return@mapNotNull null
+                if (id in excludedSessionIds) return@mapNotNull null
+                val cwd = readOmpSessionCwd(file) ?: return@mapNotNull null
+                if (cwd == expectedDirectory) id else null
+            }
+            .firstOrNull()
+    }
+    private fun readOmpSessionCwd(file: File): String? {
+        return runCatching {
+            file.bufferedReader(Charsets.UTF_8).useLines { lines ->
+                lines.take(8)
+                    .mapNotNull { line -> runCatching { JSONObject(line) }.getOrNull() }
+                    .firstOrNull { it.optString("type") == "session" }
+                    ?.optString("cwd")
+                    ?.takeIf { it.isNotBlank() }
+            }
+        }.getOrNull()
+    }
     fun rootBashrc(context: Context): File =
         File(rootfsDir(context), "root/.bashrc")
 

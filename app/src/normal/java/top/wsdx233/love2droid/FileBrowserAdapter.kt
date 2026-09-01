@@ -7,6 +7,7 @@ import android.widget.ImageView
 import android.widget.TextView
 import android.view.animation.DecelerateInterpolator
 import androidx.core.content.ContextCompat
+import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
 import java.io.File
 import kotlin.math.abs
@@ -29,9 +30,29 @@ class FileBrowserAdapter(
     private var selectedPaths: Set<String> = emptySet()
 
     fun submitItems(newItems: List<BrowserItem>, selected: Set<String>) {
-        items = newItems
-        selectedPaths = selected
-        notifyDataSetChanged()
+        val oldItems = items
+        val oldSelected = selectedPaths
+        items = newItems.toList()
+        selectedPaths = selected.toSet()
+        DiffUtil.calculateDiff(object : DiffUtil.Callback() {
+            override fun getOldListSize(): Int = oldItems.size
+            override fun getNewListSize(): Int = items.size
+
+            override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
+                return oldItems[oldItemPosition].relativePath == items[newItemPosition].relativePath
+            }
+
+            override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
+                return oldItems[oldItemPosition] == items[newItemPosition]
+            }
+        }).dispatchUpdatesTo(this)
+        items.forEachIndexed { index, item ->
+            if (oldSelected.contains(item.relativePath) != selectedPaths.contains(item.relativePath) &&
+                oldItems.any { it.relativePath == item.relativePath }
+            ) {
+                notifyItemChanged(index)
+            }
+        }
     }
 
     override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): BrowserHolder {

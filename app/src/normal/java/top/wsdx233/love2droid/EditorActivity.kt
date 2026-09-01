@@ -9,6 +9,9 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
+import android.os.FileObserver
+import android.os.Handler
+import android.os.Looper
 import android.os.Bundle
 import android.text.InputType
 import android.view.Gravity
@@ -99,6 +102,11 @@ class EditorActivity : AppCompatActivity() {
     private lateinit var drawerTopInset: View
     private var textMateReady = false
     private var lspJob: Job? = null
+    private var workspaceRestoreJob: Job? = null
+    private var directoryObserver: FileObserver? = null
+    private var directoryRefreshGeneration = 0L
+    private val directoryRefreshHandler = Handler(Looper.getMainLooper())
+    private val directoryRefreshRunnable = Runnable { refreshFileList() }
     private var terminalCounter = 0
     private var ctrlPressed = false
     private var altPressed = false
@@ -512,20 +520,44 @@ class EditorActivity : AppCompatActivity() {
         editor.requestFocus()
         editor.showSoftInput()
     }
-
     private fun newDocument() {
         captureEditorState()
         val index = editorSession.add(EditorTab(null, "", null))
         selectTab(index)
     }
 
-    private fun newTerminal(startupCommand: String? = null) {
+    private fun newOmp() {
+        newTerminal(startupCommand = "omp", isOmp = true)
+    }
+
+    private fun newTerminal(
+        startupCommand: String? = null,
+        ompSessionId: String? = null,
+        isOmp: Boolean = false,
+    ) {
         if (!ProotRuntime.isEnvironmentReady(this)) {
             startActivity(Intent(this, SetupActivity::class.java))
             return
         }
-        captureEditorState()
         val projectRoot = currentProject?.root?.takeIf { settings.ompUseProjectDirectory }
+        createTerminalTab(
+            startupCommand = startupCommand,
+            ompSessionId = ompSessionId,
+            isOmp = isOmp,
+            projectRoot = projectRoot,
+            selectAfterCreate = true,
+        )
+    }
+
+    private fun createTerminalTab(
+        startupCommand: String?,
+        ompSessionId: String?,
+        isOmp: Boolean,
+        projectRoot: File?,
+        title: String? = null,
+        selectAfterCreate: Boolean,
+    ): Int {
+        val sessionCreatedAt = System.currentTimeMillis()
         val launch = ProotRuntime.terminalLaunch(this, projectRoot)
         val session = TerminalSession(
             launch.executable,
@@ -535,14 +567,67 @@ class EditorActivity : AppCompatActivity() {
             settings.terminalTranscriptRows,
             terminalSessionClient,
         )
-        terminalCounter += 1
+        if (title == null) terminalCounter += 1
         val index = editorSession.add(
-            TerminalTab(session, getString(R.string.terminal_tab_title, terminalCounter)),
+            TerminalTab(
+                session = session,
+                title = title ?: getString(R.string.terminal_tab_title, terminalCounter),
+                workingDirectory = projectRoot?.let { root ->
+                    currentProject?.let { project -> StorageUtils.relativePath(project.root, root) }
+                },
+                ompSessionId = ompSessionId,
+                isOmp = isOmp,
+            ),
         )
-        selectTab(index)
+        if (selectAfterCreate) selectTab(index)
         if (!startupCommand.isNullOrBlank()) {
             sendTerminalStartupCommand(session, index, startupCommand, 0)
         }
+        if (isOmp && ompSessionId == null) {
+            observeOmpSession(index, session, projectRoot, sessionCreatedAt, 0)
+        }
+        return index
+    }
+
+    private fun observeOmpSession(
+        index: Int,
+        session: TerminalSession,
+        workingDirectory: File?,
+        notBeforeMillis: Long,
+        attempt: Int,
+    ) {
+        val tab = editorSession.tabs.getOrNull(index) as? TerminalTab
+        if (tab?.session !== session || !tab.isOmp || tab.ompSessionId != null) return
+        val usedSessionIds = editorSession.tabs
+            .filterIsInstance<TerminalTab>()
+            .mapNotNull { it.ompSessionId }
+            .toSet()
+        lifecycleScope.launch {
+            val sessionId = withContext(Dispatchers.IO) {
+                ProotRuntime.findOmpSessionId(
+                    this@EditorActivity,
+                    workingDirectory,
+                    notBeforeMillis,
+                    usedSessionIds,
+                )
+            }
+            val claimedByAnotherTab = sessionId != null && editorSession.tabs
+                .filterIsInstance<TerminalTab>()
+                .any { it !== tab && it.ompSessionId == sessionId }
+            if (sessionId != null && !claimedByAnotherTab) {
+                tab.ompSessionId = sessionId
+                persistWorkspace()
+                refreshTabs()
+            } else if (attempt < OMP_SESSION_DISCOVERY_ATTEMPTS) {
+                terminalView.postDelayed(
+                    { observeOmpSession(index, session, workingDirectory, notBeforeMillis, attempt + 1) },
+                    OMP_SESSION_DISCOVERY_INTERVAL_MS,
+                )
+            }
+        }
+    }
+    private fun isSafeOmpSessionId(value: String): Boolean {
+        return ProotRuntime.ompSessionIdFromFileName("session_$value.jsonl") == value
     }
 
     private fun sendTerminalStartupCommand(
@@ -580,7 +665,7 @@ class EditorActivity : AppCompatActivity() {
                 true
             }
             R.id.action_new_omp -> {
-                newTerminal("omp")
+                newOmp()
                 true
             }
             R.id.action_save -> {
@@ -630,6 +715,9 @@ class EditorActivity : AppCompatActivity() {
 
     private fun switchProject(project: Project) {
         if (!saveAllBlocking(requireNamed = true)) return
+        persistWorkspace()
+        workspaceRestoreJob?.cancel()
+        stopDirectoryObserver()
         finishTerminalTabs()
         currentProject = projectRepository.markOpened(project)
         editorSession.clear()
@@ -644,6 +732,69 @@ class EditorActivity : AppCompatActivity() {
         refreshTabs()
         showEmptyEditor()
         refreshFileList()
+        restoreWorkspace(project)
+
+    }
+    private fun refreshFileList() {
+        directoryRefreshGeneration += 1
+        val refreshGeneration = directoryRefreshGeneration
+        val project = currentProject ?: run {
+            stopDirectoryObserver()
+            currentDirectory = null
+            visibleItems = emptyList()
+            drawerProjectTitle.text = getString(R.string.no_project)
+            drawerProjectPath.text = ""
+            drawerDirectoryMenu.isEnabled = false
+            browserAdapter.submitItems(emptyList(), emptySet())
+            return
+        }
+        val directory = currentDirectory
+            ?.takeIf { it.isDirectory && StorageUtils.isWithin(project.root, it) }
+            ?: project.root
+        currentDirectory = directory
+        updateDirectoryHeader()
+        watchCurrentDirectory()
+        lifecycleScope.launch {
+            val items = withContext(Dispatchers.IO) { listDirectory(project.root, directory) }
+            if (currentProject?.id == project.id &&
+                currentDirectory?.absolutePath == directory.absolutePath &&
+                refreshGeneration == directoryRefreshGeneration
+            ) {
+                visibleItems = items
+                selectedPaths.retainAll(items.mapTo(hashSetOf()) { it.relativePath })
+                if (selectedPaths.isEmpty()) selectionMode = false
+                updateSelectionUi()
+            }
+        }
+    }
+
+    private fun watchCurrentDirectory() {
+        val project = currentProject
+        val directory = currentDirectory
+        if (project == null || directory == null || !directory.isDirectory ||
+            !StorageUtils.isWithin(project.root, directory)
+        ) {
+            stopDirectoryObserver()
+            return
+        }
+        directoryObserver?.stopWatching()
+        directoryObserver = object : FileObserver(directory.path, DIRECTORY_WATCH_MASK) {
+            override fun onEvent(event: Int, path: String?) {
+                if (path == StorageUtils.METADATA_FILE ||
+                    path == StorageUtils.WORKSPACE_FILE ||
+                    path?.startsWith("${StorageUtils.METADATA_FILE}.") == true ||
+                    path?.startsWith("${StorageUtils.WORKSPACE_FILE}.") == true
+                ) return
+                directoryRefreshHandler.removeCallbacks(directoryRefreshRunnable)
+                directoryRefreshHandler.postDelayed(directoryRefreshRunnable, DIRECTORY_REFRESH_DEBOUNCE_MS)
+            }
+        }.also { it.startWatching() }
+    }
+
+    private fun stopDirectoryObserver() {
+        directoryObserver?.stopWatching()
+        directoryObserver = null
+        directoryRefreshHandler.removeCallbacks(directoryRefreshRunnable)
     }
 
     private fun showEmptyEditor() {
@@ -662,31 +813,6 @@ class EditorActivity : AppCompatActivity() {
             .forEach { it.session.finishIfRunning() }
     }
 
-    private fun refreshFileList() {
-        val project = currentProject ?: run {
-            currentDirectory = null
-            visibleItems = emptyList()
-            drawerProjectTitle.text = getString(R.string.no_project)
-            drawerProjectPath.text = ""
-            drawerDirectoryMenu.isEnabled = false
-            browserAdapter.submitItems(emptyList(), emptySet())
-            return
-        }
-        val directory = currentDirectory
-            ?.takeIf { it.isDirectory && StorageUtils.isWithin(project.root, it) }
-            ?: project.root
-        currentDirectory = directory
-        updateDirectoryHeader()
-        lifecycleScope.launch {
-            val items = withContext(Dispatchers.IO) { listDirectory(project.root, directory) }
-            if (currentProject?.id == project.id && currentDirectory?.absolutePath == directory.absolutePath) {
-                visibleItems = items
-                selectedPaths.retainAll(items.mapTo(hashSetOf()) { it.relativePath })
-                if (selectedPaths.isEmpty()) selectionMode = false
-                updateSelectionUi()
-            }
-        }
-    }
 
     private fun listDirectory(root: File, directory: File): List<BrowserItem> = buildList {
         if (StorageUtils.relativePath(root, directory).isNotBlank()) {
@@ -706,13 +832,13 @@ class EditorActivity : AppCompatActivity() {
         }
         directory.listFiles()
             ?.asSequence()
-            ?.filter { it.name != StorageUtils.METADATA_FILE }
+            ?.filter { it.name != StorageUtils.METADATA_FILE && it.name != StorageUtils.WORKSPACE_FILE }
             ?.filter { StorageUtils.isWithin(root, it) }
             ?.sortedWith(compareBy<File> { !it.isDirectory }.thenBy { it.name.lowercase() })
             ?.forEach { child ->
                 val childCount = if (child.isDirectory) {
                     child.listFiles()?.count {
-                        it.name != StorageUtils.METADATA_FILE && StorageUtils.isWithin(root, it)
+                        it.name != StorageUtils.METADATA_FILE && it.name != StorageUtils.WORKSPACE_FILE && StorageUtils.isWithin(root, it)
                     } ?: 0
                 } else {
                     0
@@ -1115,6 +1241,136 @@ class EditorActivity : AppCompatActivity() {
         }
     }
 
+    private data class RestoredWorkspaceTab(
+        val originalIndex: Int,
+        val state: WorkspaceTabSnapshot,
+        val file: File?,
+        val text: String?,
+    )
+
+    private fun persistWorkspace() {
+        val project = currentProject ?: return
+        if (workspaceRestoreJob?.isActive == true && editorSession.tabs.isEmpty()) return
+        captureEditorState()
+        val directory = currentDirectory
+            ?.takeIf { it.isDirectory && StorageUtils.isWithin(project.root, it) }
+            ?.let { runCatching { StorageUtils.relativePath(project.root, it) }.getOrNull() }
+            ?: ""
+        val tabs = editorSession.tabs.mapNotNull { tab ->
+            when (tab) {
+                is EditorTab -> {
+                    val path = tab.file?.let { file ->
+                        runCatching { StorageUtils.relativePath(project.root, file) }.getOrNull()
+                    }
+                    if (tab.file != null && path == null) return@mapNotNull null
+                    WorkspaceTabSnapshot(
+                        type = WorkspaceTabType.EDITOR,
+                        path = path,
+                        text = tab.text.takeIf { tab.file == null || tab.dirty },
+                        dirty = tab.dirty,
+                        selectionStart = tab.selectionStart,
+                        selectionEnd = tab.selectionEnd,
+                        scrollX = tab.scrollX,
+                        scrollY = tab.scrollY,
+                    )
+                }
+                is TerminalTab -> WorkspaceTabSnapshot(
+                    type = WorkspaceTabType.TERMINAL,
+                    title = tab.title,
+                    workingDirectory = tab.workingDirectory,
+                    ompSessionId = tab.ompSessionId,
+                    isOmp = tab.isOmp || tab.ompSessionId != null,
+                )
+            }
+        }
+        val snapshot = WorkspaceSnapshot(
+            directory = directory,
+            activeTab = editorSession.activeIndex,
+            terminalCounter = terminalCounter,
+            tabs = tabs,
+        )
+        runCatching { WorkspaceStore.write(project.root, snapshot) }
+            .onFailure { error -> android.util.Log.w(TAG, "Unable to save workspace", error) }
+    }
+
+    private fun restoreWorkspace(project: Project) {
+        workspaceRestoreJob?.cancel()
+        workspaceRestoreJob = lifecycleScope.launch {
+            val snapshot = withContext(Dispatchers.IO) { WorkspaceStore.read(project.root) } ?: return@launch
+            val loaded = withContext(Dispatchers.IO) {
+                snapshot.tabs.mapIndexedNotNull { index, state ->
+                    if (state.type == WorkspaceTabType.TERMINAL) {
+                        RestoredWorkspaceTab(index, state, null, null)
+                    } else {
+                        val file = state.path
+                            ?.takeIf { it.isNotBlank() }
+                            ?.let { path -> runCatching { StorageUtils.resolveChild(project.root, path) }.getOrNull() }
+                        if (state.path?.isNotBlank() == true &&
+                            (file == null || !file.isFile || file.length() > MAX_EDITOR_BYTES)
+                        ) {
+                            null
+                        } else {
+                            val text = state.text ?: file?.readText(Charsets.UTF_8) ?: ""
+                            RestoredWorkspaceTab(index, state, file, text)
+                        }
+                    }
+                }
+            }
+            if (currentProject?.id != project.id || editorSession.tabs.isNotEmpty()) return@launch
+            currentDirectory = snapshot.directory
+                .takeIf { it.isNotBlank() }
+                ?.let { path -> runCatching { StorageUtils.resolveChild(project.root, path) }.getOrNull() }
+                ?.takeIf { it.isDirectory && StorageUtils.isWithin(project.root, it) }
+                ?: project.root
+            refreshFileList()
+            terminalCounter = snapshot.terminalCounter
+            val restoredIndices = mutableMapOf<Int, Int>()
+            loaded.forEach { restored ->
+                val newIndex = when (restored.state.type) {
+                    WorkspaceTabType.EDITOR -> {
+                        val state = restored.state
+                        editorSession.add(EditorTab(restored.file, restored.text.orEmpty(), restored.file?.let(LanguageResolver::scopeFor)).apply {
+                            dirty = state.dirty
+                            selectionStart = state.selectionStart
+                            selectionEnd = state.selectionEnd
+                            scrollX = state.scrollX
+                            scrollY = state.scrollY
+                        })
+                    }
+                    WorkspaceTabType.TERMINAL -> {
+                        if (!ProotRuntime.isEnvironmentReady(this@EditorActivity)) return@forEach
+                        val relativeDirectory = restored.state.workingDirectory
+                        val terminalDirectory = when (relativeDirectory) {
+                            null -> null
+                            else -> runCatching {
+                                StorageUtils.resolveChild(project.root, relativeDirectory)
+                            }.getOrNull()?.takeIf { it.isDirectory }
+                                ?: project.root
+                        }
+                        val sessionId = restored.state.ompSessionId
+                            ?.takeIf(::isSafeOmpSessionId)
+                        val isOmp = restored.state.isOmp || sessionId != null
+                        val startup = if (isOmp) sessionId?.let { "omp -r $it" } ?: "omp" else null
+                        runCatching {
+                            createTerminalTab(
+                                startupCommand = startup,
+                                ompSessionId = sessionId,
+                                isOmp = isOmp,
+                                projectRoot = terminalDirectory,
+                                title = restored.state.title,
+                                selectAfterCreate = false,
+                            )
+                        }.getOrNull() ?: return@forEach
+                    }
+                }
+                restoredIndices[restored.originalIndex] = newIndex
+            }
+            val active = restoredIndices[snapshot.activeTab] ?: restoredIndices.values.firstOrNull()
+            if (active != null) selectTab(active) else showEmptyEditor()
+            refreshTabs()
+        }
+    }
+
     private fun refreshTabs() {
         tabContainer.removeAllViews()
         val tabRipple = obtainStyledAttributes(
@@ -1402,10 +1658,16 @@ class EditorActivity : AppCompatActivity() {
 
     override fun onPause() {
         saveAllBlocking()
+        persistWorkspace()
         super.onPause()
     }
 
     override fun onDestroy() {
+        persistWorkspace()
+        directoryRefreshHandler.removeCallbacks(directoryRefreshRunnable)
+        directoryObserver?.stopWatching()
+        directoryObserver = null
+        workspaceRestoreJob?.cancel()
         lspJob?.cancel()
         lspController?.close()
         finishTerminalTabs()
@@ -1420,6 +1682,7 @@ class EditorActivity : AppCompatActivity() {
             editor.isWordwrap = settings.editorWordWrap
             terminalView.setTextSize(terminalDefaultTextSizePx.toInt())
             terminalView.keepScreenOn = settings.terminalKeepScreenOn
+            refreshFileList()
         }
     }
 
@@ -1431,9 +1694,14 @@ class EditorActivity : AppCompatActivity() {
         val modifier: TerminalModifier? = null,
     )
 
-
     companion object {
+        private const val TAG = "EditorActivity"
         private const val MAX_EDITOR_BYTES = 5L * 1024 * 1024
+        private const val DIRECTORY_REFRESH_DEBOUNCE_MS = 250L
+        private const val DIRECTORY_WATCH_MASK =
+            FileObserver.CREATE or FileObserver.DELETE or FileObserver.MOVED_FROM or
+                FileObserver.MOVED_TO or FileObserver.CLOSE_WRITE or FileObserver.MODIFY or
+                FileObserver.ATTRIB or FileObserver.DELETE_SELF or FileObserver.MOVE_SELF
         private const val MENU_OPEN = 1
         private const val MENU_NEW_FILE = 2
         private const val MENU_NEW_FOLDER = 3
@@ -1447,6 +1715,8 @@ class EditorActivity : AppCompatActivity() {
         private const val MENU_CLEAR_SELECTION = 11
         private const val MENU_REFRESH = 12
         private const val MAX_TAB_NAME_CHARS = 15
+        private const val OMP_SESSION_DISCOVERY_ATTEMPTS = 30
+        private const val OMP_SESSION_DISCOVERY_INTERVAL_MS = 500L
         private const val TERMINAL_KEY_COLOR = 0xFF424242.toInt()
         private const val TERMINAL_MODIFIER_COLOR = 0xFF5C6BC0.toInt()
     }

@@ -7,7 +7,7 @@ import java.util.Locale
 
 internal object StorageUtils {
     const val METADATA_FILE = ".love2droid.json"
-
+    const val WORKSPACE_FILE = ".lovedroid"
     fun isWithin(root: File, candidate: File): Boolean {
         val rootPath = root.canonicalFile.path
         val candidatePath = candidate.canonicalFile.path
