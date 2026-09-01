@@ -6,22 +6,33 @@ import io.github.rosemoe.sora.lsp.client.languageserver.serverdefinition.CustomL
 import io.github.rosemoe.sora.lsp.editor.LspEditor
 import io.github.rosemoe.sora.lsp.editor.LspProject
 import io.github.rosemoe.sora.widget.CodeEditor
+import io.github.rosemoe.sora.lsp.utils.createTextDocumentIdentifier
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
+import org.eclipse.lsp4j.DefinitionParams
+import org.eclipse.lsp4j.Location
+import org.eclipse.lsp4j.LocationLink
+import org.eclipse.lsp4j.Position
+import org.eclipse.lsp4j.Range
+import org.eclipse.lsp4j.ReferenceContext
+import org.eclipse.lsp4j.ReferenceParams
+import java.util.concurrent.TimeUnit
 
 class LuaLspController(
     context: Context,
     private val codeEditor: CodeEditor,
     private val onConnectionError: (Throwable) -> Unit,
+    private val onFileLink: (String) -> Unit,
 ) {
     private val appContext = context.applicationContext
     private val mutex = Mutex()
     private var projectRoot: File? = null
     private var project: LspProject? = null
+    @Volatile
     private var activeEditor: LspEditor? = null
 
     suspend fun attach(projectRoot: File, file: File, wrapperLanguage: Language) {
@@ -41,6 +52,9 @@ class LuaLspController(
             }
             try {
                 lspEditor.connectWithTimeout()
+                withContext(Dispatchers.Main.immediate) {
+                    lspEditor.hoverWindow?.layout = SafeHoverLayout(onFileLink)
+                }
             } catch (cancelled: CancellationException) {
                 disposeActive()
                 throw cancelled
@@ -67,6 +81,69 @@ class LuaLspController(
         }
     }
 
+    internal fun dismissHover() {
+        activeEditor?.hoverWindow?.dismiss()
+    }
+
+    internal fun isNavigationAvailable(file: File): Boolean = activeEditorFor(file) != null
+
+    internal suspend fun findDefinitions(file: File, line: Int, column: Int): List<LuaSymbolLocation> {
+        val current = activeEditorFor(file) ?: return emptyList()
+        val params = DefinitionParams(
+            current.uri.createTextDocumentIdentifier(),
+            Position(line.coerceAtLeast(0), column.coerceAtLeast(0)),
+        )
+        val response = withContext(Dispatchers.IO) {
+            current.requestManager.definition(params)?.get(REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        } ?: return emptyList()
+        val locations = if (response.isLeft) {
+            response.left.orEmpty().map(::toSymbolLocation)
+        } else {
+            response.right.orEmpty().map(::toSymbolLocation)
+        }
+        return locations.distinctAndSorted()
+    }
+
+    internal suspend fun findReferences(file: File, line: Int, column: Int): List<LuaSymbolLocation> {
+        val current = activeEditorFor(file) ?: return emptyList()
+        val params = ReferenceParams(
+            current.uri.createTextDocumentIdentifier(),
+            Position(line.coerceAtLeast(0), column.coerceAtLeast(0)),
+            ReferenceContext(false),
+        )
+        val locations = withContext(Dispatchers.IO) {
+            current.requestManager.references(params)?.get(REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        }.orEmpty()
+        return locations.filterNotNull().map(::toSymbolLocation).distinctAndSorted()
+    }
+
+    private fun activeEditorFor(file: File): LspEditor? {
+        val current = activeEditor ?: return null
+        if (!current.isConnected) return null
+        val matches = runCatching {
+            File(current.uri.path).canonicalFile == file.canonicalFile
+        }.getOrDefault(false)
+        return current.takeIf { matches }
+    }
+
+    private fun toSymbolLocation(location: Location): LuaSymbolLocation =
+        toSymbolLocation(location.uri, location.range)
+
+    private fun toSymbolLocation(location: LocationLink): LuaSymbolLocation =
+        toSymbolLocation(location.targetUri, location.targetSelectionRange ?: location.targetRange)
+
+    private fun toSymbolLocation(uri: String, range: Range): LuaSymbolLocation = LuaSymbolLocation(
+        uri = uri,
+        startLine = range.start.line,
+        startColumn = range.start.character,
+        endLine = range.end.line,
+        endColumn = range.end.character,
+    )
+
+    private fun List<LuaSymbolLocation>.distinctAndSorted(): List<LuaSymbolLocation> =
+        distinctBy { listOf(it.uri, it.startLine, it.startColumn, it.endLine, it.endColumn) }
+            .sortedWith(compareBy({ it.uri }, { it.startLine }, { it.startColumn }))
+
     fun close() {
         runCatching { activeEditor?.dispose() }
         activeEditor = null
@@ -92,9 +169,14 @@ class LuaLspController(
         projectRoot = canonical
     }
 
+    private companion object {
+        const val REQUEST_TIMEOUT_SECONDS = 10L
+    }
+
     private suspend fun disposeActive() {
         val current = activeEditor ?: return
         activeEditor = null
+        current.hoverWindow?.dismiss()
         runCatching { current.disposeAsync() }
     }
 }

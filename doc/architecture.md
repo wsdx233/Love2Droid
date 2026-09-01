@@ -72,6 +72,8 @@ Play 使用不可变 `.love` 快照，不让 runtime 读取编辑器可能处于
 - 每个项目根目录对应一个 `LspProject`，文档 URI 使用真实项目文件路径。
 - LSP 的 stdin/stdout 只承载 JSON-RPC；stderr 独立排空到日志。
 - PRoot bind 保持 Android 主体与 Ubuntu guest 中的项目绝对路径一致，避免 workspace URI 分叉。
+- Lua 符号导航直接使用 `textDocument/definition` 和 `textDocument/references`；返回的 `file:` URI 必须 canonicalize，并限制在当前项目根目录内后才能作为可编辑标签打开。
+- LuaLS 悬浮 Markdown 中的 `file:` 链接由应用内链接处理器消费，禁止通过 `URLSpan` 向系统暴露 `file://` URI。
 
 ## 终端与 PRoot
 

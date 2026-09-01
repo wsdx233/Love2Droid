@@ -45,6 +45,8 @@ app/build/outputs/apk/normalNoRecord/debug/app-normal-noRecord-debug.apk
 - 缺少 `main.lua`、打包失败和 LÖVE runtime 异常显示可理解错误，不崩溃回桌面。
 - 多个终端标签独立运行，关闭时终止对应会话；重启后按保存状态重建。
 - LuaLS 的补全、诊断、悬浮、签名提示和保存通知在真实项目路径下工作。
+- 长按项目内 Lua 符号仍进入默认文本选择；选区操作浮动菜单出现定义和用法图标，点击后分别执行跳转或在 Bottom Sheet 展示结果，点击结果打开正确标签并定位到对应范围。
+- 点击 LuaLS 悬浮信息中的项目文件链接在应用内打开文件，不触发 `FileUriExposedException`；悬浮窗口外点击会关闭窗口，项目外和无效 `file:` 链接不启动外部 Intent。
 
 ## 交付记录
 

@@ -53,6 +53,8 @@ import com.termux.terminal.TerminalSessionClient
 import com.termux.view.TerminalView
 import com.termux.view.TerminalViewClient
 import io.github.rosemoe.sora.event.ContentChangeEvent
+import io.github.rosemoe.sora.event.ClickEvent
+import io.github.rosemoe.sora.event.SelectionChangeEvent
 import io.github.rosemoe.sora.lang.EmptyLanguage
 import io.github.rosemoe.sora.lang.Language
 import io.github.rosemoe.sora.langs.textmate.TextMateColorScheme
@@ -66,7 +68,12 @@ import io.github.rosemoe.sora.langs.textmate.registry.provider.AssetsFileResolve
 import io.github.rosemoe.sora.widget.CodeEditor
 import io.github.rosemoe.sora.widget.SelectionMovement
 import io.github.rosemoe.sora.widget.subscribeAlways
+import com.google.android.material.bottomsheet.BottomSheetDialog
+import com.google.android.material.bottomsheet.BottomSheetBehavior
+import io.github.rosemoe.sora.widget.component.EditorTextActionWindow
+import io.github.rosemoe.sora.widget.getComponent
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -108,9 +115,12 @@ class EditorActivity : AppCompatActivity() {
     private var textMateReady = false
     private var lspJob: Job? = null
     private var workspaceRestoreJob: Job? = null
+    private var symbolNavigationJob: Job? = null
     private var directoryObserver: FileObserver? = null
     private var directoryRefreshGeneration = 0L
     private val directoryRefreshHandler = Handler(Looper.getMainLooper())
+    private var symbolDefinitionButton: ImageButton? = null
+    private var symbolUsagesButton: ImageButton? = null
     private val directoryRefreshRunnable = Runnable { refreshFileList() }
     private var terminalCounter = 0
     private var ctrlPressed = false
@@ -208,6 +218,13 @@ class EditorActivity : AppCompatActivity() {
         }
     }
 
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+            lspController?.dismissHover()
+        }
+        return super.dispatchTouchEvent(event)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -265,9 +282,14 @@ class EditorActivity : AppCompatActivity() {
         setupTerminal()
         setupEditorInput()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            lspController = LuaLspController(this, editor) { error ->
-                toast(getString(R.string.lua_lsp_connection_failed, error.message ?: error.javaClass.simpleName))
-            }
+            lspController = LuaLspController(
+                context = this,
+                codeEditor = editor,
+                onConnectionError = { error ->
+                    toast(getString(R.string.lua_lsp_connection_failed, error.message ?: error.javaClass.simpleName))
+                },
+                onFileLink = ::openHoverFileLink,
+            )
         }
         browserAdapter = FileBrowserAdapter(
             onClick = ::onBrowserItemClicked,
@@ -532,7 +554,199 @@ class EditorActivity : AppCompatActivity() {
                 InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS,
         )
         editor.props.allowFullscreen = false
+        setupSymbolNavigationButtons()
+        editor.subscribeAlways<SelectionChangeEvent> {
+            updateSymbolNavigationButtons()
+        }
+        editor.subscribeAlways<ClickEvent> {
+            lspController?.dismissHover()
+        }
+        updateSymbolNavigationButtons()
     }
+
+    private fun setupSymbolNavigationButtons() {
+        val actionWindow = editor.getComponent<EditorTextActionWindow>()
+        val horizontalScroll = actionWindow.getView()
+            .findViewById<ViewGroup>(io.github.rosemoe.sora.R.id.panel_hv)
+        val buttonRow = horizontalScroll?.getChildAt(0) as? ViewGroup ?: return
+        val selectableBackground = obtainStyledAttributes(
+            intArrayOf(android.R.attr.selectableItemBackgroundBorderless),
+        ).let { attributes ->
+            val drawable = attributes.getDrawable(0)
+            attributes.recycle()
+            drawable
+        }
+        val iconTint = MaterialColors.getColor(
+            this,
+            com.google.android.material.R.attr.colorOnSurface,
+            Color.WHITE,
+        )
+
+        fun addAction(icon: Int, description: Int, action: () -> Unit): ImageButton {
+            return ImageButton(this).apply {
+                layoutParams = ViewGroup.LayoutParams(dp(45), dp(45))
+                setImageResource(icon)
+                imageTintList = android.content.res.ColorStateList.valueOf(iconTint)
+                background = selectableBackground?.constantState?.newDrawable()
+                contentDescription = getString(description)
+                setPadding(dp(12), dp(12), dp(12), dp(12))
+                visibility = View.GONE
+                setOnClickListener {
+                    actionWindow.dismiss()
+                    action()
+                }
+            }.also(buttonRow::addView)
+        }
+
+        symbolDefinitionButton = addAction(
+            R.drawable.ic_symbol_definition,
+            R.string.go_to_definition,
+        ) {
+            currentSelectedSymbol()?.let { selected ->
+                findDefinition(selected.file, selected.line, selected.column)
+            }
+        }
+        symbolUsagesButton = addAction(
+            R.drawable.ic_symbol_references,
+            R.string.find_usages,
+        ) {
+            currentSelectedSymbol()?.let { selected ->
+                findUsages(selected.file, selected.line, selected.column)
+            }
+        }
+    }
+
+    private data class SelectedSymbol(
+        val file: File,
+        val line: Int,
+        val column: Int,
+    )
+
+    private fun currentSelectedSymbol(): SelectedSymbol? {
+        val file = editorSession.activeEditorTab?.file ?: return null
+        val start = editor.cursor.left
+        val end = editor.cursor.right
+        selectedSymbol(editor.text, start, end) ?: return null
+        val position = editor.text.indexer.getCharPosition(start)
+        return SelectedSymbol(file, position.line, position.column)
+    }
+
+    private fun updateSymbolNavigationButtons() {
+        val selected = currentSelectedSymbol()
+        val visible = selected != null && lspController?.isNavigationAvailable(selected.file) == true
+        val visibility = if (visible) View.VISIBLE else View.GONE
+        symbolDefinitionButton?.visibility = visibility
+        symbolUsagesButton?.visibility = visibility
+    }
+
+    private fun findDefinition(file: File, line: Int, column: Int) {
+        val controller = lspController ?: return
+        val project = currentProject ?: return
+        symbolNavigationJob?.cancel()
+        symbolNavigationJob = lifecycleScope.launch {
+            try {
+                val locations = controller.findDefinitions(file, line, column)
+                if (currentProject?.id != project.id) return@launch
+                if (locations.isEmpty()) {
+                    toast(getString(R.string.symbol_definition_not_found))
+                    return@launch
+                }
+                val targets = withContext(Dispatchers.IO) {
+                    locations.mapNotNull { resolveProjectNavigationTarget(project.root, it) }
+                }
+                when {
+                    targets.isEmpty() -> toast(getString(R.string.symbol_location_outside_project))
+                    targets.size == 1 -> openFile(targets.single().file, targets.single())
+                    else -> showNavigationResults(R.string.definition_results, project, targets)
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                toast(getString(R.string.symbol_navigation_failed, error.rootMessage()))
+            }
+        }
+    }
+
+    private fun findUsages(file: File, line: Int, column: Int) {
+        val controller = lspController ?: return
+        val project = currentProject ?: return
+        symbolNavigationJob?.cancel()
+        symbolNavigationJob = lifecycleScope.launch {
+            try {
+                val locations = controller.findReferences(file, line, column)
+                if (currentProject?.id != project.id) return@launch
+                if (locations.isEmpty()) {
+                    toast(getString(R.string.symbol_usages_not_found))
+                    return@launch
+                }
+                val targets = withContext(Dispatchers.IO) {
+                    locations.mapNotNull { resolveProjectNavigationTarget(project.root, it) }
+                }
+                if (targets.isEmpty()) {
+                    toast(getString(R.string.symbol_location_outside_project))
+                    return@launch
+                }
+                showNavigationResults(R.string.usage_results, project, targets)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                toast(getString(R.string.symbol_navigation_failed, error.rootMessage()))
+            }
+        }
+    }
+
+    private suspend fun showNavigationResults(titleRes: Int, project: Project, targets: List<EditorNavigationTarget>) {
+        val items = withContext(Dispatchers.IO) {
+            buildSymbolNavigationItems(project.root, targets)
+        }
+        if (currentProject?.id != project.id || items.isEmpty()) return
+        val dialog = BottomSheetDialog(this)
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(TextView(this@EditorActivity).apply {
+                text = getString(R.string.symbol_results_title, getString(titleRes), items.size)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
+                setTypeface(typeface, Typeface.BOLD)
+                setPadding(dp(20), dp(20), dp(20), dp(12))
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
+        val results = RecyclerView(this).apply {
+            layoutManager = LinearLayoutManager(this@EditorActivity)
+            adapter = SymbolNavigationAdapter(items) { target ->
+                dialog.dismiss()
+                openFile(target.file, target)
+            }
+        }
+        val maxHeight = minOf((resources.displayMetrics.heightPixels * 0.65f).toInt(), dp(560))
+        content.addView(results, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, maxHeight))
+        dialog.setContentView(content)
+        dialog.setOnShowListener {
+            dialog.behavior.skipCollapsed = true
+            dialog.behavior.state = BottomSheetBehavior.STATE_EXPANDED
+        }
+        dialog.show()
+    }
+
+    private fun openHoverFileLink(link: String) {
+        lspController?.dismissHover()
+        val project = currentProject ?: run {
+            toast(getString(R.string.hover_file_link_invalid))
+            return
+        }
+        val target = resolveProjectFileLink(project.root, link)
+        if (target == null || !target.file.isFile) {
+            toast(getString(R.string.hover_file_link_invalid))
+            return
+        }
+        openFile(target.file, target)
+    }
+
+    private fun Throwable.rootMessage(): String {
+        var current: Throwable = this
+        while (current.cause != null && current.cause !== current) current = checkNotNull(current.cause)
+        return current.message ?: current.javaClass.simpleName
+    }
+
 
     private fun insertSymbol(symbol: String) {
         if (!editor.isShown) return
@@ -1297,14 +1511,17 @@ class EditorActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun openFile(file: File) {
-        if (!file.isFile) return
+    private fun openFile(file: File, target: EditorNavigationTarget? = null) {
+        val project = currentProject ?: return
+        if (!file.isFile || !StorageUtils.isWithin(project.root, file)) return
         if (file.length() > MAX_EDITOR_BYTES) {
             toast("文件过大，暂不载入编辑器")
             return
         }
         editorSession.find(file)?.let { tab ->
-            selectTab(editorSession.tabs.indexOf(tab))
+            val index = editorSession.tabs.indexOf(tab)
+            if (editorSession.activeIndex != index) selectTab(index)
+            target?.let(::moveToNavigationTarget)
             return
         }
         lifecycleScope.launch {
@@ -1314,10 +1531,24 @@ class EditorActivity : AppCompatActivity() {
                 val tab = EditorTab(file, text, LanguageResolver.scopeFor(file))
                 val index = editorSession.add(tab)
                 selectTab(index)
+                target?.let(::moveToNavigationTarget)
             } catch (error: Exception) {
                 toast(error.message ?: "无法打开文件")
             }
         }
+    }
+
+    private fun moveToNavigationTarget(target: EditorNavigationTarget) {
+        val activeFile = editorSession.activeEditorTab?.file ?: return
+        if (runCatching { activeFile.canonicalFile != target.file.canonicalFile }.getOrDefault(true)) return
+        val lastLine = (editor.lineCount - 1).coerceAtLeast(0)
+        val startLine = target.startLine.coerceIn(0, lastLine)
+        val startColumn = target.startColumn.coerceIn(0, editor.text.getColumnCount(startLine))
+        val endLine = target.endLine.coerceIn(startLine, lastLine)
+        val rawEndColumn = target.endColumn.coerceIn(0, editor.text.getColumnCount(endLine))
+        val endColumn = if (endLine == startLine) rawEndColumn.coerceAtLeast(startColumn) else rawEndColumn
+        editor.setSelectionRegion(startLine, startColumn, endLine, endColumn, false)
+        editor.ensurePositionVisible(startLine, startColumn, true)
     }
 
     private fun selectTab(index: Int) {
@@ -1357,6 +1588,7 @@ class EditorActivity : AppCompatActivity() {
         symbolScroll.visibility = View.VISIBLE
         welcomePage.visibility = View.GONE
         scheduleLsp(tab, language)
+        updateSymbolNavigationButtons()
     }
 
     private fun showTerminalTab(tab: TerminalTab) {
@@ -1373,6 +1605,7 @@ class EditorActivity : AppCompatActivity() {
         terminalView.onScreenUpdated()
         terminalView.requestFocus()
         scheduleLsp(null)
+        updateSymbolNavigationButtons()
     }
 
     private fun captureEditorState() {
@@ -1393,8 +1626,10 @@ class EditorActivity : AppCompatActivity() {
             val project = currentProject
             if (file != null && project != null && language != null) {
                 controller.attach(project.root, file, language)
+                updateSymbolNavigationButtons()
             } else {
                 controller.detach()
+                updateSymbolNavigationButtons()
             }
         }
     }
@@ -1827,6 +2062,7 @@ class EditorActivity : AppCompatActivity() {
         directoryObserver = null
         workspaceRestoreJob?.cancel()
         lspJob?.cancel()
+        symbolNavigationJob?.cancel()
         lspController?.close()
         finishTerminalTabs()
         super.onDestroy()

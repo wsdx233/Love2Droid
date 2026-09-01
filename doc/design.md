@@ -56,6 +56,8 @@ Drawer 使用 `RecyclerView` 展示当前目录的直接子项，不渲染可展
 - 底部快捷输入栏可横向滚动；点击符号会替换选区或插入光标处，并保持编辑器和输入法焦点。
 - AppBar 文件菜单提供新建、保存和另存为；所有保存继续使用项目根目录内的原子写入和路径校验。
 - Lua 及已注册语言使用 TextMate 高亮；没有匹配 grammar 时以纯文本打开并给出可理解的错误。
+- LuaLS 已连接时，长按 Lua 标识符仍按编辑器默认行为选择单词；在文本选区操作浮动菜单中，完整符号选区会额外显示“转到定义”和“查找用法”两个图标按钮。多定义和用法结果使用可滚动 Bottom Sheet 展示项目相对路径、行号与代码摘要，点击结果在应用内打开标签并定位。
+- LuaLS 悬浮信息中的项目 `file:` 链接由编辑器内部处理，不交给系统 `Intent`；项目外或无效路径只显示可理解错误。点击悬浮窗口外的其他区域会关闭悬浮窗口。
 
 编辑器文件冲突、换行风格、二进制探测和大文件保护仍属待实现内容，见 [编辑器文件健壮性计划](plan/editor-file-robustness.md)。
 
@@ -89,4 +91,4 @@ Drawer 使用 `RecyclerView` 展示当前目录的直接子项，不渲染可展
 
 ## 语法范围
 
-当前 TextMate 注册覆盖 Lua、Java、Kotlin、JavaScript/TypeScript、Python、HTML、XML、Markdown、JSON、CSS 和 Shell。Lua 是 LÖVE 项目的默认语言；Android 8.0 及以上还通过 LuaLS 提供补全、诊断、悬浮和签名提示。
+当前 TextMate 注册覆盖 Lua、Java、Kotlin、JavaScript/TypeScript、Python、HTML、XML、Markdown、JSON、CSS 和 Shell。Lua 是 LÖVE 项目的默认语言；Android 8.0 及以上还通过 LuaLS 提供补全、诊断、悬浮、签名提示、转到定义和查找用法。

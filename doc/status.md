@@ -11,6 +11,7 @@
 - `.love` 快照构建、`FileProvider` Content URI 和 Play 启动闭环。
 - arm64 PRoot、Ubuntu Base 首次安装、Termux 终端快捷键栏、LuaLS、omp 和 bash-prompt。
 - LuaLS 使用项目真实路径工作；新建项目生成 `.luarc.json` 并加载 LuaJIT 与 LuaLS 内置 LÖVE 11.5 API library。
+- Lua 文件支持长按选择符号后，在文本选区操作浮动菜单中转到定义和查找用法；结果在 Bottom Sheet 中显示并在项目内安全跳转，LuaLS 悬浮 `file:` 链接不再交给外部 Intent，点击窗口外区域会关闭悬浮窗口。
 - bash-prompt 使用 `PROMPT_DIRTRIM=1`，终端提示不展示完整 `Android/data` 长路径。
 
 ## 会话恢复
@@ -39,6 +40,7 @@
 - 保存后 dirty 圆点未刷新；
 - 游戏退出影响编辑器进程。
 - 横竖屏切换不再重建编辑器 Activity；游戏窗口恢复 LÖVE/SDL 原生方向语义，不再强制视为可调整大小；调试悬浮球会在窗口尺寸变化后重新约束位置。
+- LuaLS 悬浮窗口点击 `file://` 链接不再因 `FileUriExposedException` 崩溃。
 
 ## 待实现计划
 

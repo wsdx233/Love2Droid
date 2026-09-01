@@ -88,6 +88,17 @@
     <string name="proot_log_omp_installed">omp 已安装到 /root/.local/bin，并已写入 ~/.bashrc。</string>
     <string name="proot_log_failed">安装失败：%1$s</string>
     <string name="lua_lsp_connection_failed">Lua Language Server 连接失败：%1$s</string>
+    <string name="go_to_definition">转到定义</string>
+    <string name="find_usages">查找用法</string>
+    <string name="definition_results">定义位置</string>
+    <string name="usage_results">用法</string>
+    <string name="symbol_results_title">%1$s（%2$d）</string>
+    <string name="symbol_location_line">第 %1$d 行 · %2$s</string>
+    <string name="symbol_definition_not_found">未找到定义</string>
+    <string name="symbol_usages_not_found">未找到用法</string>
+    <string name="symbol_navigation_failed">符号导航失败：%1$s</string>
+    <string name="symbol_location_outside_project">结果位于项目外，暂不支持打开</string>
+    <string name="hover_file_link_invalid">无法打开该文件链接</string>
     <string name="new_omp">新建 OMP</string>
     <string name="settings">设置</string>
     <string name="back">返回</string>
