@@ -117,6 +117,9 @@ object ProotRuntime {
 
         val bindPaths = linkedSetOf<String>()
         listOf(
+            "/dev",
+            "/proc",
+            "/sys",
             context.filesDir.absolutePath,
             context.filesDir.parentFile?.absolutePath,
             context.cacheDir.absolutePath,
