@@ -28,7 +28,6 @@ internal fun defaultProjectConf(id: String, displayName: String): String = """
         t.window.title = "${displayName.replace(34.toChar(), 39.toChar())}"
         t.window.width = 800
         t.window.height = 480
-        t.window.resizable = true
     end
 """.trimIndent() + "\n"
 

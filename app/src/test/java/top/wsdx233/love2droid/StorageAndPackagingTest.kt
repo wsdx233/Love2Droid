@@ -68,12 +68,6 @@ class StorageAndPackagingTest {
     }
 
     @Test
-    fun defaultProjectConfAllowsDeviceOrientationChanges() {
-        val conf = defaultProjectConf("demo", "Demo")
-
-        assertTrue(conf.contains("t.window.resizable = true"))
-    }
-    @Test
     fun addingLoadedTabKeepsCurrentTabUntilExplicitSelection() {
         val session = EditorSession()
         val current = EditorTab(File("current.lua"), "current", "source.lua")

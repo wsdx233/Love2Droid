@@ -35,13 +35,6 @@ public class LoveGameActivity extends org.love2d.android.GameActivity {
     }
 
     @Override
-    public void setOrientationBis(int width, int height, boolean resizable, String hint) {
-        // Android games follow the device sensor unless the game explicitly
-        // restricts the allowed orientations in the SDL hint.
-        super.setOrientationBis(width, height, true, hint);
-    }
-
-    @Override
     protected void onDestroy() {
         if (debugOverlay != null) {
             debugOverlay.detach();
