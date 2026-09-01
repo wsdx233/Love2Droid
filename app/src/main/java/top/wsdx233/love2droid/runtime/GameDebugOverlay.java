@@ -68,7 +68,16 @@ final class GameDebugOverlay extends FrameLayout {
     @Override
     protected void onSizeChanged(int width, int height, int oldWidth, int oldHeight) {
         super.onSizeChanged(width, height, oldWidth, oldHeight);
-        constrainBubbleToWindow();
+        if (GameDebugBubblePosition.isOrientationChange(oldWidth, oldHeight, width, height)) {
+            int bubbleWidth = bubble.getWidth() > 0 ? bubble.getWidth() : dp(BUBBLE_SIZE_DP);
+            int bubbleHeight = bubble.getHeight() > 0 ? bubble.getHeight() : dp(BUBBLE_SIZE_DP);
+            float y = GameDebugBubblePosition.mapVerticalPosition(
+                bubble.getY(), oldHeight, height, bubbleHeight);
+            moveBubble(GameDebugBubblePosition.dockedRightX(
+                width, bubbleWidth, dp(EDGE_MARGIN_DP)), y);
+        } else {
+            constrainBubbleToWindow();
+        }
     }
 
     void constrainBubbleToWindow() {
@@ -112,7 +121,9 @@ final class GameDebugOverlay extends FrameLayout {
     }
 
     private void placeBubbleInitially() {
-        moveBubble(getWidth() - dp(BUBBLE_SIZE_DP + EDGE_MARGIN_DP),
+        int bubbleWidth = bubble.getWidth() > 0 ? bubble.getWidth() : dp(BUBBLE_SIZE_DP);
+        moveBubble(GameDebugBubblePosition.dockedRightX(
+                getWidth(), bubbleWidth, dp(EDGE_MARGIN_DP)),
             (getHeight() - dp(BUBBLE_SIZE_DP)) / 2f);
     }
 

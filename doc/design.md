@@ -77,7 +77,7 @@ Drawer 使用 `RecyclerView` 展示当前目录的直接子项，不渲染可展
 - 终端使用 Termux `TerminalView`，底部提供两行快捷键，包括 `ESC`、`TAB`、`CTRL`、`ALT`、方向键、`HOME`、`END`、`PGUP` 和 `PGDN`。
 - 首次安装页使用 Toolbar、线性进度和持续追加的日志展示 Ubuntu Base 与工具安装状态；失败后可重试。
 - bash-prompt 使用 `PROMPT_DIRTRIM=1`，避免展示完整 `Android/data` 长路径。
-- 游戏窗口遵循 LÖVE/SDL Android 方向规则：`t.window.resizable = false` 且未设置 `SDL_ORIENTATIONS` 时，`width > height` 启动为横屏，`height >= width` 启动为竖屏；`resizable = true` 时允许随设备和系统旋转锁定切换。游戏调试悬浮球在旋转后自动限制在新的可见区域内，不会移出屏幕。
+- 游戏窗口遵循 LÖVE/SDL Android 方向规则：`t.window.resizable = false` 且未设置 `SDL_ORIENTATIONS` 时，`width > height` 启动为横屏，`height >= width` 启动为竖屏；`resizable = true` 时允许随设备和系统旋转锁定切换。游戏调试悬浮球在横竖屏双向旋转后停靠到右侧，并按旋转前的纵向比例保持位置，避免落到底部或移出屏幕。
 
 
 ## 项目管理
