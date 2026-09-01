@@ -12,7 +12,7 @@
 - 支持项目管理和新建项目。
 - 项目保存在应用专属外部目录的 `projects/` 下。
 
-本次只建立基础框架和可运行闭环，不实现 Lua 语言服务器、调试器、Git、云同步、插件系统或完整 VS Code 级 IDE 能力。
+基础框架已扩展为可运行闭环：除编辑、项目管理和 LÖVE 运行外，加入 arm64 proot 终端与 Lua Language Server；调试器、Git、云同步、插件系统和完整 VS Code 级 IDE 能力仍不在当前范围。
 
 ## 2. 已准备的参考项目
 
@@ -26,6 +26,9 @@
   - 上游：<https://github.com/Rosemoe/sora-editor>
   - 重点参考 `CodeEditor` 初始化、TextMate 注册、语言资源和 Android 17 配置。
 
+- `ref/r2droid/`
+  - 上游：<https://github.com/wsdx233/r2droid>，参考提交 `f1c63598688027dcbf4404c27ef14a3893ccb9e1`。
+  - 重点参考 Termux `TerminalView`/`TerminalSession` 集成、双行快捷键栏、proot 启动参数和安装进度日志页面。
 参考项目的上游许可证和第三方语法文件许可证必须在正式项目中保留声明；不会把参考项目的 Demo Activity、测试页面和无关资源整体复制进产品代码。
 
 ## 3. 技术路线
@@ -36,7 +39,7 @@
 - Android View/XML + `AppCompat`/Material，而不是 Compose。
   - 理由：Sora Editor 是 View widget；LÖVE Android 上游也是传统 Activity/NDK 结构；先减少跨 UI 技术栈和原生窗口交互风险。
 - `minSdk` 先定为 API 23，与当前 LÖVE Android 上游构建配置保持一致；Sora Editor 本身支持更低 API，但不因它单独降低运行时下限。
-- `compileSdk`/`targetSdk` 实现中固定为 API 37；当前 Sora Editor 0.24.6 及其 AndroidX 依赖要求至少 API 36/37。
+- `compileSdk` 固定为 API 37；为兼容 PRoot 内置 guest loader 从应用私有临时目录执行，`targetSdk` 固定为 API 28；API 29+ 的 W^X 策略会拒绝该 loader 的执行。原生 PRoot 库仍从 APK 解压后的 `nativeLibraryDir` 获取并执行。
 - Java/Kotlin 编译目标使用 JDK 17。
 - 原生构建使用上游要求的 Android NDK/CMake 组合，并将版本锁定，不使用动态 `latest`。
 - `namespace`、`applicationId`、Java/Kotlin 包统一为 `top.wsdx233.love2droid`。
@@ -169,7 +172,15 @@ projects/
 - 支持未落盘的“未命名”标签；标签栏最右侧固定 `+` 按钮，用于新建未命名文档。
 - 未命名文档首次保存或关闭时进入“另存为”流程；切换项目或 Play 前不静默丢弃未命名 dirty 内容。
 
-### 4.5 项目管理界面
+### 4.5 终端标签与 proot
+
+- 文件标签和终端标签共用标签栏；菜单可创建多个终端标签，每个标签持有独立的 proot shell 会话，切换标签不终止后台会话，关闭标签时终止对应会话。
+- 终端主体使用 Termux `TerminalView`，底部按 r2droid 布局提供两行 `ESC`、`TAB`、`CTRL`、`ALT`、方向键、`HOME`、`END`、`PGUP`、`PGDN` 等快捷键。
+- 当前 proot 产品支持范围为 arm64-v8a。可执行文件以 `libproot.so` 放入 APK 的 arm64 native library 目录，并通过 Gradle `jniLibs.useLegacyPackaging` 让最终合并清单启用 native library 解压；运行时只从 `applicationInfo.nativeLibraryDir` 定位并执行，不把可执行文件复制到普通 data 文件目录。
+- 首次启动强制进入安装页：顶部 Toolbar 显示安装状态和线性进度，主体持续追加日志。安装程序校验并解压 Ubuntu Base 24.04.4 arm64 到 `filesDir/proot/ubuntu`，进入 proot 后安装固定版本的 Lua Language Server，全部命令成功后才写入完成标记。
+- Ubuntu Base 与 LuaLS 下载都固定 URL、版本和 SHA-256；失败保留可复用阶段并提供重试，不写入“安装完成”标记。
+
+### 4.6 项目管理界面
 
 overflow action item 打开独立的项目管理页面或全屏 Bottom Sheet（以手机可操作性优先，最终根据实际布局选择）：
 
@@ -192,7 +203,7 @@ overflow action item 打开独立的项目管理页面或全屏 Bottom Sheet（�
 - 其中 Lua 是 LÖVE 项目的默认语言，必须优先验证；没有匹配 grammar 时使用纯文本语言，不阻塞打开文件。
 - 扩展名映射集中在 `LanguageResolver`，不把映射散落在 Activity 和文件浏览器代码中。
 - grammar 来源、版本/commit 和许可证写入第三方声明文件；不将 VS Code 等上游语法资源当成无许可证内容复制。
-- 初版只承诺语法高亮、缩进和编辑器基础能力，不承诺完整补全、语义诊断和 LSP。
+- Lua 文件在 Android 8.0 及以上通过 Sora `editor-lsp` 接入 proot 内的 LuaLS，提供协议声明的补全、诊断、悬浮、签名提示等能力；Android 6.0/7.x 保持 TextMate 编辑能力但不加载 `editor-lsp`。
 
 Sora 的注册流程计划采用：
 
@@ -201,6 +212,13 @@ Sora 的注册流程计划采用：
 3. 根据文件扩展名创建或更新 `TextMateLanguage`。
 4. 给 `CodeEditor` 设置语言和主题。
 5. 切换标签时先设置 `TextMateLanguage`，再载入文本，确保分析器收到完整文档并生成高亮 span；Lua grammar 注册失败时显示具体错误，不静默退化。
+
+LuaLS 接入边界：
+
+1. 每个项目根目录对应一个 `LspProject`，Lua 文档使用实际项目文件路径作为 URI。
+2. `StreamConnectionProvider` 直接管理 proot 中 `lua-language-server` 的 stdin/stdout，stderr 独立排空到日志，不能混入 JSON-RPC 数据流。
+3. 文件标签激活时用 `LspLanguage` 包装现有 TextMate language；切换到终端或非 Lua 标签时解除当前 LSP editor，保存成功后发送 `didSave`。
+4. 项目外部目录通过 proot bind 保持主客体绝对路径一致，避免 LSP workspace URI 与真实文件路径分叉。
 
 ## 6. 建议的代码边界
 
@@ -323,25 +341,29 @@ app/src/main/java/top/wsdx233/love2droid/runtime/
 6. **文件操作和编辑保存并发**
    - 所有写入串行化，采用原子写；文件浏览列表只在操作完成后提交。
 
+7. **Android W^X 限制影响 PRoot guest loader**
+   - 对齐 r2droid 的 `-L`、`--link2symlink`、`--kill-on-exit`、`--root-id`、`-r`、bind 和 `/usr/bin/env -i` 参数；保留 `targetSdk 28`，避免 API 29+ 对应用私有临时 loader 的执行拒绝。
+
 ## 10. 默认方案，请你先审阅
 
 以下选择是为了先得到一个可落地、风险可控的基础版本：
 
 - 单 App module，LÖVE native runtime 与编辑器同 APK；不先拆成复杂多模块。
 - Play 使用 `.love` 临时快照 + `FileProvider` content URI；不申请广泛存储权限。
-- 项目实际目录为 `getExternalFilesDir(null)/projects`，对应 `Android/data/<包名>/files/projects`。
+- arm64 首次启动安装 Ubuntu Base 24.04.4、proot 和 LuaLS；文件与终端共用多标签栏；Lua 文件启用完整 LSP 客户端；新建项目自动生成 `.luarc.json`，加载 LuaJIT 和 LuaLS 内置 LÖVE 11.5 API library。
 - 初始语法高亮覆盖 Lua、Java、Kotlin、JavaScript/TypeScript、Python、HTML、XML、Markdown、JSON、CSS、Shell；无 grammar 时纯文本回退。
 - 长按提供常见文件操作；区间选择限定为同一父目录的可见同级节点。
-- 本阶段不做 LSP、代码补全、调试器、Git 和插件系统。
+- arm64 首次启动安装 Ubuntu Base 24.04.4、proot 和 LuaLS；文件与终端共用多标签栏；Lua 文件启用完整 LSP 客户端。
+- 调试器、Git、云同步和插件系统仍不在当前阶段。
 
-这份文件完成后先不开始工程实现，等待你审阅并确认是否调整上述默认方案。
+本文件随实现状态维护；后续变更以用户最新要求为准。
 
 ## 11. 当前实现状态
 
-基础框架已实现：LÖVE Android runtime、应用专属项目目录与项目管理、Drawer 单目录文件浏览器及文件操作、Sora Editor、多标签、快捷输入栏、TextMate 语法资源注册、`.love` 打包与 Play 启动链路。
+基础框架已实现：LÖVE Android runtime、应用专属项目目录与项目管理、Drawer 单目录文件浏览器及文件操作、Sora Editor、文件/终端混合多标签、Termux 终端快捷键栏、arm64 proot、Ubuntu Base 首次安装流程、LuaLS 编辑器接入、TextMate 语法资源注册、`.love` 打包与 Play 启动链路。
 
 后续界面调整以用户最新要求为准：标签栏高度为 24dp；标签宽度随文件名自适应；文件名超过 15 个字符时显示前 15 个字符和 `...`；标签、关闭按钮和新建按钮均使用波纹反馈；活动标签底线使用主题色，其他标签使用灰色。该调整覆盖第 4.1 节原有的通用触控目标建议。
 
-当前维护流程只运行不依赖 Android runtime 的逻辑测试和 APK 构建，不使用 Android 模拟器；界面、输入法、文件系统和 LÖVE runtime 的实际交互由用户在真机验证。打开文件内容覆盖、保存后 dirty 圆点刷新和游戏退出影响编辑器进程的问题均已在源码侧修正。
+当前维护流程只运行不依赖 Android runtime 的逻辑测试和 APK 构建，不使用 Android 模拟器；界面、输入法、proot、Ubuntu 文件系统、LuaLS 和 LÖVE runtime 的实际交互由用户在 arm64 真机验证。打开文件内容覆盖、保存后 dirty 圆点刷新和游戏退出影响编辑器进程的问题均已在源码侧修正。
 
 以下属于计划中的增强边界，当前基础框架尚未实现：外部文件变化冲突检测、原始换行风格保留、二进制内容探测、Activity 重建后的完整标签会话恢复，以及项目列表的最近打开时间展示。

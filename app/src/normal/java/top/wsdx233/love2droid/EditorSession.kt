@@ -1,12 +1,15 @@
 package top.wsdx233.love2droid
 
+import com.termux.terminal.TerminalSession
 import java.io.File
+
+sealed interface WorkspaceTab
 
 class EditorTab(
     var file: File?,
     var text: String,
     var languageScope: String?,
-) {
+) : WorkspaceTab {
     var dirty: Boolean = false
     var selectionStart: Int = 0
     var selectionEnd: Int = 0
@@ -14,20 +17,29 @@ class EditorTab(
     var scrollY: Int = 0
 }
 
+class TerminalTab(
+    val session: TerminalSession,
+    var title: String,
+) : WorkspaceTab
+
 class EditorSession {
-    val tabs: MutableList<EditorTab> = mutableListOf()
+    val tabs: MutableList<WorkspaceTab> = mutableListOf()
     var activeIndex: Int = -1
         private set
 
-    val activeTab: EditorTab?
+    val activeTab: WorkspaceTab?
         get() = tabs.getOrNull(activeIndex)
+
+    val activeEditorTab: EditorTab?
+        get() = activeTab as? EditorTab
 
     fun find(file: File): EditorTab? {
         val canonical = file.canonicalFile
-        return tabs.firstOrNull { it.file?.canonicalFile == canonical }
+        return tabs.filterIsInstance<EditorTab>()
+            .firstOrNull { it.file?.canonicalFile == canonical }
     }
 
-    fun add(tab: EditorTab): Int {
+    fun add(tab: WorkspaceTab): Int {
         tabs += tab
         return tabs.lastIndex
     }

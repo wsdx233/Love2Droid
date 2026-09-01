@@ -54,6 +54,16 @@ class StorageAndPackagingTest {
         assertEquals(null, LanguageResolver.scopeFor(File("notes.txt")))
         assertEquals("JSON", LanguageResolver.displayName(File("data.json")))
     }
+
+    @Test
+    fun love2dConfigLoadsLuaJitAndBundledApiLibrary() {
+        val config = LuaLanguageServerProjectConfig.content()
+        assertTrue(config.contains("\"runtime.version\": \"LuaJIT\""))
+        assertTrue(config.contains("\"love.filesystem.load\": \"loadfile\""))
+        assertTrue(config.contains("\"workspace.library\""))
+        assertTrue(config.contains(ProotRuntime.LUA_LSP_LOVE_LIBRARY_GUEST_PATH))
+        assertTrue(config.contains("\"workspace.checkThirdParty\": false"))
+    }
     @Test
     fun addingLoadedTabKeepsCurrentTabUntilExplicitSelection() {
         val session = EditorSession()
@@ -67,6 +77,6 @@ class StorageAndPackagingTest {
         assertTrue(session.activeTab === current)
         session.select(loadedIndex)
         assertTrue(session.activeTab === loaded)
-        assertEquals("print('loaded')", session.activeTab?.text)
+        assertEquals("print('loaded')", session.activeEditorTab?.text)
     }
 }

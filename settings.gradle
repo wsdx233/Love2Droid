@@ -7,3 +7,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "Love2Droid"
 include ':app'
+include ':terminal-emulator', ':terminal-view'

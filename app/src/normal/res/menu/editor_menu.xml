@@ -17,6 +17,9 @@
                 android:icon="@drawable/ic_add"
                 android:title="@string/new_file" />
             <item
+                android:id="@+id/action_new_terminal"
+                android:title="@string/new_terminal" />
+            <item
                 android:id="@+id/action_save"
                 android:icon="@drawable/ic_save"
                 android:title="@string/save" />

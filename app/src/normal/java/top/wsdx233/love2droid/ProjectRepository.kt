@@ -5,6 +5,22 @@ import org.json.JSONObject
 import java.io.File
 import java.io.IOException
 import java.util.Locale
+internal object LuaLanguageServerProjectConfig {
+    const val FILE_NAME = ".luarc.json"
+
+    fun content(): String = """
+        {
+          "runtime.version": "LuaJIT",
+          "runtime.special": {
+            "love.filesystem.load": "loadfile"
+          },
+          "workspace.library": [
+            "${ProotRuntime.LUA_LSP_LOVE_LIBRARY_GUEST_PATH}"
+          ],
+          "workspace.checkThirdParty": false
+        }
+    """.trimIndent() + "\n"
+}
 
  data class Project(
     val id: String,
@@ -70,6 +86,10 @@ class ProjectRepository(context: Context) {
             StorageUtils.writeTextAtomic(
                 File(root, "conf.lua"),
                 "function love.conf(t)\n    t.identity = \"$id\"\n    t.window.title = \"${cleanName.replace("\"", "'")}\"\n    t.window.width = 800\n    t.window.height = 480\nend\n",
+            )
+            StorageUtils.writeTextAtomic(
+                File(root, LuaLanguageServerProjectConfig.FILE_NAME),
+                LuaLanguageServerProjectConfig.content(),
             )
             val project = Project(id, cleanName, description.trim(), root, 0L)
             writeMetadata(project)

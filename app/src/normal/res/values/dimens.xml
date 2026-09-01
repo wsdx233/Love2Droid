@@ -1,0 +1,3 @@
+<resources>
+    <dimen name="setup_actions_bottom_padding">16dp</dimen>
+</resources>

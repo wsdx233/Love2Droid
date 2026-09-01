@@ -2,6 +2,26 @@ Licensing information
 =====================
 
 This distribution contains code from the following projects (full license text below):
+ - r2droid terminal/proot integration reference
+	Website: https://github.com/wsdx233/r2droid
+	Reference commit: f1c63598688027dcbf4404c27ef14a3893ccb9e1
+	License: MIT; full text: licenses/R2DROID-LICENSE.txt
+
+ - Termux terminal-emulator and terminal-view
+	Website: https://github.com/termux/termux-app
+	Source release: v0.118.0
+	License: Apache License 2.0 exception; full text: licenses/TERMUX-TERMINAL-LICENSE.txt
+
+ - PRoot
+	Website: https://github.com/termux/proot
+	Source version: 5.1.107.92
+	License: GPL-2.0; full text: licenses/PROOT-LICENSE.txt
+
+ - Lua Language Server
+	Website: https://github.com/LuaLS/lua-language-server
+	Downloaded version: 3.19.1
+	License: MIT; full text: licenses/LUA-LANGUAGE-SERVER-LICENSE.txt
+
 
  - LOVE
 	Website: https://love2d.org/

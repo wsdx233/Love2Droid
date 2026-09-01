@@ -14,7 +14,9 @@ android {
         versionName project.properties["app.version_name"]
         minSdk 23
         compileSdk = 37
-        targetSdk = 37
+        // PRoot executes its bundled guest loader from app-private storage; Android's
+        // targetSdk 29+ W^X policy rejects that exec even when chmod succeeds.
+        targetSdk = 28
 
         externalNativeBuild {
             cmake {
@@ -158,6 +160,7 @@ android {
     }
     packagingOptions {
         jniLibs {
+            useLegacyPackaging true
             excludes += [
                 'lib/armeabi-v7a/libOpenSLES.so',
                 'lib/arm64-v8a/libOpenSLES.so',
@@ -186,6 +189,9 @@ dependencies {
     implementation 'io.github.rosemoe:editor:0.24.6'
     implementation 'io.github.rosemoe:language-textmate:0.24.6'
     testImplementation 'junit:junit:4.13.2'
+    implementation 'io.github.rosemoe:editor-lsp:0.24.6'
+    implementation 'org.apache.commons:commons-compress:1.28.0'
+    implementation project(':terminal-view')
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0'
 }
 

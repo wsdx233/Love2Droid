@@ -1,15 +1,25 @@
 package top.wsdx233.love2droid
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.res.Configuration
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.os.Build
 import android.os.Bundle
 import android.text.InputType
 import android.view.Gravity
+import android.util.TypedValue
+import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.LinearLayout
@@ -31,8 +41,13 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.color.MaterialColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.termux.terminal.TerminalSession
+import com.termux.terminal.TerminalSessionClient
+import com.termux.view.TerminalView
+import com.termux.view.TerminalViewClient
 import io.github.rosemoe.sora.event.ContentChangeEvent
 import io.github.rosemoe.sora.lang.EmptyLanguage
+import io.github.rosemoe.sora.lang.Language
 import io.github.rosemoe.sora.langs.textmate.TextMateColorScheme
 import io.github.rosemoe.sora.langs.textmate.TextMateLanguage
 import io.github.rosemoe.sora.langs.textmate.registry.FileProviderRegistry
@@ -45,6 +60,7 @@ import io.github.rosemoe.sora.widget.CodeEditor
 import io.github.rosemoe.sora.widget.SelectionMovement
 import io.github.rosemoe.sora.widget.subscribeAlways
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -62,6 +78,9 @@ class EditorActivity : AppCompatActivity() {
     private lateinit var drawerProjectPath: TextView
     private lateinit var drawerDirectoryMenu: View
     private lateinit var browserAdapter: FileBrowserAdapter
+    private lateinit var terminalView: TerminalView
+    private lateinit var terminalKeyBar: LinearLayout
+    private var lspController: LuaLspController? = null
 
     private val projectRepository by lazy { ProjectRepository(this) }
     private val editorSession = EditorSession()
@@ -77,6 +96,65 @@ class EditorActivity : AppCompatActivity() {
     private lateinit var editorTopInset: View
     private lateinit var drawerTopInset: View
     private var textMateReady = false
+    private var lspJob: Job? = null
+    private var terminalCounter = 0
+    private var ctrlPressed = false
+    private var altPressed = false
+    private var ctrlButton: TextView? = null
+    private var altButton: TextView? = null
+
+    private val terminalSessionClient = object : TerminalSessionClient {
+        override fun onTextChanged(changedSession: TerminalSession) {
+            if (::terminalView.isInitialized && terminalView.mTermSession === changedSession) {
+                terminalView.onScreenUpdated()
+            }
+        }
+
+        override fun onTitleChanged(changedSession: TerminalSession) {
+            val tab = editorSession.tabs.filterIsInstance<TerminalTab>()
+                .firstOrNull { it.session === changedSession }
+            val title = changedSession.title?.trim().orEmpty()
+            if (tab != null && title.isNotEmpty()) {
+                tab.title = title
+                refreshTabs()
+            }
+        }
+
+        override fun onSessionFinished(finishedSession: TerminalSession) {
+            editorSession.tabs.filterIsInstance<TerminalTab>()
+                .firstOrNull { it.session === finishedSession }
+                ?.let { tab ->
+                    tab.title = getString(R.string.terminal_finished, tab.title)
+                    refreshTabs()
+                }
+        }
+
+        override fun onCopyTextToClipboard(session: TerminalSession, text: String?) {
+            val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+            clipboard.setPrimaryClip(ClipData.newPlainText(getString(R.string.terminal), text.orEmpty()))
+        }
+
+        override fun onPasteTextFromClipboard(session: TerminalSession?) {
+            val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+            val clip = clipboard.primaryClip ?: return
+            if (clip.itemCount > 0) {
+                session?.write(clip.getItemAt(0).coerceToText(this@EditorActivity).toString())
+            }
+        }
+
+        override fun onBell(session: TerminalSession) = Unit
+        override fun onColorsChanged(session: TerminalSession) = Unit
+        override fun onTerminalCursorStateChange(state: Boolean) = Unit
+        override fun setTerminalShellPid(session: TerminalSession, pid: Int) = Unit
+        override fun getTerminalCursorStyle(): Int = 0
+        override fun logError(tag: String?, message: String?) = Unit
+        override fun logWarn(tag: String?, message: String?) = Unit
+        override fun logInfo(tag: String?, message: String?) = Unit
+        override fun logDebug(tag: String?, message: String?) = Unit
+        override fun logVerbose(tag: String?, message: String?) = Unit
+        override fun logStackTraceWithMessage(tag: String?, message: String?, error: Exception?) = Unit
+        override fun logStackTrace(tag: String?, error: Exception?) = Unit
+    }
 
     private val projectManagerLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
@@ -101,6 +179,8 @@ class EditorActivity : AppCompatActivity() {
         editorTopInset = findViewById(R.id.editor_top_inset)
         drawerTopInset = findViewById(R.id.drawer_top_inset)
         editor = findViewById(R.id.code_editor)
+        terminalView = findViewById(R.id.terminal_view)
+        terminalKeyBar = findViewById(R.id.terminal_key_bar)
         welcomePage = findViewById(R.id.welcome_page)
         drawerProjectTitle = findViewById(R.id.drawer_project_title)
         drawerProjectPath = findViewById(R.id.drawer_project_path)
@@ -133,7 +213,13 @@ class EditorActivity : AppCompatActivity() {
             }
         })
         setupSymbolBar()
+        setupTerminal()
         setupEditorInput()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            lspController = LuaLspController(this, editor) { error ->
+                toast(getString(R.string.lua_lsp_connection_failed, error.message ?: error.javaClass.simpleName))
+            }
+        }
         browserAdapter = FileBrowserAdapter(
             onClick = ::onBrowserItemClicked,
             onLongClick = ::showBrowserItemMenu,
@@ -148,7 +234,7 @@ class EditorActivity : AppCompatActivity() {
         setupTextMate()
         editor.subscribeAlways<ContentChangeEvent> {
             if (!suppressEditorEvents) {
-                editorSession.activeTab?.let { tab ->
+                editorSession.activeEditorTab?.let { tab ->
                     tab.text = editor.text.toString()
                     tab.dirty = true
                     refreshTabs()
@@ -171,10 +257,12 @@ class EditorActivity : AppCompatActivity() {
             editorTopInset.layoutParams = editorTopInset.layoutParams.apply { height = systemBars.top }
             drawerTopInset.layoutParams = drawerTopInset.layoutParams.apply { height = systemBars.top }
             val bottomInset = maxOf(systemBars.bottom, ime.bottom)
-            (symbolScroll.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
-                if (params.bottomMargin != bottomInset) {
-                    params.bottomMargin = bottomInset
-                    symbolScroll.layoutParams = params
+            listOf(symbolScroll, terminalKeyBar).forEach { bottomBar ->
+                (bottomBar.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
+                    if (params.bottomMargin != bottomInset) {
+                        params.bottomMargin = bottomInset
+                        bottomBar.layoutParams = params
+                    }
                 }
             }
             insets
@@ -215,6 +303,145 @@ class EditorActivity : AppCompatActivity() {
         addButton("{") { insertSymbolPair("{", "}") }
         listOf("\"", "=", ":", ".", ",", "_", "+", "-", "*", "/", "\\", "%", "#", "^", "$", "?", "&", "|", "<", ">", "~", ";", "'")
             .forEach { symbol -> addButton(symbol) { insertSymbol(symbol) } }
+    }
+
+    private fun setupTerminal() {
+        terminalView.setBackgroundColor(Color.BLACK)
+        terminalView.setTextSize((14f * resources.displayMetrics.scaledDensity).toInt())
+        terminalView.keepScreenOn = true
+        terminalView.setTerminalViewClient(object : TerminalViewClient {
+            override fun onScale(scale: Float): Float = 1f
+
+            override fun onSingleTapUp(event: MotionEvent?) {
+                terminalView.requestFocus()
+                val input = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+                input.showSoftInput(terminalView, InputMethodManager.SHOW_IMPLICIT)
+            }
+
+            override fun shouldBackButtonBeMappedToEscape(): Boolean = false
+            override fun shouldEnforceCharBasedInput(): Boolean = false
+            override fun shouldUseCtrlSpaceWorkaround(): Boolean = false
+            override fun isTerminalViewSelected(): Boolean = terminalView.isShown
+            override fun copyModeChanged(copyMode: Boolean) = Unit
+            override fun onKeyDown(keyCode: Int, event: KeyEvent?, session: TerminalSession?): Boolean = false
+            override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean = false
+            override fun onLongPress(event: MotionEvent?): Boolean = false
+
+            override fun readControlKey(): Boolean {
+                val active = ctrlPressed
+                ctrlPressed = false
+                updateTerminalModifierButtons()
+                return active
+            }
+
+            override fun readAltKey(): Boolean {
+                val active = altPressed
+                altPressed = false
+                updateTerminalModifierButtons()
+                return active
+            }
+
+            override fun readShiftKey(): Boolean = false
+            override fun readFnKey(): Boolean = false
+            override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession?): Boolean = false
+            override fun onEmulatorSet() = Unit
+            override fun logError(tag: String?, message: String?) = Unit
+            override fun logWarn(tag: String?, message: String?) = Unit
+            override fun logInfo(tag: String?, message: String?) = Unit
+            override fun logDebug(tag: String?, message: String?) = Unit
+            override fun logVerbose(tag: String?, message: String?) = Unit
+            override fun logStackTraceWithMessage(tag: String?, message: String?, error: Exception?) = Unit
+            override fun logStackTrace(tag: String?, error: Exception?) = Unit
+        })
+        setupTerminalKeys()
+    }
+
+    private fun setupTerminalKeys() {
+        val firstRow = listOf(
+            TerminalKey("ESC", "\u001b"),
+            TerminalKey("/", "/"),
+            TerminalKey("—", "-"),
+            TerminalKey("HOME", "\u001b[H"),
+            TerminalKey("↑", "\u001b[A"),
+            TerminalKey("END", "\u001b[F"),
+            TerminalKey("PGUP", "\u001b[5~"),
+        )
+        val secondRow = listOf(
+            TerminalKey("⇥", "\t"),
+            TerminalKey("CTRL", modifier = TerminalModifier.CTRL),
+            TerminalKey("ALT", modifier = TerminalModifier.ALT),
+            TerminalKey("←", "\u001b[D"),
+            TerminalKey("↓", "\u001b[B"),
+            TerminalKey("→", "\u001b[C"),
+            TerminalKey("PGDN", "\u001b[6~"),
+        )
+        terminalKeyBar.removeAllViews()
+        terminalKeyBar.addView(createTerminalKeyRow(firstRow))
+        terminalKeyBar.addView(View(this), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(3)))
+        terminalKeyBar.addView(createTerminalKeyRow(secondRow))
+    }
+
+    private fun createTerminalKeyRow(keys: List<TerminalKey>): LinearLayout {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            )
+            keys.forEach { key ->
+                val button = TextView(this@EditorActivity).apply {
+                    text = key.label
+                    setTextColor(Color.WHITE)
+                    setTextSize(
+                        TypedValue.COMPLEX_UNIT_SP,
+                        if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) 11f else 12f,
+                    )
+                    typeface = Typeface.MONOSPACE
+                    gravity = Gravity.CENTER
+                    background = GradientDrawable().apply {
+                        setColor(TERMINAL_KEY_COLOR)
+                        cornerRadius = dp(4).toFloat()
+                    }
+                    contentDescription = key.label
+                }
+                button.layoutParams = LinearLayout.LayoutParams(0, dp(38), 1f).apply {
+                    marginStart = dp(1)
+                    marginEnd = dp(1)
+                }
+                when (key.modifier) {
+                    TerminalModifier.CTRL -> {
+                        ctrlButton = button
+                        button.setOnClickListener {
+                            ctrlPressed = !ctrlPressed
+                            updateTerminalModifierButtons()
+                            terminalView.requestFocus()
+                        }
+                    }
+                    TerminalModifier.ALT -> {
+                        altButton = button
+                        button.setOnClickListener {
+                            altPressed = !altPressed
+                            updateTerminalModifierButtons()
+                            terminalView.requestFocus()
+                        }
+                    }
+                    null -> button.setOnClickListener {
+                        (editorSession.activeTab as? TerminalTab)?.session?.write(key.sequence)
+                        terminalView.requestFocus()
+                    }
+                }
+                addView(button)
+            }
+        }
+    }
+
+    private fun updateTerminalModifierButtons() {
+        (ctrlButton?.background as? GradientDrawable)?.setColor(
+            if (ctrlPressed) TERMINAL_MODIFIER_COLOR else TERMINAL_KEY_COLOR,
+        )
+        (altButton?.background as? GradientDrawable)?.setColor(
+            if (altPressed) TERMINAL_MODIFIER_COLOR else TERMINAL_KEY_COLOR,
+        )
     }
 
     private fun setupEditorInput() {
@@ -269,6 +496,28 @@ class EditorActivity : AppCompatActivity() {
         selectTab(index)
     }
 
+    private fun newTerminal() {
+        if (!ProotRuntime.isEnvironmentReady(this)) {
+            startActivity(Intent(this, SetupActivity::class.java))
+            return
+        }
+        captureEditorState()
+        val launch = ProotRuntime.terminalLaunch(this, currentProject?.root)
+        val session = TerminalSession(
+            launch.executable,
+            launch.workingDirectory,
+            launch.arguments,
+            launch.environment,
+            2000,
+            terminalSessionClient,
+        )
+        terminalCounter += 1
+        val index = editorSession.add(
+            TerminalTab(session, getString(R.string.terminal_tab_title, terminalCounter)),
+        )
+        selectTab(index)
+    }
+
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     private fun onToolbarItemSelected(item: MenuItem): Boolean {
@@ -279,6 +528,10 @@ class EditorActivity : AppCompatActivity() {
             }
             R.id.action_new_document -> {
                 newDocument()
+                true
+            }
+            R.id.action_new_terminal -> {
+                newTerminal()
                 true
             }
             R.id.action_save -> {
@@ -298,8 +551,12 @@ class EditorActivity : AppCompatActivity() {
                 true
             }
             R.id.action_word_wrap -> {
-                editor.isWordwrap = !editor.isWordwrap
-                item.isChecked = editor.isWordwrap
+                if (editor.isShown) {
+                    editor.isWordwrap = !editor.isWordwrap
+                    item.isChecked = editor.isWordwrap
+                } else {
+                    toast(getString(R.string.no_active_document))
+                }
                 true
             }
             R.id.action_projects -> {
@@ -319,6 +576,7 @@ class EditorActivity : AppCompatActivity() {
 
     private fun switchProject(project: Project) {
         if (!saveAllBlocking(requireNamed = true)) return
+        finishTerminalTabs()
         currentProject = projectRepository.markOpened(project)
         editorSession.clear()
         selectedPaths.clear()
@@ -336,9 +594,18 @@ class EditorActivity : AppCompatActivity() {
 
     private fun showEmptyEditor() {
         editor.clearFocus()
+        terminalView.clearFocus()
         editor.visibility = View.GONE
+        terminalView.visibility = View.GONE
         symbolScroll.visibility = View.GONE
+        terminalKeyBar.visibility = View.GONE
         welcomePage.visibility = View.VISIBLE
+        scheduleLsp(null)
+    }
+
+    private fun finishTerminalTabs() {
+        editorSession.tabs.filterIsInstance<TerminalTab>()
+            .forEach { it.session.finishIfRunning() }
     }
 
     private fun refreshFileList() {
@@ -718,12 +985,18 @@ class EditorActivity : AppCompatActivity() {
     private fun selectTab(index: Int) {
         if (editorSession.activeIndex != index) captureEditorState()
         editorSession.select(index)
-        val tab = editorSession.activeTab ?: run {
-            showEmptyEditor()
-            return
+        when (val tab = editorSession.activeTab) {
+            is EditorTab -> showEditorTab(tab)
+            is TerminalTab -> showTerminalTab(tab)
+            null -> showEmptyEditor()
         }
+        refreshTabs()
+    }
+
+    private fun showEditorTab(tab: EditorTab) {
         suppressEditorEvents = true
-        setEditorLanguage(tab.languageScope)
+        val language = createEditorLanguage(tab.languageScope)
+        editor.setEditorLanguage(language)
         editor.setText(tab.text)
         editor.postInvalidate()
         val left = tab.selectionStart.coerceIn(0, editor.text.length)
@@ -740,20 +1013,52 @@ class EditorActivity : AppCompatActivity() {
         editor.scroller.startScroll(tab.scrollX, tab.scrollY, 0, 0, 0)
         editor.scroller.abortAnimation()
         suppressEditorEvents = false
+        terminalView.visibility = View.GONE
+        terminalKeyBar.visibility = View.GONE
         editor.visibility = View.VISIBLE
         symbolScroll.visibility = View.VISIBLE
         welcomePage.visibility = View.GONE
-        refreshTabs()
+        scheduleLsp(tab, language)
+    }
+
+    private fun showTerminalTab(tab: TerminalTab) {
+        editor.clearFocus()
+        editor.visibility = View.GONE
+        symbolScroll.visibility = View.GONE
+        welcomePage.visibility = View.GONE
+        terminalView.visibility = View.VISIBLE
+        terminalKeyBar.visibility = View.VISIBLE
+        ctrlPressed = false
+        altPressed = false
+        updateTerminalModifierButtons()
+        terminalView.attachSession(tab.session)
+        terminalView.onScreenUpdated()
+        terminalView.requestFocus()
+        scheduleLsp(null)
     }
 
     private fun captureEditorState() {
-        val tab = editorSession.activeTab ?: return
-        if (suppressEditorEvents) return
+        val tab = editorSession.activeEditorTab ?: return
+        if (suppressEditorEvents || !editor.isShown) return
         tab.text = editor.text.toString()
         tab.selectionStart = editor.cursor.left
         tab.selectionEnd = editor.cursor.right
         tab.scrollX = editor.offsetX
         tab.scrollY = editor.offsetY
+    }
+
+    private fun scheduleLsp(tab: EditorTab?, language: Language? = null) {
+        val controller = lspController ?: return
+        lspJob?.cancel()
+        lspJob = lifecycleScope.launch {
+            val file = tab?.file
+            val project = currentProject
+            if (file != null && project != null && language != null) {
+                controller.attach(project.root, file, language)
+            } else {
+                controller.detach()
+            }
+        }
     }
 
     private fun refreshTabs() {
@@ -788,13 +1093,17 @@ class EditorActivity : AppCompatActivity() {
                 gravity = Gravity.CENTER
             }
             val label = TextView(this).apply {
-                val name = tab.file?.name ?: getString(R.string.unnamed_file)
+                val name = when (tab) {
+                    is EditorTab -> tab.file?.name ?: getString(R.string.unnamed_file)
+                    is TerminalTab -> tab.title
+                }
                 val shortenedName = if (name.length > MAX_TAB_NAME_CHARS) {
                     name.take(MAX_TAB_NAME_CHARS) + "..."
                 } else {
                     name
                 }
-                text = if (tab.dirty) getString(R.string.dirty_tab_label, shortenedName) else shortenedName
+                val dirty = (tab as? EditorTab)?.dirty == true
+                text = if (dirty) getString(R.string.dirty_tab_label, shortenedName) else shortenedName
                 setTextColor(if (index == editorSession.activeIndex) Color.WHITE else Color.LTGRAY)
                 textSize = 13f
                 gravity = Gravity.CENTER
@@ -809,7 +1118,9 @@ class EditorActivity : AppCompatActivity() {
                 setPadding(dp(3), dp(3), dp(3), dp(3))
                 minimumWidth = 0
                 minimumHeight = 0
-                contentDescription = getString(R.string.close_file)
+                contentDescription = getString(
+                    if (tab is TerminalTab) R.string.close_terminal else R.string.close_file,
+                )
                 setOnClickListener { closeTab(index) }
             }
             content.addView(label, LinearLayout.LayoutParams(
@@ -853,22 +1164,34 @@ class EditorActivity : AppCompatActivity() {
     }
 
     private fun closeTab(index: Int) {
-        val tab = editorSession.tabs.getOrNull(index) ?: return
-        if (tab.dirty) {
-            MaterialAlertDialogBuilder(this)
-                .setTitle(getString(R.string.unsaved_file_title, tab.file?.name ?: getString(R.string.unnamed_file)))
-                .setNegativeButton(R.string.cancel, null)
-                .setNeutralButton(R.string.discard_changes) { _, _ -> removeTab(index) }
-                .setPositiveButton(R.string.save_changes) { _, _ ->
-                    if (tab.file == null) {
-                        saveTabAs(tab) { removeTab(index) }
-                    } else if (saveTabBlocking(tab)) {
-                        removeTab(index)
-                    }
+        when (val tab = editorSession.tabs.getOrNull(index) ?: return) {
+            is TerminalTab -> {
+                tab.session.finishIfRunning()
+                removeTab(index)
+            }
+            is EditorTab -> {
+                if (tab.dirty) {
+                    MaterialAlertDialogBuilder(this)
+                        .setTitle(
+                            getString(
+                                R.string.unsaved_file_title,
+                                tab.file?.name ?: getString(R.string.unnamed_file),
+                            ),
+                        )
+                        .setNegativeButton(R.string.cancel, null)
+                        .setNeutralButton(R.string.discard_changes) { _, _ -> removeTab(index) }
+                        .setPositiveButton(R.string.save_changes) { _, _ ->
+                            if (tab.file == null) {
+                                saveTabAs(tab) { removeTab(index) }
+                            } else if (saveTabBlocking(tab)) {
+                                removeTab(index)
+                            }
+                        }
+                        .show()
+                } else {
+                    removeTab(index)
                 }
-                .show()
-        } else {
-            removeTab(index)
+            }
         }
     }
 
@@ -881,7 +1204,7 @@ class EditorActivity : AppCompatActivity() {
 
     private fun saveActiveDocument() {
         captureEditorState()
-        val tab = editorSession.activeTab ?: run {
+        val tab = editorSession.activeEditorTab ?: run {
             toast(getString(R.string.no_active_document))
             return
         }
@@ -894,7 +1217,8 @@ class EditorActivity : AppCompatActivity() {
 
     private fun saveActiveDocumentAs() {
         captureEditorState()
-        editorSession.activeTab?.let(::saveTabAs) ?: toast(getString(R.string.no_active_document))
+        editorSession.activeEditorTab?.let(::saveTabAs)
+            ?: toast(getString(R.string.no_active_document))
     }
 
     private fun saveTabAs(tab: EditorTab, onSaved: () -> Unit = {}) {
@@ -918,7 +1242,7 @@ class EditorActivity : AppCompatActivity() {
                 tab.file = target
                 tab.languageScope = LanguageResolver.scopeFor(target)
                 tab.dirty = false
-                if (editorSession.activeTab === tab) setEditorLanguage(tab.languageScope)
+                if (editorSession.activeEditorTab === tab) applyEditorLanguage(tab)
             }.onSuccess {
                 refreshTabs()
                 refreshFileList()
@@ -929,19 +1253,26 @@ class EditorActivity : AppCompatActivity() {
 
     private fun saveTabBlocking(tab: EditorTab): Boolean {
         val file = tab.file ?: return false
-        return runCatching {
+        val saved = runCatching {
             StorageUtils.writeTextAtomic(file, tab.text)
             tab.dirty = false
         }.onFailure { toast(it.message ?: "保存失败") }.isSuccess
+        if (saved) {
+            lspController?.let { controller ->
+                lifecycleScope.launch { controller.notifySaved(file) }
+            }
+        }
+        return saved
     }
 
     private fun saveAllBlocking(requireNamed: Boolean = false): Boolean {
         captureEditorState()
-        if (requireNamed && editorSession.tabs.any { it.dirty && it.file == null }) {
+        val editorTabs = editorSession.tabs.filterIsInstance<EditorTab>()
+        if (requireNamed && editorTabs.any { it.dirty && it.file == null }) {
             toast("存在未命名未保存文件，请先另存为")
             return false
         }
-        val saved = editorSession.tabs.filter { it.file != null }.all(::saveTabBlocking)
+        val saved = editorTabs.filter { it.file != null }.all(::saveTabBlocking)
         if (saved) refreshTabs()
         return saved
     }
@@ -970,15 +1301,20 @@ class EditorActivity : AppCompatActivity() {
         }
     }
 
-    private fun setEditorLanguage(scope: String?) {
-        val language = if (scope == null || !textMateReady) {
+    private fun applyEditorLanguage(tab: EditorTab) {
+        val language = createEditorLanguage(tab.languageScope)
+        editor.setEditorLanguage(language)
+        scheduleLsp(tab, language)
+    }
+
+    private fun createEditorLanguage(scope: String?): Language {
+        return if (scope == null || !textMateReady) {
             EmptyLanguage()
         } else {
             runCatching { TextMateLanguage.create(scope, true) }
                 .onFailure { toast(getString(R.string.syntax_highlighting_failed, scope)) }
                 .getOrElse { EmptyLanguage() }
         }
-        editor.setEditorLanguage(language)
     }
 
     private fun setupTextMate() {
@@ -1014,6 +1350,21 @@ class EditorActivity : AppCompatActivity() {
         super.onPause()
     }
 
+    override fun onDestroy() {
+        lspJob?.cancel()
+        lspController?.close()
+        finishTerminalTabs()
+        super.onDestroy()
+    }
+
+    private enum class TerminalModifier { CTRL, ALT }
+
+    private data class TerminalKey(
+        val label: String,
+        val sequence: String = "",
+        val modifier: TerminalModifier? = null,
+    )
+
 
     companion object {
         private const val MAX_EDITOR_BYTES = 5L * 1024 * 1024
@@ -1030,5 +1381,7 @@ class EditorActivity : AppCompatActivity() {
         private const val MENU_CLEAR_SELECTION = 11
         private const val MENU_REFRESH = 12
         private const val MAX_TAB_NAME_CHARS = 15
+        private const val TERMINAL_KEY_COLOR = 0xFF424242.toInt()
+        private const val TERMINAL_MODIFIER_COLOR = 0xFF5C6BC0.toInt()
     }
 }

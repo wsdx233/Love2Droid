@@ -61,6 +61,15 @@
                 android:paddingBottom="8dp"
                 android:textSize="14sp" />
 
+            <com.termux.view.TerminalView
+                android:id="@+id/terminal_view"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="#000000"
+                android:focusable="true"
+                android:focusableInTouchMode="true"
+                android:visibility="gone" />
+
             <LinearLayout
                 android:id="@+id/welcome_page"
                 android:layout_width="match_parent"
@@ -126,6 +135,18 @@
                 android:paddingStart="4dp"
                 android:paddingEnd="4dp" />
         </HorizontalScrollView>
+
+        <LinearLayout
+            android:id="@+id/terminal_key_bar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="#2D2D2D"
+            android:orientation="vertical"
+            android:paddingStart="4dp"
+            android:paddingTop="3dp"
+            android:paddingEnd="4dp"
+            android:paddingBottom="3dp"
+            android:visibility="gone" />
     </LinearLayout>
 
     <LinearLayout
