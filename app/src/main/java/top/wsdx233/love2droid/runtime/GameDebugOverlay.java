@@ -21,6 +21,8 @@ import android.widget.Toast;
 import androidx.core.content.ContextCompat;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
+import android.view.ContextThemeWrapper;
+
 import java.nio.charset.StandardCharsets;
 
 import top.wsdx233.love2droid.R;
@@ -110,7 +112,7 @@ final class GameDebugOverlay extends FrameLayout {
     }
 
     private void showMenu() {
-        new MaterialAlertDialogBuilder(activity)
+        dialogBuilder()
             .setTitle(R.string.debug_menu_title)
             .setItems(new CharSequence[]{
                 activity.getString(R.string.debug_exit),
@@ -152,7 +154,7 @@ final class GameDebugOverlay extends FrameLayout {
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT
         ));
-        new MaterialAlertDialogBuilder(activity)
+        dialogBuilder()
             .setTitle(R.string.debug_logs)
             .setView(scroll)
             .setPositiveButton(R.string.debug_close, null)
@@ -176,7 +178,7 @@ final class GameDebugOverlay extends FrameLayout {
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT
         ));
-        AlertDialog dialog = new MaterialAlertDialogBuilder(activity)
+        AlertDialog dialog = dialogBuilder()
             .setTitle(R.string.debug_execute_code)
             .setView(container)
             .setNegativeButton(R.string.debug_close, null)
@@ -193,6 +195,11 @@ final class GameDebugOverlay extends FrameLayout {
             Toast.makeText(activity, R.string.debug_code_submitted, Toast.LENGTH_SHORT).show();
         }));
         dialog.show();
+    }
+
+    private MaterialAlertDialogBuilder dialogBuilder() {
+        return new MaterialAlertDialogBuilder(new ContextThemeWrapper(
+            activity, R.style.Theme_Love2Droid_DebugDialog));
     }
 
     private FrameLayout.LayoutParams bubbleLayoutParams() {
