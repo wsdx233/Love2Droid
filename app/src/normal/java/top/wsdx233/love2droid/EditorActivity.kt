@@ -33,6 +33,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.view.GravityCompat
 import androidx.core.view.ViewCompat
+import androidx.core.content.res.ResourcesCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
@@ -102,6 +103,12 @@ class EditorActivity : AppCompatActivity() {
     private var altPressed = false
     private var ctrlButton: TextView? = null
     private var altButton: TextView? = null
+    private val mapleTypeface: Typeface by lazy {
+        requireNotNull(ResourcesCompat.getFont(this, R.font.maple_mono_nf_cn_regular))
+    }
+    private val terminalDefaultTextSizePx by lazy { sp(12f) }
+    private val terminalMinTextSizePx by lazy { sp(8f) }
+    private val terminalMaxTextSizePx by lazy { sp(32f) }
 
     private val terminalSessionClient = object : TerminalSessionClient {
         override fun onTextChanged(changedSession: TerminalSession) {
@@ -283,7 +290,7 @@ class EditorActivity : AppCompatActivity() {
             val button = TextView(this).apply {
                 text = label
                 textSize = 18f
-                typeface = Typeface.MONOSPACE
+                typeface = mapleTypeface
                 gravity = Gravity.CENTER
                 minWidth = dp(44)
                 minHeight = dp(48)
@@ -307,10 +314,18 @@ class EditorActivity : AppCompatActivity() {
 
     private fun setupTerminal() {
         terminalView.setBackgroundColor(Color.BLACK)
-        terminalView.setTextSize((14f * resources.displayMetrics.scaledDensity).toInt())
+        terminalView.setTextSize(terminalDefaultTextSizePx.toInt())
+        terminalView.setTypeface(mapleTypeface)
         terminalView.keepScreenOn = true
         terminalView.setTerminalViewClient(object : TerminalViewClient {
-            override fun onScale(scale: Float): Float = 1f
+            override fun onScale(scale: Float): Float {
+                val textSizePx = (terminalDefaultTextSizePx * scale).coerceIn(
+                    terminalMinTextSizePx,
+                    terminalMaxTextSizePx,
+                )
+                terminalView.setTextSize(textSizePx.toInt().coerceAtLeast(1))
+                return textSizePx / terminalDefaultTextSizePx
+            }
 
             override fun onSingleTapUp(event: MotionEvent?) {
                 terminalView.requestFocus()
@@ -396,7 +411,7 @@ class EditorActivity : AppCompatActivity() {
                         TypedValue.COMPLEX_UNIT_SP,
                         if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) 11f else 12f,
                     )
-                    typeface = Typeface.MONOSPACE
+                    typeface = mapleTypeface
                     gravity = Gravity.CENTER
                     background = GradientDrawable().apply {
                         setColor(TERMINAL_KEY_COLOR)
@@ -445,6 +460,9 @@ class EditorActivity : AppCompatActivity() {
     }
 
     private fun setupEditorInput() {
+        editor.typefaceText = mapleTypeface
+        editor.typefaceLineNumber = mapleTypeface
+        editor.setTextSize(12f)
         editor.isFocusableInTouchMode = true
         editor.setInputType(
             InputType.TYPE_CLASS_TEXT or
@@ -453,7 +471,6 @@ class EditorActivity : AppCompatActivity() {
         )
         editor.props.allowFullscreen = false
     }
-
     private fun insertSymbol(symbol: String) {
         if (!editor.isShown) return
         val start = editor.cursor.left
@@ -519,6 +536,8 @@ class EditorActivity : AppCompatActivity() {
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+    private fun sp(value: Float): Float =
+        TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, value, resources.displayMetrics)
 
     private fun onToolbarItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
@@ -1105,6 +1124,7 @@ class EditorActivity : AppCompatActivity() {
                 val dirty = (tab as? EditorTab)?.dirty == true
                 text = if (dirty) getString(R.string.dirty_tab_label, shortenedName) else shortenedName
                 setTextColor(if (index == editorSession.activeIndex) Color.WHITE else Color.LTGRAY)
+                typeface = mapleTypeface
                 textSize = 13f
                 gravity = Gravity.CENTER
                 maxLines = 1

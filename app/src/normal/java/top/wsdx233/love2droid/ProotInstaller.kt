@@ -39,6 +39,7 @@ private const val LUA_LS_URL =
     "https://github.com/LuaLS/lua-language-server/releases/download/$LUA_LS_VERSION/$LUA_LS_FILE"
 private const val LUA_LS_SHA256 =
     "abd2572e8fc929dc838a81ffb8473c5bce0bf39bfe8edb4b120b3b623176ce83"
+private const val OMP_INSTALL_URL = "https://omp.sh/install"
 
 
 data class ProotInstallState(
@@ -119,7 +120,12 @@ object ProotInstaller {
                         appendLog(appContext.getString(R.string.proot_log_rootfs_reused))
                     }
                     repairRootfsPermissions(appContext)
-                    installLuaLanguageServer(appContext)
+                    if (ProotRuntime.luaLanguageServer(appContext).isFile) {
+                        appendLog(appContext.getString(R.string.proot_log_lsp_reused))
+                    } else {
+                        installLuaLanguageServer(appContext)
+                    }
+                    installOmp(appContext)
                     writeReadyMarker(appContext)
                     File(appContext.cacheDir, "proot/$UBUNTU_BASE_FILE").delete()
                     update(
@@ -422,9 +428,50 @@ object ProotInstaller {
         }
         update(
             ProotInstallState.Status.INSTALLING,
+            84,
+            context.getString(R.string.proot_install_verifying),
+        )
+    }
+    private fun installOmp(context: Context) {
+        update(
+            ProotInstallState.Status.INSTALLING,
+            88,
+            context.getString(R.string.proot_install_omp),
+        )
+        val script = """
+            set -eu
+            export HOME=/root
+            export PI_INSTALL_DIR=/root/.local/bin
+            curl -fsSL $OMP_INSTALL_URL | sh
+            if [ ! -x /root/.local/bin/omp ]; then
+                for candidate in /root/.bun/bin/omp /root/.bun/install/global/node_modules/.bin/omp; do
+                    if [ -x "${'$'}{candidate}" ]; then
+                        mkdir -p /root/.local/bin
+                        ln -sf "${'$'}{candidate}" /root/.local/bin/omp
+                        break
+                    fi
+                done
+            fi
+            mkdir -p /root
+            touch /root/.bashrc
+            if ! grep -Fqx 'export PATH="/root/.local/bin:${'$'}PATH"' /root/.bashrc; then
+                printf '\nexport PATH="/root/.local/bin:${'$'}PATH"\n' >> /root/.bashrc
+            fi
+            if [ -e /root/.local/bin/omp ]; then
+                chmod 0755 /root/.local/bin/omp
+            fi
+            test -x /root/.local/bin/omp
+        """.trimIndent()
+        runProotCommand(context, script)
+        check(ProotRuntime.ompBinary(context).isFile) {
+            "omp executable was not installed"
+        }
+        update(
+            ProotInstallState.Status.INSTALLING,
             97,
             context.getString(R.string.proot_install_verifying),
         )
+        appendLog(context.getString(R.string.proot_log_omp_installed))
     }
 
     private fun runProotCommand(context: Context, script: String) {
@@ -449,7 +496,7 @@ object ProotInstaller {
 
     private fun writeReadyMarker(context: Context) {
         ProotRuntime.readyMarker(context).writeText(
-            "ubuntu=24.04.4\nlua-language-server=$LUA_LS_VERSION\nabi=${ProotRuntime.SUPPORTED_ABI}\n",
+            "ubuntu=24.04.4\nlua-language-server=$LUA_LS_VERSION\nomp=/root/.local/bin/omp\nabi=${ProotRuntime.SUPPORTED_ABI}\n",
         )
     }
 

@@ -12,6 +12,8 @@ object ProotRuntime {
     private const val LUA_LANGUAGE_SERVER_GUEST_PATH = "/opt/lua-language-server/bin/lua-language-server"
     internal const val LUA_LSP_LOVE_LIBRARY_GUEST_PATH =
         "/opt/lua-language-server/meta/3rd/love2d/library"
+    private const val OMP_GUEST_PATH = "/root/.local/bin/omp"
+    private const val OMP_BASHRC_ENTRY = "export PATH=\"/root/.local/bin:\$PATH\""
     private const val READY_MARKER_NAME = ".setup-complete"
 
     data class LaunchSpec(
@@ -50,7 +52,21 @@ object ProotRuntime {
             prootBinary(context).isFile &&
             rootfsDir(context).isDirectory &&
             readyMarker(context).isFile &&
-            luaLanguageServer(context).isFile
+            luaLanguageServer(context).isFile &&
+            isOmpReady(context)
+    }
+
+    fun ompBinary(context: Context): File =
+        File(rootfsDir(context), OMP_GUEST_PATH.removePrefix("/"))
+
+    fun rootBashrc(context: Context): File =
+        File(rootfsDir(context), "root/.bashrc")
+
+    fun isOmpReady(context: Context): Boolean {
+        val bashrc = rootBashrc(context)
+        return ompBinary(context).isFile &&
+            bashrc.isFile &&
+            bashrc.useLines { lines -> lines.any { it.trim() == OMP_BASHRC_ENTRY } }
     }
 
     fun terminalLaunch(context: Context, projectRoot: File?): TerminalLaunchSpec {
@@ -164,7 +180,7 @@ object ProotRuntime {
             "-i",
             "HOME=/root",
             "LANG=C.UTF-8",
-            "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+            "PATH=/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
             "XDG_DATA_HOME=/root/.local/share",
             "XDG_CACHE_HOME=/root/.cache",
             "TMPDIR=/tmp",

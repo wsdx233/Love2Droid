@@ -64,7 +64,7 @@
             android:id="@+id/setup_logs"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:fontFamily="monospace"
+            android:fontFamily="@font/maple_mono_nf_cn_regular"
             android:padding="12dp"
             android:text="@string/proot_setup_logs_empty"
             android:textColor="#D4D4D8"
