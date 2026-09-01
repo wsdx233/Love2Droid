@@ -66,6 +66,13 @@ class StorageAndPackagingTest {
         assertTrue(config.contains(ProotRuntime.LUA_LSP_LOVE_LIBRARY_GUEST_PATH))
         assertTrue(config.contains("\"workspace.checkThirdParty\": false"))
     }
+
+    @Test
+    fun defaultProjectConfAllowsDeviceOrientationChanges() {
+        val conf = defaultProjectConf("demo", "Demo")
+
+        assertTrue(conf.contains("t.window.resizable = true"))
+    }
     @Test
     fun addingLoadedTabKeepsCurrentTabUntilExplicitSelection() {
         val session = EditorSession()

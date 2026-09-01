@@ -1,5 +1,6 @@
 package top.wsdx233.love2droid.runtime;
 
+import android.content.res.Configuration;
 import android.os.Bundle;
 
 /**
@@ -23,6 +24,21 @@ public class LoveGameActivity extends org.love2d.android.GameActivity {
             debugOverlay = new GameDebugOverlay(this);
             debugOverlay.attach();
         }
+    }
+
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        if (debugOverlay != null) {
+            debugOverlay.constrainBubbleToWindow();
+        }
+    }
+
+    @Override
+    public void setOrientationBis(int width, int height, boolean resizable, String hint) {
+        // Android games follow the device sensor unless the game explicitly
+        // restricts the allowed orientations in the SDL hint.
+        super.setOrientationBis(width, height, true, hint);
     }
 
     @Override

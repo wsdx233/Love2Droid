@@ -21,6 +21,8 @@
 - 左上角导航按钮打开或关闭文件浏览器；Play 启动当前项目；overflow 打开项目管理。
 - 竖屏时 Drawer 覆盖编辑区并显示 scrim；横屏允许 Drawer 与编辑区同时显示。
 - AppBar 和 Drawer 避开状态栏 inset；输入法弹出时编辑区缩小，快捷输入栏停靠在输入法上方。
+- 横竖屏旋转由 Activity 接管配置变化，编辑器标签、未保存文本、终端标签和当前目录保持不变。
+
 - 产品图标统一使用 Material 矢量图标，不使用 `android.R.drawable` 旧图标。
 
 ## 文件浏览器
@@ -73,6 +75,8 @@ Drawer 使用 `RecyclerView` 展示当前目录的直接子项，不渲染可展
 - 终端使用 Termux `TerminalView`，底部提供两行快捷键，包括 `ESC`、`TAB`、`CTRL`、`ALT`、方向键、`HOME`、`END`、`PGUP` 和 `PGDN`。
 - 首次安装页使用 Toolbar、线性进度和持续追加的日志展示 Ubuntu Base 与工具安装状态；失败后可重试。
 - bash-prompt 使用 `PROMPT_DIRTRIM=1`，避免展示完整 `Android/data` 长路径。
+- 游戏窗口默认允许横竖屏随设备旋转切换；游戏调试悬浮球在旋转后自动限制在新的可见区域内，不会移出屏幕。
+
 
 ## 项目管理
 

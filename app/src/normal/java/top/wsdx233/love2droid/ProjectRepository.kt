@@ -22,6 +22,16 @@ internal object LuaLanguageServerProjectConfig {
     """.trimIndent() + "\n"
 }
 
+internal fun defaultProjectConf(id: String, displayName: String): String = """
+    function love.conf(t)
+        t.identity = "$id"
+        t.window.title = "${displayName.replace(34.toChar(), 39.toChar())}"
+        t.window.width = 800
+        t.window.height = 480
+        t.window.resizable = true
+    end
+""".trimIndent() + "\n"
+
  data class Project(
     val id: String,
     val displayName: String,
@@ -85,7 +95,7 @@ class ProjectRepository(context: Context) {
             )
             StorageUtils.writeTextAtomic(
                 File(root, "conf.lua"),
-                "function love.conf(t)\n    t.identity = \"$id\"\n    t.window.title = \"${cleanName.replace("\"", "'")}\"\n    t.window.width = 800\n    t.window.height = 480\nend\n",
+                defaultProjectConf(id, cleanName),
             )
             StorageUtils.writeTextAtomic(
                 File(root, LuaLanguageServerProjectConfig.FILE_NAME),

@@ -65,6 +65,18 @@ final class GameDebugOverlay extends FrameLayout {
         post(this::placeBubbleInitially);
     }
 
+    @Override
+    protected void onSizeChanged(int width, int height, int oldWidth, int oldHeight) {
+        super.onSizeChanged(width, height, oldWidth, oldHeight);
+        constrainBubbleToWindow();
+    }
+
+    void constrainBubbleToWindow() {
+        if (getWidth() > 0 && getHeight() > 0) {
+            post(() -> moveBubble(bubble.getX(), bubble.getY()));
+        }
+    }
+
     void detach() {
         ((ViewGroup) getParent()).removeView(this);
     }
