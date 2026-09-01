@@ -6,7 +6,7 @@
 
 - LÖVE Android runtime 与编辑器集成在同一 APK；游戏使用独立 `LoveGameActivity` 和 `:game` 进程。
 - 应用专属项目目录、项目元数据、项目管理和 Drawer 单目录文件浏览器。
-- 文件新建、重命名、复制/剪切、粘贴、删除、详情、多选和同目录区间选择。
+- 文件新建、重命名、复制/剪切、粘贴、删除和详情；文件浏览器支持滑动进入多选、再次滑动选择同目录区间，以及底部全选、反选和取消选择操作栏。
 - Sora Editor、TextMate 语法注册、文件/终端混合多标签、未命名文档和原子保存。
 - `.love` 快照构建、`FileProvider` Content URI 和 Play 启动闭环。
 - arm64 PRoot、Ubuntu Base 首次安装、Termux 终端快捷键栏、LuaLS、omp 和 bash-prompt。

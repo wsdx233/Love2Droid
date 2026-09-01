@@ -221,5 +221,46 @@
             android:clipToPadding="false"
             android:paddingTop="8dp"
             android:paddingBottom="16dp" />
+
+        <LinearLayout
+            android:id="@+id/selection_action_bar"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:background="?attr/colorSurface"
+            android:elevation="8dp"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:visibility="gone">
+
+            <ImageButton
+                android:id="@+id/action_select_all"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/select_all"
+                android:padding="16dp"
+                android:src="@drawable/ic_select_all"
+                android:tint="?attr/colorOnSurface" />
+
+            <ImageButton
+                android:id="@+id/action_invert_selection"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/invert_selection"
+                android:padding="16dp"
+                android:src="@drawable/ic_invert_selection"
+                android:tint="?attr/colorOnSurface" />
+
+            <ImageButton
+                android:id="@+id/action_clear_selection"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/clear_selection"
+                android:padding="16dp"
+                android:src="@drawable/ic_close"
+                android:tint="?attr/colorOnSurface" />
+        </LinearLayout>
     </LinearLayout>
 </androidx.drawerlayout.widget.DrawerLayout>

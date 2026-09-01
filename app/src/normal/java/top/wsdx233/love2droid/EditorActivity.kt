@@ -20,6 +20,7 @@ import android.util.TypedValue
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.MenuItem
+import android.view.animation.PathInterpolator
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
@@ -33,6 +34,7 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.graphics.drawable.DrawableCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.view.GravityCompat
@@ -82,6 +84,7 @@ class EditorActivity : AppCompatActivity() {
     private lateinit var drawerProjectTitle: TextView
     private lateinit var drawerProjectPath: TextView
     private lateinit var drawerDirectoryMenu: View
+    private lateinit var selectionActionBar: LinearLayout
     private lateinit var browserAdapter: FileBrowserAdapter
     private lateinit var terminalView: TerminalView
     private lateinit var terminalKeyBar: LinearLayout
@@ -96,6 +99,7 @@ class EditorActivity : AppCompatActivity() {
     private var visibleItems: List<BrowserItem> = emptyList()
     private var suppressEditorEvents = false
     private var selectionMode = false
+    private var selectionAnchorPath: String? = null
     private var clipboardFiles: List<File> = emptyList()
     private var clipboardIsCut = false
     private var openedManagerForEmptyState = false
@@ -224,6 +228,10 @@ class EditorActivity : AppCompatActivity() {
         drawerProjectTitle = findViewById(R.id.drawer_project_title)
         drawerProjectPath = findViewById(R.id.drawer_project_path)
         drawerDirectoryMenu = findViewById(R.id.drawer_directory_menu)
+        selectionActionBar = findViewById(R.id.selection_action_bar)
+        findViewById<View>(R.id.action_select_all).setOnClickListener { selectAllVisibleItems() }
+        findViewById<View>(R.id.action_invert_selection).setOnClickListener { invertVisibleSelection() }
+        findViewById<View>(R.id.action_clear_selection).setOnClickListener { clearSelection() }
         drawerDirectoryMenu.setOnClickListener(::showCurrentDirectoryMenu)
         findViewById<View>(R.id.welcome_open_file).setOnClickListener {
             drawer.openDrawer(GravityCompat.START)
@@ -235,7 +243,9 @@ class EditorActivity : AppCompatActivity() {
         toolbar.navigationContentDescription = getString(R.string.file_browser)
         toolbar.setNavigationOnClickListener { drawer.openDrawer(GravityCompat.START) }
         toolbar.inflateMenu(R.menu.editor_menu)
+        tintToolbarMenuIcons()
         toolbar.setOnMenuItemClickListener(::onToolbarItemSelected)
+
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -262,7 +272,7 @@ class EditorActivity : AppCompatActivity() {
         browserAdapter = FileBrowserAdapter(
             onClick = ::onBrowserItemClicked,
             onLongClick = ::showBrowserItemMenu,
-            onSwipe = ::toggleSelection,
+            onSwipe = ::selectRangeFromSwipe,
         )
         findViewById<RecyclerView>(R.id.file_list).apply {
             layoutManager = LinearLayoutManager(this@EditorActivity)
@@ -289,12 +299,29 @@ class EditorActivity : AppCompatActivity() {
             window.decorView.post { openProjectManagerIfNeeded() }
         }
     }
+    private fun tintToolbarMenuIcons() {
+        val iconColor = ContextCompat.getColor(this, android.R.color.white)
+        for (index in 0 until toolbar.menu.size()) {
+            val item = toolbar.menu.getItem(index)
+            val icon = item.icon ?: continue
+            val tinted = DrawableCompat.wrap(icon.mutate())
+            DrawableCompat.setTint(tinted, iconColor)
+            item.icon = tinted
+        }
+    }
     private fun setupWindowInsets() {
         ViewCompat.setOnApplyWindowInsetsListener(drawer) { _, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
             editorTopInset.layoutParams = editorTopInset.layoutParams.apply { height = systemBars.top }
             drawerTopInset.layoutParams = drawerTopInset.layoutParams.apply { height = systemBars.top }
+            val selectionBarHeight = dp(SELECTION_ACTION_BAR_HEIGHT_DP) + systemBars.bottom
+            if (selectionActionBar.layoutParams.height != selectionBarHeight) {
+                selectionActionBar.layoutParams = selectionActionBar.layoutParams.apply {
+                    height = selectionBarHeight
+                }
+            }
+            selectionActionBar.setPadding(0, 0, 0, systemBars.bottom)
             val bottomInset = maxOf(systemBars.bottom, ime.bottom)
             listOf(symbolScroll, terminalKeyBar).forEach { bottomBar ->
                 (bottomBar.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
@@ -748,10 +775,12 @@ class EditorActivity : AppCompatActivity() {
         currentProject = projectRepository.markOpened(project)
         editorSession.clear()
         selectedPaths.clear()
+        selectionAnchorPath = null
         currentDirectory = currentProject?.root
         visibleItems = emptyList()
-        browserAdapter.submitItems(emptyList(), emptySet())
         selectionMode = false
+        updateSelectionActionBar()
+        browserAdapter.submitItems(emptyList(), emptySet())
         toolbar.title = currentProject?.displayName.orEmpty()
         drawerProjectTitle.text = currentProject?.displayName
         updateDirectoryHeader()
@@ -787,8 +816,17 @@ class EditorActivity : AppCompatActivity() {
                 refreshGeneration == directoryRefreshGeneration
             ) {
                 visibleItems = items
-                selectedPaths.retainAll(items.mapTo(hashSetOf()) { it.relativePath })
-                if (selectedPaths.isEmpty()) selectionMode = false
+                val selectablePaths = items.asSequence()
+                    .filterNot { it.parentNavigation }
+                    .mapTo(hashSetOf()) { it.relativePath }
+                selectedPaths.retainAll(selectablePaths)
+                if (selectionAnchorPath !in selectablePaths) {
+                    selectionAnchorPath = selectedPaths.lastOrNull()
+                }
+                if (selectedPaths.isEmpty()) {
+                    selectionMode = false
+                    selectionAnchorPath = null
+                }
                 updateSelectionUi()
             }
         }
@@ -929,11 +967,11 @@ class EditorActivity : AppCompatActivity() {
         val project = currentProject ?: return
         if (!directory.isDirectory || !StorageUtils.isWithin(project.root, directory)) return
         selectedPaths.clear()
+        selectionAnchorPath = null
         selectionMode = false
         visibleItems = emptyList()
-        browserAdapter.submitItems(emptyList(), emptySet())
         currentDirectory = directory
-        updateSelectionTitle()
+        updateSelectionUi()
         refreshFileList()
     }
 
@@ -958,10 +996,46 @@ class EditorActivity : AppCompatActivity() {
 
     private fun toggleSelection(item: BrowserItem) {
         selectionMode = true
-        if (!selectedPaths.add(item.relativePath)) selectedPaths.remove(item.relativePath)
-        if (selectedPaths.isEmpty()) selectionMode = false
+        if (selectedPaths.remove(item.relativePath)) {
+            if (selectionAnchorPath == item.relativePath) {
+                selectionAnchorPath = selectedPaths.lastOrNull()
+            }
+        } else {
+            selectedPaths += item.relativePath
+            selectionAnchorPath = item.relativePath
+        }
+        if (selectedPaths.isEmpty()) {
+            selectionMode = false
+            selectionAnchorPath = null
+        }
         updateSelectionUi()
     }
+
+    private fun selectRangeFromSwipe(item: BrowserItem) {
+        if (!selectionMode) {
+            selectedPaths += item.relativePath
+            selectionAnchorPath = item.relativePath
+            selectionMode = true
+            updateSelectionUi()
+            return
+        }
+
+        val orderedPaths = selectableBrowserPaths()
+        val anchorPath = selectionAnchorPath
+            ?.takeIf { it in orderedPaths }
+            ?: selectedPaths.lastOrNull { it in orderedPaths }
+            ?: item.relativePath
+        val range = inclusiveSelectionRange(orderedPaths, anchorPath, item.relativePath) ?: return
+        selectedPaths.clear()
+        selectedPaths.addAll(range)
+        selectionAnchorPath = anchorPath
+        updateSelectionUi()
+    }
+
+    private fun selectableBrowserPaths(): List<String> = visibleItems.asSequence()
+        .filterNot { it.parentNavigation }
+        .map { it.relativePath }
+        .toList()
 
     private fun showBrowserItemMenu(item: BrowserItem, anchor: View) {
         val menu = PopupMenu(this, anchor)
@@ -992,28 +1066,86 @@ class EditorActivity : AppCompatActivity() {
 
     private fun clearSelection() {
         selectedPaths.clear()
+        selectionAnchorPath = null
         selectionMode = false
         updateSelectionUi()
     }
 
     private fun updateSelectionTitle() {
-        toolbar.title = if (selectionMode) "已选择 ${selectedPaths.size} 项" else currentProject?.displayName.orEmpty()
+        toolbar.title = if (selectionMode) {
+            getString(R.string.selected_count, selectedPaths.size)
+        } else {
+            currentProject?.displayName.orEmpty()
+        }
     }
 
     private fun updateSelectionUi() {
         updateSelectionTitle()
         browserAdapter.submitItems(visibleItems, selectedPaths)
+        updateSelectionActionBar()
+    }
+
+    private fun selectAllVisibleItems() {
+        val orderedPaths = selectableBrowserPaths()
+        selectedPaths.clear()
+        selectedPaths.addAll(orderedPaths)
+        selectionAnchorPath = orderedPaths.firstOrNull()
+        selectionMode = selectedPaths.isNotEmpty()
+        updateSelectionUi()
+    }
+
+    private fun invertVisibleSelection() {
+        val inverted = invertedSelection(selectableBrowserPaths(), selectedPaths)
+        selectedPaths.clear()
+        selectedPaths.addAll(inverted)
+        selectionAnchorPath = selectedPaths.firstOrNull()
+        selectionMode = selectedPaths.isNotEmpty()
+        updateSelectionUi()
+    }
+
+    private fun updateSelectionActionBar() {
+        selectionActionBar.animate().cancel()
+        if (selectionMode && selectedPaths.isNotEmpty()) {
+            if (selectionActionBar.visibility != View.VISIBLE) {
+                selectionActionBar.alpha = 0f
+                selectionActionBar.translationY = dp(20).toFloat()
+                selectionActionBar.scaleX = 0.94f
+                selectionActionBar.scaleY = 0.94f
+                selectionActionBar.visibility = View.VISIBLE
+            }
+            selectionActionBar.animate()
+                .alpha(1f)
+                .translationY(0f)
+                .scaleX(1f)
+                .scaleY(1f)
+                .setDuration(SELECTION_BAR_SHOW_DURATION_MS)
+                .setInterpolator(PathInterpolator(0f, 0f, 0.2f, 1f))
+                .start()
+        } else if (selectionActionBar.visibility == View.VISIBLE) {
+            selectionActionBar.animate()
+                .alpha(0f)
+                .translationY(dp(12).toFloat())
+                .scaleX(0.96f)
+                .scaleY(0.96f)
+                .setDuration(SELECTION_BAR_HIDE_DURATION_MS)
+                .setInterpolator(PathInterpolator(0.4f, 0f, 1f, 1f))
+                .withEndAction {
+                    if (!selectionMode) {
+                        selectionActionBar.visibility = View.GONE
+                        selectionActionBar.translationY = 0f
+                    }
+                }
+                .start()
+        }
     }
 
     private fun selectRange() {
         if (selectedPaths.size != 2) return
         val paths = selectedPaths.toList()
-        val first = visibleItems.indexOfFirst { it.relativePath == paths[0] }
-        val second = visibleItems.indexOfFirst { it.relativePath == paths[1] }
-        if (first < 0 || second < 0) return
+        val range = inclusiveSelectionRange(selectableBrowserPaths(), paths[0], paths[1]) ?: return
         selectedPaths.clear()
-        visibleItems.subList(minOf(first, second), maxOf(first, second) + 1)
-            .forEach { selectedPaths += it.relativePath }
+        selectedPaths.addAll(range)
+        selectionAnchorPath = paths[0]
         updateSelectionUi()
     }
 
@@ -1724,6 +1856,9 @@ class EditorActivity : AppCompatActivity() {
         private const val TAG = "EditorActivity"
         private const val MAX_EDITOR_BYTES = 5L * 1024 * 1024
         private const val DIRECTORY_REFRESH_DEBOUNCE_MS = 250L
+        private const val SELECTION_ACTION_BAR_HEIGHT_DP = 56
+        private const val SELECTION_BAR_SHOW_DURATION_MS = 160L
+        private const val SELECTION_BAR_HIDE_DURATION_MS = 100L
         private const val DIRECTORY_WATCH_MASK =
             FileObserver.CREATE or FileObserver.DELETE or FileObserver.MOVED_FROM or
                 FileObserver.MOVED_TO or FileObserver.CLOSE_WRITE or FileObserver.MODIFY or
