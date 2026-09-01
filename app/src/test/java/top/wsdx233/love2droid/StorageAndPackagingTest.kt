@@ -1,6 +1,8 @@
 package top.wsdx233.love2droid
 
 import java.io.File
+import java.io.InputStream
+import java.io.InterruptedIOException
 import java.nio.file.Files
 import java.util.zip.ZipFile
 import org.junit.Assert.assertEquals
@@ -78,5 +80,17 @@ class StorageAndPackagingTest {
         session.select(loadedIndex)
         assertTrue(session.activeTab === loaded)
         assertEquals("print('loaded')", session.activeEditorTab?.text)
+    }
+
+    @Test
+    fun lspStderrReaderIgnoresInterruptedClosedPipe() {
+        var logged = false
+        val closedPipe = object : InputStream() {
+            override fun read(): Int = throw InterruptedIOException("closed")
+        }
+
+        consumeLuaLanguageServerStderr(closedPipe) { logged = true }
+
+        assertFalse(logged)
     }
 }

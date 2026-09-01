@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import io.github.rosemoe.sora.lsp.client.connection.StreamConnectionProvider
 import java.io.File
+import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 
@@ -26,8 +27,8 @@ class LuaLanguageServerConnection(
         process = started
         Thread(
             {
-                started.errorStream.bufferedReader().useLines { lines ->
-                    lines.forEach { line -> Log.w(TAG, line) }
+                consumeLuaLanguageServerStderr(started.errorStream) { line ->
+                    Log.w(TAG, line)
                 }
             },
             "lua-lsp-stderr",
@@ -57,5 +58,18 @@ class LuaLanguageServerConnection(
 
     private companion object {
         const val TAG = "LuaLanguageServer"
+    }
+}
+
+internal fun consumeLuaLanguageServerStderr(
+    input: InputStream,
+    onLine: (String) -> Unit,
+) {
+    try {
+        input.bufferedReader().useLines { lines ->
+            lines.forEach(onLine)
+        }
+    } catch (_: IOException) {
+        // Closing a connection interrupts this reader while it is blocked on stderr.
     }
 }
