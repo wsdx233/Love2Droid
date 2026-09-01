@@ -12,9 +12,28 @@ Love2Droid 是单 `app` 模块 Android 应用，包名为 `top.wsdx233.love2droi
 - `app/src/main/cpp/`：LÖVE、SDL3、megasource 和 CMake native 构建。`love/` 与 `megasource/` 视为上游代码。
 - `app/src/main/assets/textmate/`：Sora TextMate 主题、语言配置和 grammar；`languages.json` 是集中注册入口。
 - `app/src/test/`：不依赖 Android runtime 的逻辑单元测试。
-- `doc/plan.md`：架构、交互和实现状态。
+- `doc/README.md`：文档导航和分类说明。
+- `doc/architecture.md`：当前架构、模块边界和关键技术约束。
+- `doc/design.md`：界面布局、交互和编辑器行为约定。
+- `doc/reference.md`：外部参考项目、来源和使用边界。
+- `doc/verification.md`：逻辑测试、构建和真机验证要求。
+- `doc/status.md`：当前实现状态、已知限制和已确认决策。
+- `doc/plan/`：只记录尚未实现且准备实现的事项，每个主题使用独立 Markdown 文件。
 - `licenses/` 与 `license.txt`：第三方及 LÖVE 许可证。
 - `ref/`：本地参考仓库，不属于产品源码，不提交 Git。
+
+## 文档规范
+
+- 文档统一使用 Markdown，放在 `doc/` 下；每篇文档只负责一个稳定主题，禁止继续把架构、交互、参考资料和实现状态堆到同一个计划文件。
+- `doc/architecture.md` 记录已经采用的系统结构、模块职责、数据流和不应随意改变的边界；新的架构决策在这里更新。
+- `doc/design.md` 记录界面布局、交互行为和用户可见约定；实现细节只在确实影响交互时引用源码，不复制大段代码。
+- `doc/reference.md` 记录参考项目、官方资料、版本或提交、许可证和允许借鉴的范围；参考仓库本身仍放在 `ref/`，不复制 Demo 或无关资源。
+- `doc/verification.md` 记录可重复的逻辑测试、APK 构建和必须由真机完成的验证；验证步骤应对应可观察行为。
+- `doc/status.md` 记录当前已实现能力、已知限制和已确认的非计划事项；完成或取消计划后同步更新，不把已完成内容伪装成待办。
+- `doc/plan/` 中的文件只记录“尚未实现且已确认要实现”的内容；按主题拆分，并明确状态、范围、行为要求和验收标准。实现完成或计划取消后必须从 `plan/` 移除，同时同步 `status.md` 及受影响的稳定主题文档；不得在 `plan/` 保留已完成事项、历史实现说明、架构约束、参考资料或当前状态。
+- 文档之间通过相对 Markdown 链接互相引用；文件改名或移动时必须同步搜索并更新引用，入口导航维护在 `doc/README.md`。
+- 文档使用中文为主，代码符号、路径、命令、版本号和外部名称保持原文；新增可本地化的产品 UI 文案仍必须进入字符串资源，不能只写死在业务代码中。
+- 文档变更不要求 APK 构建；若同一提交还修改源码、资源、Manifest、Gradle、native/CMake 或 TextMate 资源，仍必须遵守下方 APK 构建要求。
 
 ## 源码边界
 
