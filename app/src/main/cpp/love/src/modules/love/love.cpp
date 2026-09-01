@@ -30,7 +30,6 @@
 // C++
 #include <string>
 #include <sstream>
-
 #ifdef LOVE_WINDOWS
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -39,6 +38,7 @@
 #ifdef LOVE_ANDROID
 #include <SDL3/SDL.h>
 #endif // LOVE_ANDROID
+
 
 #ifdef LOVE_LEGENDARY_CONSOLE_IO_HACK
 #include <fcntl.h>
@@ -253,6 +253,11 @@ int w__openConsole(lua_State *L);
 #endif // LOVE_LEGENDARY_CONSOLE_IO_HACK
 
 #ifdef LOVE_ANDROID
+int love_android_debug_poll(lua_State *L);
+void love_android_debug_log(const std::string &line);
+#endif
+
+#ifdef LOVE_ANDROID
 static int w_print_sdl_log(lua_State *L)
 {
 	int nargs = lua_gettop(L);
@@ -280,6 +285,7 @@ static int w_print_sdl_log(lua_State *L)
 		lua_pop(L, 1); // Pop the result of tostring(arg).
 	}
 
+	love_android_debug_log(outstring);
 	SDL_Log("[LOVE] %s", outstring.c_str());
 	return 0;
 }
@@ -557,6 +563,8 @@ int luaopen_love(lua_State *L)
 	lua_setfield(L, -2, "_version_codename");
 
 #ifdef LOVE_ANDROID
+	lua_pushcfunction(L, love_android_debug_poll);
+	lua_setfield(L, -2, "_androidDebugPoll");
 	lua_register(L, "print", w_print_sdl_log);
 #endif
 

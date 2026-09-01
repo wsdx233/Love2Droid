@@ -173,6 +173,7 @@ function love.run()
 
 	-- Main loop time.
 	return function()
+        if love._androidDebugPoll then love._androidDebugPoll() end
 		-- Process events.
 		if love.event then
 			love.event.pump()

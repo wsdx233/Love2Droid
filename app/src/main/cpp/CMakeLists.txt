@@ -28,6 +28,7 @@ set(LOVE_ANDROID 1)
 # Include Megasource and LOVE
 set(MEGA_LOVE "${CMAKE_CURRENT_SOURCE_DIR}/love")
 add_subdirectory(megasource)
+target_sources(liblove PRIVATE love_debug.cpp)
 
 add_dependencies(love_android love OpenAL)
 

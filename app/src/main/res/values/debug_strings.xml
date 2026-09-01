@@ -1,0 +1,13 @@
+<resources>
+    <string name="debug_open_menu">打开调试菜单</string>
+    <string name="debug_menu_title">游戏调试</string>
+    <string name="debug_exit">退出游戏</string>
+    <string name="debug_logs">查看日志</string>
+    <string name="debug_logs_empty">暂无游戏日志</string>
+    <string name="debug_execute_code">执行代码</string>
+    <string name="debug_execute">执行</string>
+    <string name="debug_close">关闭</string>
+    <string name="debug_code_hint">输入 Lua 代码，例如：print(love.timer.getTime())</string>
+    <string name="debug_code_empty">请输入要执行的 Lua 代码</string>
+    <string name="debug_code_submitted">代码已加入执行队列</string>
+</resources>
