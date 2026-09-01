@@ -7,18 +7,28 @@
         android:title="@string/play"
         app:showAsAction="always" />
     <item
+        android:id="@+id/action_new"
+        android:icon="@drawable/ic_add"
+        android:title="@string/new_action"
+        app:showAsAction="always">
+        <menu>
+            <item
+                android:id="@+id/action_new_document"
+                android:title="@string/new_file" />
+            <item
+                android:id="@+id/action_new_terminal"
+                android:title="@string/new_terminal" />
+            <item
+                android:id="@+id/action_new_omp"
+                android:title="@string/new_omp" />
+        </menu>
+    </item>
+    <item
         android:id="@+id/action_file"
         android:icon="@drawable/ic_more_vert"
         android:title="@string/file_operations"
         app:showAsAction="always">
         <menu>
-            <item
-                android:id="@+id/action_new_document"
-                android:icon="@drawable/ic_add"
-                android:title="@string/new_file" />
-            <item
-                android:id="@+id/action_new_terminal"
-                android:title="@string/new_terminal" />
             <item
                 android:id="@+id/action_save"
                 android:icon="@drawable/ic_save"
@@ -34,6 +44,9 @@
                 android:id="@+id/action_word_wrap"
                 android:checkable="true"
                 android:title="@string/word_wrap" />
+            <item
+                android:id="@+id/action_settings"
+                android:title="@string/settings" />
             <item
                 android:id="@+id/action_projects"
                 android:title="@string/project_manager" />

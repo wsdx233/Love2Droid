@@ -191,8 +191,8 @@ dependencies {
     testImplementation 'junit:junit:4.13.2'
     implementation 'io.github.rosemoe:editor-lsp:0.24.6'
     implementation 'org.apache.commons:commons-compress:1.28.0'
+    implementation 'org.yaml:snakeyaml:2.4'
     implementation project(':terminal-view')
-    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0'
 }
 
 configurations.implementation {

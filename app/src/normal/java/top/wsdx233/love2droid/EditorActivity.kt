@@ -84,6 +84,7 @@ class EditorActivity : AppCompatActivity() {
     private var lspController: LuaLspController? = null
 
     private val projectRepository by lazy { ProjectRepository(this) }
+    private val settings by lazy { SettingsStore(this) }
     private val editorSession = EditorSession()
     private val selectedPaths = linkedSetOf<String>()
     private var currentProject: Project? = null
@@ -106,7 +107,8 @@ class EditorActivity : AppCompatActivity() {
     private val mapleTypeface: Typeface by lazy {
         requireNotNull(ResourcesCompat.getFont(this, R.font.maple_mono_nf_cn_regular))
     }
-    private val terminalDefaultTextSizePx by lazy { sp(12f) }
+    private val terminalDefaultTextSizePx: Float
+        get() = sp(settings.terminalFontSize)
     private val terminalMinTextSizePx by lazy { sp(8f) }
     private val terminalMaxTextSizePx by lazy { sp(32f) }
 
@@ -316,15 +318,16 @@ class EditorActivity : AppCompatActivity() {
         terminalView.setBackgroundColor(Color.BLACK)
         terminalView.setTextSize(terminalDefaultTextSizePx.toInt())
         terminalView.setTypeface(mapleTypeface)
-        terminalView.keepScreenOn = true
+        terminalView.keepScreenOn = settings.terminalKeepScreenOn
         terminalView.setTerminalViewClient(object : TerminalViewClient {
             override fun onScale(scale: Float): Float {
-                val textSizePx = (terminalDefaultTextSizePx * scale).coerceIn(
+                val baseTextSizePx = terminalDefaultTextSizePx
+                val textSizePx = (baseTextSizePx * scale).coerceIn(
                     terminalMinTextSizePx,
                     terminalMaxTextSizePx,
                 )
                 terminalView.setTextSize(textSizePx.toInt().coerceAtLeast(1))
-                return textSizePx / terminalDefaultTextSizePx
+                return textSizePx / baseTextSizePx
             }
 
             override fun onSingleTapUp(event: MotionEvent?) {
@@ -462,7 +465,9 @@ class EditorActivity : AppCompatActivity() {
     private fun setupEditorInput() {
         editor.typefaceText = mapleTypeface
         editor.typefaceLineNumber = mapleTypeface
-        editor.setTextSize(12f)
+        editor.setTextSize(settings.editorFontSize)
+        editor.isLineNumberEnabled = settings.editorLineNumbers
+        editor.isWordwrap = settings.editorWordWrap
         editor.isFocusableInTouchMode = true
         editor.setInputType(
             InputType.TYPE_CLASS_TEXT or
@@ -471,6 +476,7 @@ class EditorActivity : AppCompatActivity() {
         )
         editor.props.allowFullscreen = false
     }
+
     private fun insertSymbol(symbol: String) {
         if (!editor.isShown) return
         val start = editor.cursor.left
@@ -513,19 +519,20 @@ class EditorActivity : AppCompatActivity() {
         selectTab(index)
     }
 
-    private fun newTerminal() {
+    private fun newTerminal(startupCommand: String? = null) {
         if (!ProotRuntime.isEnvironmentReady(this)) {
             startActivity(Intent(this, SetupActivity::class.java))
             return
         }
         captureEditorState()
-        val launch = ProotRuntime.terminalLaunch(this, currentProject?.root)
+        val projectRoot = currentProject?.root?.takeIf { settings.ompUseProjectDirectory }
+        val launch = ProotRuntime.terminalLaunch(this, projectRoot)
         val session = TerminalSession(
             launch.executable,
             launch.workingDirectory,
             launch.arguments,
             launch.environment,
-            2000,
+            settings.terminalTranscriptRows,
             terminalSessionClient,
         )
         terminalCounter += 1
@@ -533,6 +540,25 @@ class EditorActivity : AppCompatActivity() {
             TerminalTab(session, getString(R.string.terminal_tab_title, terminalCounter)),
         )
         selectTab(index)
+        if (!startupCommand.isNullOrBlank()) {
+            sendTerminalStartupCommand(session, index, startupCommand, 0)
+        }
+    }
+
+    private fun sendTerminalStartupCommand(
+        session: TerminalSession,
+        index: Int,
+        command: String,
+        attempt: Int,
+    ) {
+        if ((editorSession.tabs.getOrNull(index) as? TerminalTab)?.session !== session) return
+        if (session.isRunning) {
+            session.write("$command\n")
+        } else if (attempt < 20) {
+            terminalView.postDelayed({
+                sendTerminalStartupCommand(session, index, command, attempt + 1)
+            }, 100L)
+        }
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
@@ -551,6 +577,10 @@ class EditorActivity : AppCompatActivity() {
             }
             R.id.action_new_terminal -> {
                 newTerminal()
+                true
+            }
+            R.id.action_new_omp -> {
+                newTerminal("omp")
                 true
             }
             R.id.action_save -> {
@@ -572,10 +602,15 @@ class EditorActivity : AppCompatActivity() {
             R.id.action_word_wrap -> {
                 if (editor.isShown) {
                     editor.isWordwrap = !editor.isWordwrap
+                    settings.editorWordWrap = editor.isWordwrap
                     item.isChecked = editor.isWordwrap
                 } else {
                     toast(getString(R.string.no_active_document))
                 }
+                true
+            }
+            R.id.action_settings -> {
+                startActivity(Intent(this, SettingsActivity::class.java))
                 true
             }
             R.id.action_projects -> {
@@ -1375,6 +1410,17 @@ class EditorActivity : AppCompatActivity() {
         lspController?.close()
         finishTerminalTabs()
         super.onDestroy()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::editor.isInitialized) {
+            editor.setTextSize(settings.editorFontSize)
+            editor.isLineNumberEnabled = settings.editorLineNumbers
+            editor.isWordwrap = settings.editorWordWrap
+            terminalView.setTextSize(terminalDefaultTextSizePx.toInt())
+            terminalView.keepScreenOn = settings.terminalKeepScreenOn
+        }
     }
 
     private enum class TerminalModifier { CTRL, ALT }

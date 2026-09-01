@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/action_add_provider"
+        android:title="@string/provider_add" />
+    <item
+        android:id="@+id/action_add_model"
+        android:title="@string/model_add" />
+    <item
+        android:id="@+id/action_discover_models"
+        android:title="@string/models_discover" />
+    <item
+        android:id="@+id/action_known_models"
+        android:title="@string/models_known" />
+    <item
+        android:id="@+id/action_edit_provider"
+        android:title="@string/provider_edit" />
+</menu>

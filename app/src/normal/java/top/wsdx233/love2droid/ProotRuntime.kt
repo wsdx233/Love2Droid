@@ -63,6 +63,13 @@ object ProotRuntime {
 
     fun ompBinary(context: Context): File =
         File(rootfsDir(context), OMP_GUEST_PATH.removePrefix("/"))
+    fun ompModelsFile(context: Context): File {
+        val directory = File(rootfsDir(context), "root/.omp/agent")
+        return listOf("models.yml", "models.yaml")
+            .map { File(directory, it) }
+            .firstOrNull(File::isFile)
+            ?: File(directory, "models.yml")
+    }
 
     fun rootBashrc(context: Context): File =
         File(rootfsDir(context), "root/.bashrc")
