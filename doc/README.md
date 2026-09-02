@@ -18,9 +18,5 @@
 
 - [编辑器文件健壮性](plan/editor-file-robustness.md)
 - [项目最近打开时间](plan/project-recency.md)
-- [编辑器搜索与替换](plan/editor-search-replace.md)
-- [项目搜索](plan/project-search.md)
-- [项目版本控制](plan/project-version-control.md)
-- [Android 游戏属性与打包](plan/android-game-packaging.md)
 
 计划完成或取消后，应从 `plan/` 移除，并同步更新 [status.md](status.md) 及受影响的稳定主题文档。

@@ -1062,6 +1062,7 @@ class EditorActivity : AppCompatActivity() {
         AndroidPackagingSheet(
             activity = this,
             scope = lifecycleScope,
+            repository = projectRepository,
             project = project,
             chooseSigningKey = { callback ->
                 pendingSigningKeySelection = callback

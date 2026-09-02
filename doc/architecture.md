@@ -77,6 +77,7 @@ Android 发布与 Play 分离；发布结果是可安装、可分享的独立 AP
 7. 成品写入 cache 下的 `android-packages/`，只通过 `FileProvider` 临时 URI 交给分享目标或系统安装器。Android 8.0 及以上的未知来源授权由系统设置处理。
 
 独立成品启动 `PackagedLoveGameActivity`，不包含编辑器内 Play 使用的调试悬浮层。成品 APK 继承当前已安装 Love2Droid APK 中可用的 ABI；分 ABI 安装时不会凭空补齐其他 ABI。
+- 打包面板展示和实际构建均按项目 id 从 `ProjectRepository` 重新读取元数据，避免使用属性编辑前的旧 `Project` 快照。
 
 ## 项目搜索与版本控制
 
@@ -101,6 +102,7 @@ Android 发布与 Play 分离；发布结果是可安装、可分享的独立 AP
 - 文件标签和终端标签共用标签栏；每个终端标签持有独立 `TerminalSession`。
 - PRoot 当前产品支持范围为 `arm64-v8a`。`libproot.so` 从 APK 解压后的 `applicationInfo.nativeLibraryDir` 定位并执行，不复制到普通 data 目录。
 - 首次安装校验并解压固定版本和 SHA-256 的 Ubuntu Base 24.04.4 arm64，再安装固定版本的 LuaLS、omp 和 bash-prompt；全部阶段成功后才写入完成标记。
+- 产品启动的 Git 进程注入 `core.createObject=rename`，绕过 Android 共享存储上不可靠的硬链接对象落盘；终端 Git 继承同一设置。
 - 安装失败保留可复用阶段并允许重试，不提前写入完成状态。
 
 ## 主要模块职责

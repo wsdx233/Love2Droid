@@ -41,6 +41,7 @@ internal class ProjectSearchSheet(
     private val dialog = BottomSheetDialog(activity)
     private val queryInput = EditText(activity)
     private val regexButton = MaterialButton(activity)
+    private val searchButton = MaterialButton(activity)
     private val tabs = TabLayout(activity)
     private val progress = ProgressBar(activity)
     private val message = TextView(activity)
@@ -96,6 +97,15 @@ internal class ProjectSearchSheet(
             addOnCheckedChangeListener { _, _ -> scheduleSearch() }
         }
         searchRow.addView(regexButton, LinearLayout.LayoutParams(dp(48), dp(44)))
+        searchButton.apply {
+            setIconResource(R.drawable.ic_search)
+            contentDescription = activity.getString(R.string.project_search)
+            minWidth = 0
+            insetTop = 0
+            insetBottom = 0
+            setOnClickListener { scheduleSearch(immediate = true) }
+        }
+        searchRow.addView(searchButton, LinearLayout.LayoutParams(dp(48), dp(44)))
         content.addView(searchRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
         listOf(

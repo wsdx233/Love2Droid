@@ -13,6 +13,8 @@
 - 标签去重、dirty 关闭决策和项目切换状态正确。
 - `.love` 快照包含项目文件，且根目录存在 `main.lua`。
 - 会话状态通过原子写入保存，损坏状态不得破坏项目源文件。
+- 终端 Git 在项目路径执行 `git init`、`git add` 和首次提交时，Git 对象可以正常写入 Android 共享存储。
+- 项目属性保存后重新打开面板仍一致；使用非默认应用名、包名、版本、方向和权限打包后，成品 Manifest 与属性一致。
 
 测试必须不依赖 Android runtime，保持确定、隔离并可在完整测试集中运行。
 
@@ -47,6 +49,8 @@ app/build/outputs/apk/normalNoRecord/debug/app-normal-noRecord-debug.apk
 - 多个终端标签独立运行，关闭时终止对应会话；重启后按保存状态重建。
 - LuaLS 的补全、诊断、悬浮、签名提示和保存通知在真实项目路径下工作。
 - 长按项目内 Lua 符号仍进入默认文本选择；选区操作浮动菜单出现定义和用法图标，点击后分别执行跳转或在 Bottom Sheet 展示结果，点击结果打开正确标签并定位到对应范围。
+- 在项目终端的真实项目路径执行 `git init` → `git add main.lua` → `git commit`，确认 `.git/objects/` 不再报告写入失败。
+- 修改项目属性并保存，重新进入打包面板确认摘要更新；生成 APK 后检查应用名、包名、版本、方向、权限和图标均为项目值。
 - 点击 LuaLS 悬浮信息中的项目文件链接在应用内打开文件，不触发 `FileUriExposedException`；悬浮窗口外点击会关闭窗口，项目外和无效 `file:` 链接不启动外部 Intent。
 
 ## 交付记录

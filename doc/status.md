@@ -12,6 +12,8 @@
 - arm64 PRoot、Ubuntu Base 首次安装、Termux 终端快捷键栏、LuaLS、omp 和 bash-prompt。
 - LuaLS 使用项目真实路径工作；新建项目生成 `.luarc.json` 并加载 LuaJIT 与 LuaLS 内置 LÖVE 11.5 API library。
 - Lua 文件支持长按选择符号后，在文本选区操作浮动菜单中转到定义和查找用法；结果在 Bottom Sheet 中显示并在项目内安全跳转，LuaLS 悬浮 `file:` 链接不再交给外部 Intent，点击窗口外区域会关闭悬浮窗口。
+- 项目搜索支持文件、文本和符号三类查询，提供普通/正则模式、LuaLS 语义结果与本地降级结果；版本控制面板只读展示 Git 状态、历史、提交详情和 Diff。
+- 项目属性可编辑应用名、包名、版本、方向、权限和图标；Android APK 发布会重新读取最新项目元数据，写入 `game.love`、Manifest 和图标后签名，并提供分享/安装。
 - bash-prompt 使用 `PROMPT_DIRTRIM=1`，终端提示不展示完整 `Android/data` 长路径。
 
 ## 会话恢复
@@ -40,6 +42,7 @@
 - 保存后 dirty 圆点未刷新；
 - 游戏退出影响编辑器进程。
 - 横竖屏切换不再重建编辑器 Activity；游戏窗口恢复 LÖVE/SDL 原生方向语义，不再强制视为可调整大小；调试悬浮球在横竖屏双向旋转后停靠到右侧，并保持旋转前的纵向比例。
+- 终端 PRoot 注入 Git `core.createObject=rename`，避免 Android 共享存储上的硬链接对象写入失败；打包流程在开始构建时重新读取项目属性，避免使用旧快照。
 - LuaLS 悬浮窗口点击 `file://` 链接不再因 `FileUriExposedException` 崩溃。
 
 ## 待实现计划
@@ -54,7 +57,7 @@
 - PRoot 当前只支持 `arm64-v8a`。
 - Android 6.0/7.x 不加载 Sora `editor-lsp`，仅保留 TextMate 编辑能力。
 - 标签暂不支持拖拽排序。
-- 调试器、Git、云同步、通用插件系统和完整 VS Code 级 IDE 能力不在当前计划范围；不得因“尚未实现”自动把它们写入 `plan/`。
+- 调试器、云同步、通用插件系统和完整 VS Code 级 IDE 能力不在当前计划范围；不得因“尚未实现”自动把它们写入 `plan/`。
 
 ## 验证边界
 

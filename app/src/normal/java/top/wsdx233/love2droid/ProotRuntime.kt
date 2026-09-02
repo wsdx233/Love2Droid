@@ -347,6 +347,11 @@ object ProotRuntime {
             "TMPDIR=/tmp",
             "R2_NOCOLOR=1",
             "TERM=$terminalType",
+            // Android shared storage does not reliably support Git's hard-link object finalization.
+            // Force Git to rename its temporary object instead; this is inherited by terminal Git.
+            "GIT_CONFIG_COUNT=1",
+            "GIT_CONFIG_KEY_0=core.createObject",
+            "GIT_CONFIG_VALUE_0=rename",
         )
         command += guestCommand
 

@@ -29,6 +29,7 @@ import java.io.IOException
 internal class AndroidPackagingSheet(
     private val activity: AppCompatActivity,
     private val scope: CoroutineScope,
+    private val repository: ProjectRepository,
     private val project: Project,
     private val chooseSigningKey: (((Uri?) -> Unit) -> Unit),
 ) {
@@ -60,7 +61,7 @@ internal class AndroidPackagingSheet(
             setTypeface(typeface, android.graphics.Typeface.BOLD)
         })
         addView(TextView(activity).apply {
-            val properties = project.androidProperties
+            val properties = latestProject().androidProperties
             text = activity.getString(
                 R.string.android_package_summary,
                 properties.appName,
@@ -115,8 +116,9 @@ internal class AndroidPackagingSheet(
         scope.launch {
             try {
                 val apk = withContext(Dispatchers.IO) {
-                    ProjectValidator.validate(project)?.let { throw IOException(it) }
-                    builder.build(project) { stage ->
+                    val current = latestProject()
+                    ProjectValidator.validate(current)?.let { throw IOException(it) }
+                    builder.build(current) { stage ->
                         activity.runOnUiThread { status.setText(stage.messageResource()) }
                     }
                 }
@@ -157,7 +159,7 @@ internal class AndroidPackagingSheet(
             val password = passwordText.toCharArray()
             try {
                 val fingerprint = withContext(Dispatchers.IO) {
-                    builder.importSigningKey(project, uri, password)
+                    builder.importSigningKey(latestProject(), uri, password)
                 }
                 signingStatus.text = activity.getString(R.string.android_signing_fingerprint, fingerprint)
                 status.setText(R.string.android_signing_imported)
@@ -176,13 +178,15 @@ internal class AndroidPackagingSheet(
     }
 
     private fun updateSigningStatus() {
-        val fingerprint = runCatching { builder.signingFingerprint(project) }.getOrNull()
+        val fingerprint = runCatching { builder.signingFingerprint(latestProject()) }.getOrNull()
         signingStatus.text = if (fingerprint == null) {
             activity.getString(R.string.android_signing_automatic)
         } else {
             activity.getString(R.string.android_signing_fingerprint, fingerprint)
         }
     }
+
+    private fun latestProject(): Project = repository.findProject(project.id) ?: project
 
     private fun share(apk: File) {
         val uri = apkUri(apk)
