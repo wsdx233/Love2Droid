@@ -42,23 +42,23 @@
 ## Material Symbols
 
 - Android 产品图标统一从 Google Material Symbols 获取，默认使用 Rounded、未填充、weight 400；确有强调层级时才使用 `--fill` 或调整 `--weight`。
-- 新增或替换图标必须使用 `npx add-material-symbols`，禁止手绘路径、复制来源不明的 Vector Drawable 或使用 `android.R.drawable`。常用命令：
+- 新增或替换图标必须使用 `npx --yes --package=@expo/material-symbols add-material-symbols`，禁止手绘路径、复制来源不明的 Vector Drawable 或使用 `android.R.drawable`。常用命令：
 
 ```sh
 # Rounded
-npx add-material-symbols --style rounded home search
+npx --yes --package=@expo/material-symbols add-material-symbols --style rounded home search
 
 # Filled
-npx add-material-symbols --fill favorite
+npx --yes --package=@expo/material-symbols add-material-symbols --fill favorite
 
 # Rounded + filled
-npx add-material-symbols --style rounded --fill home favorite settings
+npx --yes --package=@expo/material-symbols add-material-symbols --style rounded --fill home favorite settings
 
 # weight 300
-npx add-material-symbols --weight 300 star
+npx --yes --package=@expo/material-symbols add-material-symbols --weight 300 star
 
 # 直接输出 Android drawable
-npx add-material-symbols -o app/src/main/res/drawable home search settings favorite
+npx --yes --package=@expo/material-symbols add-material-symbols -o app/src/main/res/drawable home search settings favorite
 ```
 
 - 运行命令后只提交实际使用的 XML，并通过资源引用搜索移除被替换的旧图标。命令无法解析包或图标名时应先确认 npm 包源和 Material Symbol 名称，不得猜测 path data。

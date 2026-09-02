@@ -157,7 +157,7 @@ final class GameDebugOverlay extends FrameLayout {
         setFocusable(false);
 
         bubble = new ImageButton(activity);
-        bubble.setImageDrawable(ContextCompat.getDrawable(activity, R.drawable.ic_terminal));
+        bubble.setImageDrawable(ContextCompat.getDrawable(activity, R.drawable.ic_build));
         bubble.setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN);
         bubble.setBackground(rippleBackground(
             roundDrawable(Color.argb(220, 0, 0, 0), dp(18), Color.argb(80, 255, 255, 255), dp(1)),
@@ -419,7 +419,7 @@ final class GameDebugOverlay extends FrameLayout {
         tabs.setTabRippleColor(ColorStateList.valueOf(Color.argb(28, 103, 80, 164)));
         tabs.addTab(tabs.newTab().setIcon(R.drawable.ic_terminal).setContentDescription(R.string.debug_tab_console));
         tabs.addTab(tabs.newTab().setIcon(R.drawable.ic_visibility).setContentDescription(R.string.debug_tab_watch));
-        tabs.addTab(tabs.newTab().setIcon(R.drawable.ic_breakpoint).setContentDescription(R.string.debug_tab_breakpoints));
+        tabs.addTab(tabs.newTab().setIcon(R.drawable.ic_bug_report).setContentDescription(R.string.debug_tab_breakpoints));
         tabs.addOnTabSelectedListener(new TabLayout.OnTabSelectedListener() {
             @Override public void onTabSelected(TabLayout.Tab tab) {
                 if (!syncingTabSelection)
@@ -443,7 +443,7 @@ final class GameDebugOverlay extends FrameLayout {
         rail.setPadding(0, dp(12), 0, 0);
         rail.getMenu().add(0, TAB_CONSOLE_ID, 0, R.string.debug_tab_console).setIcon(R.drawable.ic_terminal);
         rail.getMenu().add(0, TAB_WATCH_ID, 1, R.string.debug_tab_watch).setIcon(R.drawable.ic_visibility);
-        rail.getMenu().add(0, TAB_BREAKPOINTS_ID, 2, R.string.debug_tab_breakpoints).setIcon(R.drawable.ic_breakpoint);
+        rail.getMenu().add(0, TAB_BREAKPOINTS_ID, 2, R.string.debug_tab_breakpoints).setIcon(R.drawable.ic_bug_report);
         rail.setOnItemSelectedListener(item -> {
             if (!syncingTabSelection)
                 showTab(tabIndexForId(item.getItemId()));
@@ -885,7 +885,7 @@ final class GameDebugOverlay extends FrameLayout {
     }
 
     private void beginNativeRefresh() {
-        if (detached || !panelOpen || !refreshInFlight.compareAndSet(false, true)) return;
+        if (detached || (!panelOpen && !hasPinnedWatches()) || !refreshInFlight.compareAndSet(false, true)) return;
         nativeExecutor.execute(() -> {
             byte[] logBytes = activity.nativeGetDebugLogs();
             byte[] stateBytes = activity.nativeGetDebugState();
@@ -904,13 +904,22 @@ final class GameDebugOverlay extends FrameLayout {
                 renderWatchRows();
                 renderHud();
                 renderState(state);
-                if (panelOpen && activeTab == 1)
-                    requestWatchValues();
+                boolean requestAllWatches = panelOpen && activeTab == 1;
+                if (requestAllWatches || hasPinnedWatches())
+                    requestWatchValues(!requestAllWatches);
             });
         });
     }
-    private void requestWatchValues() {
+    private boolean hasPinnedWatches() {
         for (WatchEntry entry : watches) {
+            if (entry.pinned) return true;
+        }
+        return false;
+    }
+
+    private void requestWatchValues(boolean pinnedOnly) {
+        for (WatchEntry entry : watches) {
+            if (pinnedOnly && !entry.pinned) continue;
             String marker = "__L2D_WATCH_" + entry.id + "__";
             String code = "local __ok,__value=pcall(function() return (" + entry.expression + ") end); if __ok then print(\"" + marker + "\" .. tostring(__value)) else print(\"" + marker + "<error> \" .. tostring(__value)) end";
             activity.nativeQueueDebugCode(code.getBytes(StandardCharsets.UTF_8));

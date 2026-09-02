@@ -5,7 +5,7 @@
     <string name="debug_close">关闭</string>
     <string name="debug_code_empty">请输入要执行的 Lua 代码</string>
     <string name="debug_code_submitted">代码已加入执行队列</string>
-    <string name="debug_panel_title">调试控制台</string>
+    <string name="debug_panel_title">调试</string>
     <string name="debug_fullscreen">全屏</string>
     <string name="debug_exit_fullscreen">退出全屏</string>
     <string name="debug_exit_game">退出游戏</string>
