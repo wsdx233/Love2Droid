@@ -28,6 +28,10 @@ internal class SymbolNavigationAdapter(
             drawable
         }
         val row = LinearLayout(context).apply {
+            layoutParams = RecyclerView.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            )
             orientation = LinearLayout.VERTICAL
             minimumHeight = (64 * density).toInt()
             setPadding(paddingHorizontal, paddingVertical, paddingHorizontal, paddingVertical)

@@ -705,6 +705,24 @@ class EditorActivity : AppCompatActivity() {
             findUsages(selected.file, selected.line, selected.column)
         }
         val customButtons = listOfNotNull(symbolDefinitionButton, symbolUsagesButton)
+        val resizeActionWindow = Runnable {
+            if (actionWindow.isShowing()) {
+                val contentWidth = buttonRow.measuredWidth
+                val maxWidth = (resources.displayMetrics.widthPixels - dp(32)).coerceAtLeast(actionWindow.getWidth())
+                val width = contentWidth.coerceAtMost(maxWidth)
+                if (width > actionWindow.getWidth()) {
+                    actionWindow.setSize(width, actionWindow.getHeight())
+                }
+            }
+        }
+        buttonRow.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            editor.removeCallbacks(resizeActionWindow)
+            editor.post(resizeActionWindow)
+        }
+        editor.subscribeAlways<SelectionChangeEvent> {
+            editor.removeCallbacks(resizeActionWindow)
+            editor.postDelayed(resizeActionWindow, 80L)
+        }
         actionWindow.getPopup().setTouchInterceptor { _, event ->
             if (event.actionMasked != MotionEvent.ACTION_UP) {
                 false
@@ -790,10 +808,10 @@ class EditorActivity : AppCompatActivity() {
                     locations.mapNotNull { resolveProjectNavigationTarget(project.root, it) }
                 }
                 android.util.Log.d(TAG, "Definition targets: ${targets.size}")
-                if (targets.isEmpty()) {
-                    toast(getString(R.string.symbol_location_outside_project))
-                } else {
-                    showNavigationResults(R.string.definition_results, project, targets)
+                when {
+                    targets.isEmpty() -> toast(getString(R.string.symbol_location_outside_project))
+                    targets.size == 1 -> openFile(targets.single().file, targets.single())
+                    else -> showNavigationResults(R.string.definition_results, project, targets)
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -818,11 +836,11 @@ class EditorActivity : AppCompatActivity() {
                 val targets = withContext(Dispatchers.IO) {
                     locations.mapNotNull { resolveProjectNavigationTarget(project.root, it) }
                 }
-                if (targets.isEmpty()) {
-                    toast(getString(R.string.symbol_location_outside_project))
-                    return@launch
+                when {
+                    targets.isEmpty() -> toast(getString(R.string.symbol_location_outside_project))
+                    targets.size == 1 -> openFile(targets.single().file, targets.single())
+                    else -> showNavigationResults(R.string.usage_results, project, targets)
                 }
-                showNavigationResults(R.string.usage_results, project, targets)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Throwable) {
