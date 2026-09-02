@@ -45,6 +45,8 @@
                 android:paddingEnd="4dp" />
         </HorizontalScrollView>
 
+        <include layout="@layout/view_editor_search" />
+
         <FrameLayout
             android:id="@+id/editor_container"
             android:layout_width="match_parent"
@@ -164,19 +166,61 @@
             android:layout_height="0dp"
             android:background="?attr/colorPrimary"
             android:importantForAccessibility="no" />
-        <TextView
-            android:id="@+id/drawer_project_title"
+        <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:ellipsize="end"
-            android:maxLines="1"
+            android:layout_height="64dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
             android:paddingStart="20dp"
-            android:paddingTop="20dp"
-            android:paddingEnd="20dp"
-            android:paddingBottom="4dp"
-            android:text="@string/no_project"
-            android:textSize="20sp"
-            android:textStyle="bold" />
+            android:paddingTop="12dp"
+            android:paddingEnd="8dp"
+            android:paddingBottom="4dp">
+
+            <TextView
+                android:id="@+id/drawer_project_title"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:gravity="center_vertical"
+                android:maxLines="1"
+                android:text="@string/no_project"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+
+            <ImageButton
+                android:id="@+id/drawer_project_search"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/project_search"
+                android:enabled="false"
+                android:padding="9dp"
+                android:src="@drawable/ic_search"
+                android:tint="?attr/colorOnSurfaceVariant" />
+
+            <ImageButton
+                android:id="@+id/drawer_version_control"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/version_control"
+                android:enabled="false"
+                android:padding="9dp"
+                android:src="@drawable/ic_source_control"
+                android:tint="?attr/colorOnSurfaceVariant" />
+
+            <ImageButton
+                android:id="@+id/drawer_project_properties"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/project_properties"
+                android:enabled="false"
+                android:padding="9dp"
+                android:src="@drawable/ic_tune"
+                android:tint="?attr/colorOnSurfaceVariant" />
+        </LinearLayout>
 
         <LinearLayout
             android:layout_width="match_parent"

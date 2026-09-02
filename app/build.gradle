@@ -136,6 +136,7 @@ android {
             java {
                 srcDir 'src/normal/java'
             }
+            assets.srcDir "$buildDir/generated/game-template/assets"
         }
     }
 
@@ -170,6 +171,63 @@ android {
         }
     }
 }
+
+def gameTemplateWorkDir = layout.buildDirectory.dir('intermediates/game-template')
+def gameTemplateAsset = layout.buildDirectory.file('generated/game-template/assets/game-template.apk')
+def compileGameTemplateResources = tasks.register('compileGameTemplateResources', Exec) {
+    def sourceIcon = file('src/main/res/drawable-xxxhdpi/love.png')
+    def stagedResources = gameTemplateWorkDir.map { it.dir('res') }
+    def compiledResources = gameTemplateWorkDir.map { it.file('compiled-resources.zip') }
+    inputs.file(sourceIcon)
+    outputs.file(compiledResources)
+    doFirst {
+        delete(stagedResources.get().asFile)
+        copy {
+            from sourceIcon
+            into new File(stagedResources.get().asFile, 'drawable')
+            rename { 'icon.png' }
+        }
+        compiledResources.get().asFile.parentFile.mkdirs()
+        commandLine(
+            androidComponents.sdkComponents.aapt2.get().executable.get().asFile,
+            'compile', '--dir', stagedResources.get().asFile,
+            '-o', compiledResources.get().asFile,
+        )
+    }
+}
+
+def linkGameTemplate = tasks.register('linkGameTemplate', Exec) {
+    dependsOn compileGameTemplateResources
+    def manifestFile = file('src/gameTemplate/AndroidManifest.xml')
+    def compiledResources = gameTemplateWorkDir.map { it.file('compiled-resources.zip') }
+    def androidJar = androidComponents.sdkComponents.bootClasspath.map { files -> files.first() }
+    inputs.file(manifestFile)
+    inputs.file(compiledResources)
+    inputs.file(androidJar)
+    outputs.file(gameTemplateAsset)
+    doFirst {
+        gameTemplateAsset.get().asFile.parentFile.mkdirs()
+        commandLine(
+            androidComponents.sdkComponents.aapt2.get().executable.get().asFile,
+            'link', '-o', gameTemplateAsset.get().asFile,
+            '-I', androidJar.get().asFile,
+            '--manifest', manifestFile,
+            '-R', compiledResources.get().asFile,
+        )
+    }
+}
+
+tasks.configureEach { task ->
+    if (task.name.startsWith('mergeNormal') && task.name.endsWith('Assets')) {
+        task.dependsOn linkGameTemplate
+    }
+}
+
+tasks.withType(org.gradle.api.tasks.testing.Test).configureEach {
+    dependsOn linkGameTemplate
+    systemProperty 'love2droid.gameTemplateApk', gameTemplateAsset.get().asFile.absolutePath
+    systemProperty 'love2droid.testApkOutput', layout.buildDirectory.file('intermediates/game-template/test-game.apk').get().asFile.absolutePath
+}
 kotlin {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
@@ -193,6 +251,7 @@ dependencies {
     implementation 'org.eclipse.lsp4j:org.eclipse.lsp4j:1.0.0'
     implementation 'org.apache.commons:commons-compress:1.28.0'
     implementation 'org.yaml:snakeyaml:2.4'
+    implementation 'com.android.tools.build:apksig:9.3.1'
     implementation project(':terminal-view')
 }
 

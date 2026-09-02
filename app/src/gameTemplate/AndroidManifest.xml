@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    android:versionCode="1"
+    android:versionName="1.0"
+    android:installLocation="auto"
+    package="com.love2d.template">
+    <uses-sdk android:minSdkVersion="23" android:targetSdkVersion="28" />
+
+    <uses-permission android:name="com.love2droid.placeholder.PERMISSION_01" />
+    <uses-permission android:name="com.love2droid.placeholder.PERMISSION_02" />
+    <uses-permission android:name="com.love2droid.placeholder.PERMISSION_03" />
+    <uses-permission android:name="com.love2droid.placeholder.PERMISSION_04" />
+    <uses-permission android:name="com.love2droid.placeholder.PERMISSION_05" />
+    <uses-permission android:name="com.love2droid.placeholder.PERMISSION_06" />
+    <uses-permission android:name="com.love2droid.placeholder.PERMISSION_07" />
+    <uses-permission android:name="com.love2droid.placeholder.PERMISSION_08" />
+    <uses-permission android:name="com.love2droid.placeholder.PERMISSION_09" />
+    <uses-permission android:name="com.love2droid.placeholder.PERMISSION_10" />
+    <uses-permission android:name="com.love2droid.placeholder.PERMISSION_11" />
+    <uses-permission android:name="com.love2droid.placeholder.PERMISSION_12" />
+    <uses-permission android:name="com.love2droid.placeholder.PERMISSION_13" />
+    <uses-permission android:name="com.love2droid.placeholder.PERMISSION_14" />
+    <uses-permission android:name="com.love2droid.placeholder.PERMISSION_15" />
+    <uses-permission android:name="com.love2droid.placeholder.PERMISSION_16" />
+    <uses-permission android:name="com.love2droid.placeholder.PERMISSION_17" />
+    <uses-permission android:name="com.love2droid.placeholder.PERMISSION_18" />
+    <uses-permission android:name="com.love2droid.placeholder.PERMISSION_19" />
+    <uses-permission android:name="com.love2droid.placeholder.PERMISSION_20" />
+    <uses-permission android:name="com.love2droid.placeholder.PERMISSION_21" />
+    <uses-permission android:name="com.love2droid.placeholder.PERMISSION_22" />
+    <uses-permission android:name="com.love2droid.placeholder.PERMISSION_23" />
+    <uses-permission android:name="com.love2droid.placeholder.PERMISSION_24" />
+    <uses-permission android:name="com.love2droid.placeholder.PERMISSION_25" />
+    <uses-permission android:name="com.love2droid.placeholder.PERMISSION_26" />
+    <uses-permission android:name="com.love2droid.placeholder.PERMISSION_27" />
+    <uses-permission android:name="com.love2droid.placeholder.PERMISSION_28" />
+    <uses-permission android:name="com.love2droid.placeholder.PERMISSION_29" />
+    <uses-permission android:name="com.love2droid.placeholder.PERMISSION_30" />
+    <uses-permission android:name="com.love2droid.placeholder.PERMISSION_31" />
+    <uses-permission android:name="com.love2droid.placeholder.PERMISSION_32" />
+
+    <uses-feature android:glEsVersion="0x00030000" />
+    <uses-feature android:name="android.hardware.vulkan.version" android:version="0x401000" android:required="false" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
+    <uses-feature android:name="android.hardware.gamepad" android:required="false" />
+    <uses-feature android:name="android.hardware.usb.host" android:required="false" />
+    <uses-feature android:name="android.hardware.type.pc" android:required="false" />
+    <uses-feature android:name="android.hardware.audio.low_latency" android:required="false" />
+    <uses-feature android:name="android.hardware.audio.pro" android:required="false" />
+
+    <application
+        android:allowBackup="true"
+        android:allowNativeHeapPointerTagging="false"
+        android:extractNativeLibs="true"
+        android:icon="@drawable/icon"
+        android:label="Love2D Game">
+        <activity
+            android:name="top.wsdx233.love2droid.runtime.PackagedLoveGameActivity"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation"
+            android:exported="true"
+            android:launchMode="singleInstance"
+            android:screenOrientation="landscape"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
+            <meta-data android:name="SDL_ENV.SDL_ANDROID_ALLOW_RECREATE_ACTIVITY" android:value="1" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="tv.ouya.intent.category.GAME" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

@@ -3,4 +3,7 @@
     <cache-path
         name="love_packages"
         path="love-packages/" />
+    <cache-path
+        name="android_packages"
+        path="android-packages/" />
 </paths>

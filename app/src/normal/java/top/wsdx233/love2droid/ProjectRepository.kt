@@ -1,6 +1,7 @@
 package top.wsdx233.love2droid
 
 import android.content.Context
+import android.net.Uri
 import org.json.JSONObject
 import java.io.File
 import java.io.IOException
@@ -31,17 +32,19 @@ internal fun defaultProjectConf(id: String, displayName: String): String = """
     end
 """.trimIndent() + "\n"
 
- data class Project(
+data class Project(
     val id: String,
     val displayName: String,
     val description: String,
     val root: File,
     val lastOpened: Long,
+    val androidProperties: AndroidProjectProperties = AndroidProjectProperties.defaults(id, displayName),
 )
 
 class ProjectRepository(context: Context) {
     private val appContext = context.applicationContext
     private val preferences = appContext.getSharedPreferences("project-state", Context.MODE_PRIVATE)
+    private val iconStore = ProjectIconStore(appContext)
     val projectsRoot: File = File(
         appContext.getExternalFilesDir(null) ?: appContext.filesDir,
         "projects",
@@ -76,6 +79,20 @@ class ProjectRepository(context: Context) {
         writeMetadata(updated)
         preferences.edit().putString("last_project_id", project.id).apply()
         return updated
+    }
+
+    fun updateAndroidProperties(project: Project, properties: AndroidProjectProperties): Project {
+        require(StorageUtils.isWithin(projectsRoot, project.root)) { "Project is outside storage root" }
+        val updated = project.copy(androidProperties = properties.validated())
+        writeMetadata(updated)
+        return updated
+    }
+
+    fun projectIcon(project: Project): File? = iconStore.iconFile(project.id)
+
+    fun importProjectIcon(project: Project, uri: Uri): File {
+        require(StorageUtils.isWithin(projectsRoot, project.root)) { "Project is outside storage root" }
+        return iconStore.importIcon(project.id, uri)
     }
 
     fun createProject(displayName: String, requestedId: String, description: String): Project {
@@ -123,6 +140,7 @@ class ProjectRepository(context: Context) {
             newRoot
         }
         val updated = project.copy(id = newId, displayName = cleanName, root = movedRoot)
+        iconStore.renameProject(project.id, newId)
         writeMetadata(updated)
         if (preferences.getString("last_project_id", null) == project.id) {
             preferences.edit().putString("last_project_id", newId).apply()
@@ -133,6 +151,7 @@ class ProjectRepository(context: Context) {
     fun deleteProject(project: Project) {
         require(StorageUtils.isWithin(projectsRoot, project.root)) { "Project is outside storage root" }
         StorageUtils.deleteRecursively(project.root)
+        iconStore.deleteProject(project.id)
         if (preferences.getString("last_project_id", null) == project.id) {
             preferences.edit().remove("last_project_id").apply()
         }
@@ -145,7 +164,12 @@ class ProjectRepository(context: Context) {
         val displayName = metadata?.optString("displayName").orEmpty().ifBlank { root.name }
         val description = metadata?.optString("description").orEmpty()
         val lastOpened = metadata?.optLong("lastOpened", 0L) ?: 0L
-        return Project(root.name, displayName, description, root, lastOpened)
+        val androidProperties = AndroidProjectProperties.fromJson(
+            metadata?.optJSONObject("android"),
+            root.name,
+            displayName,
+        )
+        return Project(root.name, displayName, description, root, lastOpened, androidProperties)
     }
 
     private fun writeMetadata(project: Project) {
@@ -154,6 +178,7 @@ class ProjectRepository(context: Context) {
             .put("displayName", project.displayName)
             .put("description", project.description)
             .put("lastOpened", project.lastOpened)
+            .put("android", project.androidProperties.toJson())
         StorageUtils.writeTextAtomic(File(project.root, StorageUtils.METADATA_FILE), metadata.toString(2))
     }
 

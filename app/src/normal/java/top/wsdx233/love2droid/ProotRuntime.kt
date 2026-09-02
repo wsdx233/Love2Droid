@@ -52,6 +52,8 @@ object ProotRuntime {
     fun luaLanguageServer(context: Context): File =
         File(rootfsDir(context), LUA_LANGUAGE_SERVER_GUEST_PATH.removePrefix("/"))
 
+    fun gitBinary(context: Context): File = File(rootfsDir(context), "usr/bin/git")
+
     fun prootBinary(context: Context): File =
         File(context.applicationInfo.nativeLibraryDir, PROOT_LIBRARY_NAME)
 
@@ -241,6 +243,19 @@ object ProotRuntime {
             guestWorkingDirectory = "/root",
             terminalType = "dumb",
             guestCommand = listOf(resolveGuestShell(context), "-l", "-c", script),
+        )
+    }
+
+    fun projectCommandLaunch(context: Context, projectRoot: File, guestCommand: List<String>): LaunchSpec {
+        check(isEnvironmentReady(context)) { "Proot environment is not ready" }
+        require(guestCommand.isNotEmpty()) { "Guest command is required" }
+        val canonicalRoot = projectRoot.canonicalFile
+        require(canonicalRoot.isDirectory) { "Project directory is missing" }
+        return buildLaunch(
+            context = context,
+            guestWorkingDirectory = canonicalRoot.absolutePath,
+            terminalType = "dumb",
+            guestCommand = guestCommand,
         )
     }
 

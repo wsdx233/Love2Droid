@@ -64,6 +64,27 @@ Play 使用不可变 `.love` 快照，不让 runtime 读取编辑器可能处于
 
 该数据流避免依赖 file URI 和广泛存储权限。若个别设备的 URI/SDL 组合不兼容，只允许在 runtime 边界增加受控 staging，不扩大整个应用的存储权限。
 
+## Android 游戏发布数据流
+
+Android 发布与 Play 分离；发布结果是可安装、可分享的独立 APK：
+
+1. 项目元数据保存应用名、包名、版本、方向、权限和稳定签名身份；图标保存在应用私有 `project-icons/`，项目重命名和删除时同步处理。
+2. Gradle 构建期间由 AAPT2 从 `app/src/gameTemplate/AndroidManifest.xml` 和默认图标生成最小 `game-template.apk` 资产，不提交预编译模板。
+3. 发布前保存标签、校验 `main.lua`，再由 `LovePackageBuilder` 生成最新 `game.love`。
+4. `AndroidApkAssembler` 取模板的 Manifest、资源表和图标，取当前已安装 Love2Droid APK 的 runtime DEX 与必要 native 库，写入 `assets/game.love`；编辑器资产、终端和 PRoot native 库不进入成品。
+5. `AndroidBinaryXmlEditor` 重写二进制 Manifest 的包名、应用名、版本、方向和权限，并在输出前重新解析验证结果。
+6. `AndroidSigningStore` 为每个项目在 AndroidKeyStore 中维护稳定签名，也允许导入 RSA/EC PKCS#12；密码只存在于当前导入操作的内存中。`AndroidApkBuilder` 使用官方 `apksig` 生成 v1/v2 签名。
+7. 成品写入 cache 下的 `android-packages/`，只通过 `FileProvider` 临时 URI 交给分享目标或系统安装器。Android 8.0 及以上的未知来源授权由系统设置处理。
+
+独立成品启动 `PackagedLoveGameActivity`，不包含编辑器内 Play 使用的调试悬浮层。成品 APK 继承当前已安装 Love2Droid APK 中可用的 ABI；分 ABI 安装时不会凭空补齐其他 ABI。
+
+## 项目搜索与版本控制
+
+- 编辑器内搜索由 `EditorSearchController` 封装 Sora `EditorSearcher`，维护普通/正则查询、替换展开状态和标签切换后的重新提交。
+- 项目文件与文本搜索由 `ProjectSearchEngine` 在后台执行，跳过产品元数据、`.git/`、二进制和超限文件；所有结果仍受项目根目录边界约束。
+- 符号搜索优先使用 LuaLS `workspace/symbol`，无语义结果时退化到本地 Lua 标识符索引，并在结果模型中标记来源。
+- Git 后端只通过 PRoot 内的 `git` CLI 执行固定参数命令。`GitClient` 限制输出大小，解析 porcelain/NUL 分隔机器格式；当前 UI 只读展示状态、历史、提交详情和 Diff，不实现写操作或凭据管理。
+
 ## 编辑器、语法与 LSP
 
 - Sora `CodeEditor` 提供文本编辑；TextMate grammar 只由 `app/src/main/assets/textmate/languages.json` 注册。
@@ -89,6 +110,10 @@ Play 使用不可变 `.love` 快照，不让 runtime 读取编辑器可能处于
 - `EditorSession`：标签、dirty、光标和滚动状态；不负责项目列表 UI。
 - `LanguageResolver`：扩展名到语言定义的唯一映射入口。
 - `LovePackageBuilder`：项目目录到 `.love` 临时快照。
+- `AndroidApkAssembler` 与 `AndroidBinaryXmlEditor`：纯归档/二进制 Manifest 变换；不持有 Activity 或签名密钥。
+- `AndroidSigningStore`：AndroidKeyStore 和 PKCS#12 导入边界；项目元数据只保存稳定身份标识，不保存私钥或密码。
+- `AndroidApkBuilder`：串联 `.love`、模板、runtime 条目与签名，输出 cache APK。
+- `ProjectSearchEngine` 与 `GitClient`：后台搜索和只读 Git 协议；Bottom Sheet 只负责展示与用户动作。
 - `StorageUtils`：路径边界、原子写和递归文件操作。
 - runtime 边界：保存、校验、打包后启动 LÖVE，不处理文件浏览器选择。
 

@@ -41,6 +41,9 @@
                 android:id="@+id/action_find_replace"
                 android:title="@string/find_replace" />
             <item
+                android:id="@+id/action_package_android"
+                android:title="@string/android_package_title" />
+            <item
                 android:id="@+id/action_word_wrap"
                 android:checkable="true"
                 android:title="@string/word_wrap" />

@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.res.Configuration
 import android.content.Intent
+import android.net.Uri
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -87,9 +88,13 @@ class EditorActivity : AppCompatActivity() {
     private lateinit var symbolBar: LinearLayout
     private lateinit var symbolScroll: View
     private lateinit var editor: CodeEditor
+    private lateinit var editorSearchController: EditorSearchController
     private lateinit var welcomePage: View
     private lateinit var drawerProjectTitle: TextView
     private lateinit var drawerProjectPath: TextView
+    private lateinit var drawerProjectSearch: View
+    private lateinit var drawerVersionControl: View
+    private lateinit var drawerProjectProperties: View
     private lateinit var drawerDirectoryMenu: View
     private lateinit var selectionActionBar: LinearLayout
     private lateinit var browserAdapter: FileBrowserAdapter
@@ -121,6 +126,8 @@ class EditorActivity : AppCompatActivity() {
     private val directoryRefreshHandler = Handler(Looper.getMainLooper())
     private var symbolDefinitionButton: ImageButton? = null
     private var symbolUsagesButton: ImageButton? = null
+    private var pendingProjectIconSelection: ((Uri?) -> Unit)? = null
+    private var pendingSigningKeySelection: ((Uri?) -> Unit)? = null
     private val directoryRefreshRunnable = Runnable { refreshFileList() }
     private var terminalCounter = 0
     private var ctrlPressed = false
@@ -218,6 +225,22 @@ class EditorActivity : AppCompatActivity() {
         }
     }
 
+    private val projectIconLauncher = registerForActivityResult(
+        ActivityResultContracts.GetContent(),
+    ) { uri ->
+        val callback = pendingProjectIconSelection
+        pendingProjectIconSelection = null
+        callback?.invoke(uri)
+    }
+
+    private val signingKeyLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        val callback = pendingSigningKeySelection
+        pendingSigningKeySelection = null
+        callback?.invoke(uri)
+    }
+
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
         if (event.actionMasked == MotionEvent.ACTION_DOWN) {
             lspController?.dismissHover()
@@ -244,12 +267,24 @@ class EditorActivity : AppCompatActivity() {
         welcomePage = findViewById(R.id.welcome_page)
         drawerProjectTitle = findViewById(R.id.drawer_project_title)
         drawerProjectPath = findViewById(R.id.drawer_project_path)
+        drawerProjectSearch = findViewById(R.id.drawer_project_search)
+        drawerVersionControl = findViewById(R.id.drawer_version_control)
+        drawerProjectProperties = findViewById(R.id.drawer_project_properties)
         drawerDirectoryMenu = findViewById(R.id.drawer_directory_menu)
         selectionActionBar = findViewById(R.id.selection_action_bar)
+        editorSearchController = EditorSearchController(
+            context = this,
+            editor = editor,
+            root = findViewById(android.R.id.content),
+            onError = ::toast,
+        )
         findViewById<View>(R.id.action_select_all).setOnClickListener { selectAllVisibleItems() }
         findViewById<View>(R.id.action_invert_selection).setOnClickListener { invertVisibleSelection() }
         findViewById<View>(R.id.action_clear_selection).setOnClickListener { clearSelection() }
         drawerDirectoryMenu.setOnClickListener(::showCurrentDirectoryMenu)
+        drawerProjectSearch.setOnClickListener { showProjectSearch() }
+        drawerVersionControl.setOnClickListener { showVersionControl() }
+        drawerProjectProperties.setOnClickListener { showProjectProperties() }
         findViewById<View>(R.id.welcome_open_file).setOnClickListener {
             drawer.openDrawer(GravityCompat.START)
         }
@@ -267,6 +302,7 @@ class EditorActivity : AppCompatActivity() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 when {
+                    editorSearchController.isVisible -> editorSearchController.close()
                     drawer.isDrawerOpen(GravityCompat.START) && selectionMode -> clearSelection()
                     drawer.isDrawerOpen(GravityCompat.START) && navigateToParentDirectory() -> Unit
                     drawer.isDrawerOpen(GravityCompat.START) -> drawer.closeDrawer(GravityCompat.START)
@@ -945,7 +981,7 @@ class EditorActivity : AppCompatActivity() {
             }
             R.id.action_find_replace -> {
                 if (editor.isShown) {
-                    editor.beginSearchMode()
+                    editorSearchController.show()
                 } else {
                     toast(getString(R.string.no_active_document))
                 }
@@ -961,6 +997,10 @@ class EditorActivity : AppCompatActivity() {
                 }
                 true
             }
+            R.id.action_package_android -> {
+                showAndroidPackaging()
+                true
+            }
             R.id.action_settings -> {
                 startActivity(Intent(this, SettingsActivity::class.java))
                 true
@@ -971,6 +1011,65 @@ class EditorActivity : AppCompatActivity() {
             }
             else -> false
         }
+    }
+
+    private fun showProjectSearch() {
+        val project = currentProject ?: return
+        drawer.closeDrawer(GravityCompat.START)
+        ProjectSearchSheet(
+            activity = this,
+            scope = lifecycleScope,
+            project = project,
+            lspController = lspController,
+            onOpen = { target -> openFile(target.file, target) },
+        ).show()
+    }
+
+    private fun showVersionControl() {
+        val project = currentProject ?: return
+        drawer.closeDrawer(GravityCompat.START)
+        GitBottomSheet(this, lifecycleScope, project).show()
+    }
+
+    private fun showProjectProperties() {
+        val project = currentProject ?: return
+        drawer.closeDrawer(GravityCompat.START)
+        ProjectPropertiesSheet(
+            activity = this,
+            scope = lifecycleScope,
+            repository = projectRepository,
+            project = project,
+            chooseIcon = { callback ->
+                pendingProjectIconSelection = callback
+                projectIconLauncher.launch("image/*")
+            },
+            onSaved = { updated ->
+                if (currentProject?.id == updated.id) {
+                    currentProject = updated
+                    toolbar.title = updated.displayName
+                    drawerProjectTitle.text = updated.displayName
+                }
+            },
+        ).show()
+    }
+
+    private fun showAndroidPackaging() {
+        val project = currentProject ?: run {
+            openProjectManagerIfNeeded(force = true)
+            return
+        }
+        if (!saveAllBlocking(requireNamed = true)) return
+        AndroidPackagingSheet(
+            activity = this,
+            scope = lifecycleScope,
+            project = project,
+            chooseSigningKey = { callback ->
+                pendingSigningKeySelection = callback
+                signingKeyLauncher.launch(
+                    arrayOf("application/x-pkcs12", "application/pkcs12", "application/octet-stream"),
+                )
+            },
+        ).show()
     }
 
     private fun openProjectManagerIfNeeded(force: Boolean = false) {
@@ -997,6 +1096,9 @@ class EditorActivity : AppCompatActivity() {
         browserAdapter.submitItems(emptyList(), emptySet())
         toolbar.title = currentProject?.displayName.orEmpty()
         drawerProjectTitle.text = currentProject?.displayName
+        drawerProjectSearch.isEnabled = true
+        drawerVersionControl.isEnabled = true
+        drawerProjectProperties.isEnabled = true
         updateDirectoryHeader()
         refreshTabs()
         showEmptyEditor()
@@ -1014,6 +1116,9 @@ class EditorActivity : AppCompatActivity() {
             drawerProjectTitle.text = getString(R.string.no_project)
             drawerProjectPath.text = ""
             drawerDirectoryMenu.isEnabled = false
+            drawerProjectSearch.isEnabled = false
+            drawerVersionControl.isEnabled = false
+            drawerProjectProperties.isEnabled = false
             browserAdapter.submitItems(emptyList(), emptySet())
             return
         }
@@ -1082,6 +1187,7 @@ class EditorActivity : AppCompatActivity() {
         terminalView.visibility = View.GONE
         symbolScroll.visibility = View.GONE
         terminalKeyBar.visibility = View.GONE
+        editorSearchController.setEditorAvailable(false)
         welcomePage.visibility = View.VISIBLE
         scheduleLsp(null)
     }
@@ -1585,6 +1691,7 @@ class EditorActivity : AppCompatActivity() {
         terminalView.visibility = View.GONE
         terminalKeyBar.visibility = View.GONE
         editor.visibility = View.VISIBLE
+        editorSearchController.setEditorAvailable(true)
         symbolScroll.visibility = View.VISIBLE
         welcomePage.visibility = View.GONE
         scheduleLsp(tab, language)
@@ -1594,6 +1701,7 @@ class EditorActivity : AppCompatActivity() {
     private fun showTerminalTab(tab: TerminalTab) {
         editor.clearFocus()
         editor.visibility = View.GONE
+        editorSearchController.setEditorAvailable(false)
         symbolScroll.visibility = View.GONE
         welcomePage.visibility = View.GONE
         terminalView.visibility = View.VISIBLE
@@ -2063,6 +2171,7 @@ class EditorActivity : AppCompatActivity() {
         workspaceRestoreJob?.cancel()
         lspJob?.cancel()
         symbolNavigationJob?.cancel()
+        editorSearchController.dispose()
         lspController?.close()
         finishTerminalTabs()
         super.onDestroy()

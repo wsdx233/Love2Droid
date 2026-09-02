@@ -25,6 +25,20 @@
 - 参考范围：Termux `TerminalView`/`TerminalSession`、双行快捷键栏、PRoot 启动参数和安装进度日志
 - 使用边界：只借鉴与终端和 PRoot 集成直接相关的实现，不复制无关产品代码
 
+## AndroLua Pro
+
+- 上游：<https://github.com/nirenr/AndroLua_pro>
+- 参考提交：`abe5c25148a60ee44ddcccc212db6b96e836c793`
+- 许可证：MIT
+- 参考范围：项目发布属性、权限选择、APK 归档重写和签名交互。
+- 使用边界：只参考流程与交互，不复制旧版打包器、过时 Android 支持代码或签名文件；成品使用当前 Love2Droid 构建生成的最小资源模板和同版本 LÖVE runtime。
+
+## Android apksig
+
+- 来源：Google Maven `com.android.tools.build:apksig:9.3.1`。
+- 参考范围：Android APK Signature Scheme v1/v2 生成。
+- 使用边界：签名私钥由 AndroidKeyStore 持有或从用户选择的 PKCS#12 导入；项目元数据、日志和发布 APK 均不保存密码或私钥。
+
 ## 许可证要求
 
 - LÖVE、SDL、Termux 组件、参考项目和第三方 TextMate grammar 的上游许可证必须保留。

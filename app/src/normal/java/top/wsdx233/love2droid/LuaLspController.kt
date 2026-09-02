@@ -20,6 +20,9 @@ import org.eclipse.lsp4j.Position
 import org.eclipse.lsp4j.Range
 import org.eclipse.lsp4j.ReferenceContext
 import org.eclipse.lsp4j.ReferenceParams
+import org.eclipse.lsp4j.SymbolInformation
+import org.eclipse.lsp4j.WorkspaceSymbol
+import org.eclipse.lsp4j.WorkspaceSymbolParams
 import java.util.concurrent.TimeUnit
 
 class LuaLspController(
@@ -117,6 +120,21 @@ class LuaLspController(
         return locations.filterNotNull().map(::toSymbolLocation).distinctAndSorted()
     }
 
+    internal suspend fun searchWorkspaceSymbols(query: String): List<LuaWorkspaceSymbol> {
+        val current = activeEditor?.takeIf { it.isConnected } ?: return emptyList()
+        val response = withContext(Dispatchers.IO) {
+            current.requestManager.symbol(WorkspaceSymbolParams(query))
+                ?.get(REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        } ?: return emptyList()
+        val symbols = if (response.isLeft) {
+            response.left.orEmpty().map(::toWorkspaceSymbol)
+        } else {
+            response.right.orEmpty().filterNotNull().map(::toWorkspaceSymbol)
+        }
+        return symbols.distinctBy { listOf(it.name, it.location.uri, it.location.startLine, it.location.startColumn) }
+            .take(MAX_WORKSPACE_SYMBOLS)
+    }
+
     private fun activeEditorFor(file: File): LspEditor? {
         val current = activeEditor ?: return null
         if (!current.isConnected) return null
@@ -139,6 +157,21 @@ class LuaLspController(
         endLine = range.end.line,
         endColumn = range.end.character,
     )
+
+    private fun toWorkspaceSymbol(symbol: SymbolInformation): LuaWorkspaceSymbol = LuaWorkspaceSymbol(
+        name = symbol.name,
+        kind = symbol.kind.toString(),
+        location = toSymbolLocation(symbol.location),
+    )
+
+    private fun toWorkspaceSymbol(symbol: WorkspaceSymbol): LuaWorkspaceSymbol {
+        val location = if (symbol.location.isLeft) {
+            toSymbolLocation(symbol.location.left)
+        } else {
+            LuaSymbolLocation(symbol.location.right.uri, 0, 0, 0, 0)
+        }
+        return LuaWorkspaceSymbol(symbol.name, symbol.kind.toString(), location)
+    }
 
     private fun List<LuaSymbolLocation>.distinctAndSorted(): List<LuaSymbolLocation> =
         distinctBy { listOf(it.uri, it.startLine, it.startColumn, it.endLine, it.endColumn) }
@@ -171,6 +204,7 @@ class LuaLspController(
 
     private companion object {
         const val REQUEST_TIMEOUT_SECONDS = 10L
+        const val MAX_WORKSPACE_SYMBOLS = 1_000
     }
 
     private suspend fun disposeActive() {
