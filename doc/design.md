@@ -100,6 +100,10 @@ Drawer 使用 `RecyclerView` 展示当前目录的直接子项，不渲染可展
 - 首次安装页使用 Toolbar、线性进度和持续追加的日志展示 Ubuntu Base 与工具安装状态；失败后可重试。
 - bash-prompt 使用 `PROMPT_DIRTRIM=1`，避免展示完整 `Android/data` 长路径。
 - 游戏窗口遵循 LÖVE/SDL Android 方向规则：`t.window.resizable = false` 且未设置 `SDL_ORIENTATIONS` 时，`width > height` 启动为横屏，`height >= width` 启动为竖屏；`resizable = true` 时允许随设备和系统旋转锁定切换。游戏调试悬浮球在横竖屏双向旋转后停靠到右侧，并按旋转前的纵向比例保持位置，避免落到底部或移出屏幕。
+- 游戏调试悬浮球使用黑色半透明背景和白色 Material 图标，支持拖动。轻触后显示黑色半透明 scrim；横屏面板从左侧滑出，竖屏面板从底部以 Bottom Sheet 形态滑出。调试 Activity 使用 `Window` 的 `adjustPan` 让系统在输入法出现时仅平移到当前输入框可见，不手动计算输入法高度。
+- 调试面板保持纯白背景、少量圆角和大号触控热区，使用 Material 3 色彩层级与 Google Material 图标。控制台页合并增量日志与 Lua 高亮多行 REPL，提供等级筛选、关键字搜索、清空和滚动锁定；日志刷新和自动跟随不转移当前输入焦点。监视页支持安全求值并把表达式固定到游戏画面 HUD。REPL 快捷代码和符号栏当前不显示。
+- Lua 编辑器轻触行号可切换断点，不增加独立 gutter；断点行号背景在亮色主题下为浅红色、暗色主题下为红色。断点按项目持久化到 `.love2droid.json`，编辑导致行数变化时同步迁移，并在 Play 时传入 runtime。游戏断点页不编辑断点，只提供继续、单步和暂停控制、调用栈，以及从 `.love` 快照读取的只读 Lua 编辑器；暂停或单步时高亮当前代码行。
+- 面板关闭后固定监视项仍以黑色半透明白字 HUD 显示。所有调试数据通过 native 环形日志缓冲和受保护的 Lua 调试钩子传输；求值错误只进入日志，不终止游戏。
 
 
 ## 项目管理

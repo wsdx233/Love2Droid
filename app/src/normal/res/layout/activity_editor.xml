@@ -54,7 +54,7 @@
             android:layout_weight="1"
             android:background="@android:color/transparent">
 
-            <io.github.rosemoe.sora.widget.CodeEditor
+            <top.wsdx233.love2droid.BreakpointCodeEditor
                 android:id="@+id/code_editor"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"

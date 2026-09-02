@@ -57,6 +57,7 @@ import com.termux.view.TerminalViewClient
 import io.github.rosemoe.sora.event.ContentChangeEvent
 import io.github.rosemoe.sora.event.ColorSchemeUpdateEvent
 import io.github.rosemoe.sora.event.ClickEvent
+import io.github.rosemoe.sora.event.EditorMotionEvent
 import io.github.rosemoe.sora.event.SelectionChangeEvent
 import io.github.rosemoe.sora.lang.EmptyLanguage
 import io.github.rosemoe.sora.lang.Language
@@ -92,7 +93,7 @@ class EditorActivity : AppCompatActivity() {
     private lateinit var symbolBar: LinearLayout
     private lateinit var symbolScroll: View
     private lateinit var editorContainer: View
-    private lateinit var editor: CodeEditor
+    private lateinit var editor: BreakpointCodeEditor
     private lateinit var editorSearchController: EditorSearchController
     private lateinit var welcomePage: View
     private lateinit var drawerProjectTitle: TextView
@@ -112,6 +113,7 @@ class EditorActivity : AppCompatActivity() {
     private val editorSession = EditorSession()
     private val selectedPaths = linkedSetOf<String>()
     private var currentProject: Project? = null
+    private val currentBreakpoints = linkedSetOf<ProjectBreakpoint>()
     private var currentDirectory: File? = null
     private var visibleItems: List<BrowserItem> = emptyList()
     private var suppressEditorEvents = false
@@ -128,6 +130,7 @@ class EditorActivity : AppCompatActivity() {
     private var lspJob: Job? = null
     private var workspaceRestoreJob: Job? = null
     private var symbolNavigationJob: Job? = null
+    private var breakpointSaveJob: Job? = null
     private val openingFiles = mutableSetOf<String>()
     private var selectedSymbolForNavigation: SelectedSymbol? = null
     private var directoryObserver: FileObserver? = null
@@ -394,11 +397,12 @@ class EditorActivity : AppCompatActivity() {
             setHasFixedSize(true)
         }
 
-        editor.subscribeAlways<ContentChangeEvent> {
+        editor.subscribeAlways<ContentChangeEvent> { event ->
             if (!suppressEditorEvents) {
                 editorSession.activeEditorTab?.let { tab ->
                     tab.text = editor.text.toString()
                     tab.dirty = true
+                    adjustBreakpointsForEdit(tab, event)
                     refreshTabs()
                 }
             }
@@ -653,12 +657,87 @@ class EditorActivity : AppCompatActivity() {
         }
         editor.subscribeAlways<ColorSchemeUpdateEvent> {
             applyEditorSurfaceColors()
+            updateEditorBreakpointHighlights()
         }
-        editor.subscribeAlways<ClickEvent> {
+        editor.subscribeAlways<ClickEvent> { event ->
             lspController?.dismissHover()
+            if (event.motionRegion == EditorMotionEvent.REGION_LINE_NUMBER && toggleBreakpoint(event.line)) {
+                event.intercept()
+            }
         }
         updateSymbolNavigationButtons()
         applyEditorSurfaceColors()
+    }
+
+    private fun toggleBreakpoint(zeroBasedLine: Int): Boolean {
+        val project = currentProject ?: return false
+        val tab = editorSession.activeEditorTab ?: return false
+        val file = tab.file ?: return false
+        if (tab.languageScope != "source.lua" || !StorageUtils.isWithin(project.root, file)) return false
+        val relativePath = StorageUtils.relativePath(project.root, file)
+        val breakpoint = ProjectBreakpoint(relativePath, zeroBasedLine + 1)
+        if (!currentBreakpoints.remove(breakpoint)) {
+            currentBreakpoints.add(breakpoint)
+        }
+        updateEditorBreakpointHighlights()
+        persistBreakpoints()
+        return true
+    }
+
+    private fun adjustBreakpointsForEdit(tab: EditorTab, event: ContentChangeEvent) {
+        val project = currentProject ?: return
+        val file = tab.file ?: return
+        if (tab.languageScope != "source.lua" || !StorageUtils.isWithin(project.root, file)) return
+        val kind = when (event.action) {
+            ContentChangeEvent.ACTION_INSERT -> BreakpointEditKind.INSERT
+            ContentChangeEvent.ACTION_DELETE -> BreakpointEditKind.DELETE
+            else -> return
+        }
+        val adjusted = currentBreakpoints.adjustedForEdit(
+            file = StorageUtils.relativePath(project.root, file),
+            kind = kind,
+            startLine = event.changeStart.line,
+            endLine = event.changeEnd.line,
+        )
+        if (adjusted.toSet() == currentBreakpoints) return
+        currentBreakpoints.clear()
+        currentBreakpoints.addAll(adjusted)
+        updateEditorBreakpointHighlights()
+        persistBreakpoints()
+    }
+
+    private fun updateEditorBreakpointHighlights() {
+        val project = currentProject
+        val tab = editorSession.activeEditorTab
+        val file = tab?.file
+        val lines = if (project != null && file != null && tab.languageScope == "source.lua" &&
+            StorageUtils.isWithin(project.root, file)
+        ) {
+            val relativePath = StorageUtils.relativePath(project.root, file)
+            currentBreakpoints.asSequence()
+                .filter { it.file == relativePath }
+                .map { it.line - 1 }
+                .toList()
+        } else {
+            emptyList()
+        }
+        editor.setBreakpointLines(lines)
+    }
+
+    private fun persistBreakpoints() {
+        val project = currentProject ?: return
+        val snapshot = currentBreakpoints.toList()
+        val previous = breakpointSaveJob
+        breakpointSaveJob = lifecycleScope.launch {
+            previous?.join()
+            val updated = withContext(Dispatchers.IO) {
+                val latest = projectRepository.findProject(project.id) ?: return@withContext null
+                projectRepository.updateBreakpoints(latest, snapshot)
+            }
+            if (updated != null && currentProject?.id == project.id) {
+                currentProject = currentProject?.copy(breakpoints = updated.breakpoints)
+            }
+        }
     }
 
     private fun setupSymbolNavigationButtons() {
@@ -1216,6 +1295,8 @@ class EditorActivity : AppCompatActivity() {
         stopDirectoryObserver()
         finishTerminalTabs()
         currentProject = projectRepository.markOpened(project)
+        currentBreakpoints.clear()
+        currentBreakpoints.addAll(currentProject?.breakpoints.orEmpty())
         editorSession.clear()
         selectedPaths.clear()
         selectionAnchorPath = null
@@ -1320,6 +1401,7 @@ class EditorActivity : AppCompatActivity() {
         editorSearchController.setEditorAvailable(false)
         welcomePage.visibility = View.VISIBLE
         scheduleLsp(null)
+        if (::editor.isInitialized) editor.setBreakpointLines(emptyList())
     }
 
     private fun finishTerminalTabs() {
@@ -2109,6 +2191,7 @@ class EditorActivity : AppCompatActivity() {
         editor.scroller.startScroll(tab.scrollX, tab.scrollY, 0, 0, 0)
         editor.scroller.abortAnimation()
         suppressEditorEvents = false
+        updateEditorBreakpointHighlights()
         terminalView.visibility = View.GONE
         terminalKeyBar.visibility = View.GONE
         editor.visibility = View.VISIBLE
@@ -2126,6 +2209,7 @@ class EditorActivity : AppCompatActivity() {
         symbolScroll.visibility = View.GONE
         welcomePage.visibility = View.GONE
         terminalView.visibility = View.VISIBLE
+        editor.setBreakpointLines(emptyList())
         terminalKeyBar.visibility = View.VISIBLE
         ctrlPressed = false
         altPressed = false
@@ -2613,10 +2697,21 @@ class EditorActivity : AppCompatActivity() {
                         ProjectValidator.validate(project)?.let { throw IOException(it) }
                         LovePackageBuilder.build(project, cacheDir)
                     }
+                    val breakpoints = currentBreakpoints.sortedWith(
+                        compareBy(ProjectBreakpoint::file, ProjectBreakpoint::line),
+                    )
                     val uri = FileProvider.getUriForFile(this@EditorActivity, "$packageName.fileprovider", packageFile)
                     startActivity(
                         Intent(this@EditorActivity, top.wsdx233.love2droid.runtime.LoveGameActivity::class.java)
                             .setData(uri)
+                            .putStringArrayListExtra(
+                                top.wsdx233.love2droid.runtime.LoveGameActivity.EXTRA_DEBUG_BREAKPOINT_FILES,
+                                ArrayList(breakpoints.map(ProjectBreakpoint::file)),
+                            )
+                            .putIntegerArrayListExtra(
+                                top.wsdx233.love2droid.runtime.LoveGameActivity.EXTRA_DEBUG_BREAKPOINT_LINES,
+                                ArrayList(breakpoints.map(ProjectBreakpoint::line)),
+                            )
                             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),
                     )
                 } catch (error: Exception) {

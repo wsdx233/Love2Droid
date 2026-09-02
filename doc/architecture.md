@@ -18,10 +18,9 @@ Love2Droid 是单 `app` 模块 Android 应用，包名与 `applicationId` 为 `t
 
 编辑器与 LÖVE runtime 位于同一 APK，但职责和进程隔离：
 
-- 产品主入口负责项目管理、文件浏览、编辑器、标签和终端。
-- `LoveGameActivity` 保留上游 `GameActivity`、SDL 初始化和 native library 加载顺序，只增加启动参数与生命周期适配。
-- 游戏 Activity 运行在 `:game` 进程，避免 SDL/native 清理影响编辑器主进程。
-- LÖVE 不封装为普通 Maven 依赖；CMake、JNI、SDL 和多 ABI 打包约束在工程中保持可见。
+- `LoveGameActivity` 保留上游 `GameActivity`、SDL 初始化和 native library 加载顺序，使用 `Window` 的 `adjustPan` 让系统把当前输入框平移到输入法上方，并挂载游戏调试悬浮层。悬浮层仅负责触控 UI、JNI 状态轮询和从当前 `.love` 快照异步读取暂停位置的 Lua 源码。
+- 调试控制台通过 `LoveGameActivity` JNI 与 native 调试桥接通信。native 侧维护固定容量命令队列、日志环形队列和断点表；Lua 主线程轮询命令，在受保护调用中执行 REPL 和监视表达式。编辑器在 Play Intent 中传递项目断点，runtime 初始化 native 状态后一次性装载。
+- 断点与单步依赖 Lua hook，命中后只挂起 Lua 执行并保持 Android UI 可通信；继续、单步和暂停由 JNI 状态请求驱动。项目断点以相对 Lua 路径和一基行号保存在 `.love2droid.json`，编辑器行号区域只负责切换和呈现，不引入额外 gutter。
 
 ## 项目存储
 
@@ -126,6 +125,8 @@ Android 发布与 Play 分离；发布结果是可安装、可分享的独立 AP
 - `StorageUtils`：路径边界、原子写和递归文件操作。
 - runtime 边界：保存、校验、打包后启动 LÖVE，不处理文件浏览器选择。
 - `SafFileTransfer`：通过 `DocumentFile` 和内容流在项目边界内递归导入/导出；不解析外部 URI 路径。
+- `GameDebugOverlay`：游戏内黑色半透明悬浮球、HUD 和自适应调试面板；负责日志筛选、监视、REPL、执行控制、暂停源码展示和面板动画，不负责断点编辑。
+- `love_debug.cpp`：native 调试命令/日志边界、Lua 保护求值、断点与单步 hook；固定内存上限，不持有 Android View。
 
 ## 长期风险约束
 

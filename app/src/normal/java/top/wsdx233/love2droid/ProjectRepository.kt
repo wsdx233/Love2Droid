@@ -2,6 +2,7 @@ package top.wsdx233.love2droid
 
 import android.content.Context
 import android.net.Uri
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.IOException
@@ -39,6 +40,7 @@ data class Project(
     val root: File,
     val lastOpened: Long,
     val androidProperties: AndroidProjectProperties = AndroidProjectProperties.defaults(id, displayName),
+    val breakpoints: List<ProjectBreakpoint> = emptyList(),
 )
 
 class ProjectRepository(context: Context) {
@@ -87,6 +89,13 @@ class ProjectRepository(context: Context) {
         writeMetadata(updated)
         return updated
     }
+    fun updateBreakpoints(project: Project, breakpoints: Collection<ProjectBreakpoint>): Project {
+        require(StorageUtils.isWithin(projectsRoot, project.root)) { "Project is outside storage root" }
+        val updated = project.copy(breakpoints = normalizeProjectBreakpoints(project.root, breakpoints))
+        writeMetadata(updated)
+        return updated
+    }
+
 
     fun projectIcon(project: Project): File? = iconStore.iconFile(project.id)
 
@@ -185,7 +194,22 @@ class ProjectRepository(context: Context) {
             root.name,
             displayName,
         )
-        return Project(root.name, displayName, description, root, lastOpened, androidProperties)
+        val breakpoints = buildList {
+            val values = metadata?.optJSONArray("breakpoints") ?: JSONArray()
+            for (index in 0 until values.length()) {
+                val value = values.optJSONObject(index) ?: continue
+                add(ProjectBreakpoint(value.optString("file"), value.optInt("line")))
+            }
+        }
+        return Project(
+            root.name,
+            displayName,
+            description,
+            root,
+            lastOpened,
+            androidProperties,
+            normalizeProjectBreakpoints(root, breakpoints),
+        )
     }
     private fun uniqueProjectId(base: String): String {
         if (!File(projectsRoot, base).exists()) return base
@@ -198,12 +222,21 @@ class ProjectRepository(context: Context) {
     }
 
     private fun writeMetadata(project: Project) {
+        val breakpoints = JSONArray()
+        project.breakpoints.forEach { breakpoint ->
+            breakpoints.put(
+                JSONObject()
+                    .put("file", breakpoint.file)
+                    .put("line", breakpoint.line),
+            )
+        }
         val metadata = JSONObject()
             .put("id", project.id)
             .put("displayName", project.displayName)
             .put("description", project.description)
             .put("lastOpened", project.lastOpened)
             .put("android", project.androidProperties.toJson())
+            .put("breakpoints", breakpoints)
         StorageUtils.writeTextAtomic(File(project.root, StorageUtils.METADATA_FILE), metadata.toString(2))
     }
 
