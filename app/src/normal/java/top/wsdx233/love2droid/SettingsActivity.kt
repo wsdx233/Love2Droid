@@ -29,9 +29,12 @@ class SettingsActivity : AppCompatActivity() {
         settings = SettingsStore(this)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        val topInset = View(this)
+        val topInset = View(this).apply { setBackgroundColor(getColor(R.color.action_bar_background)) }
         root.addView(topInset, LinearLayout.LayoutParams.MATCH_PARENT, 0)
         val toolbar = MaterialToolbar(this).apply {
+            setBackgroundColor(getColor(R.color.action_bar_background))
+            setTitleTextColor(getColor(R.color.action_bar_foreground))
+            setNavigationIconTint(getColor(R.color.action_bar_foreground))
             title = getString(R.string.settings)
             setNavigationIcon(R.drawable.ic_arrow_back)
             setNavigationContentDescription(R.string.back)

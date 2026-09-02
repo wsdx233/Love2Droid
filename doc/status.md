@@ -7,12 +7,12 @@
 - LÖVE Android runtime 与编辑器集成在同一 APK；游戏使用独立 `LoveGameActivity` 和 `:game` 进程。
 - 应用专属项目目录、项目元数据、项目管理和 Drawer 单目录文件浏览器。
 - 文件新建、重命名、复制/剪切、粘贴、删除和详情；文件浏览器支持滑动进入多选、再次滑动选择同目录区间，以及底部全选、反选和取消选择操作栏；文件夹和顶部目录菜单支持通过指定 DocumentsUI 的 SAF 导入文件或文件夹并导出，文件支持 SAF 导出；项目管理支持 `.love`/`.zip` 导入和 `.love` 导出。
-- Sora Editor、TextMate 语法注册、文件/终端混合多标签、未命名文档和原子保存；打开文件使用后台受限 UTF-8 加载，拒绝二进制、非 UTF-8 和超过 5 MB 的文件，并保留 LF/CRLF/CR 换行风格。
+- Sora Editor、TextMate 语法注册、文件/终端混合多标签、未命名文档和原子保存；打开文件使用后台受限 UTF-8 加载，拒绝二进制、非 UTF-8 和超过 5 MB 的文件，并保留 LF/CRLF/CR 换行风格。AppBar 支持符号栏、当前标签只读和 LuaLS 悬浮信息开关，其中符号栏与悬浮信息状态跨重启保存。
 - `.love` 快照构建、FileProvider Content URI 和 Play 启动闭环。
 - arm64 PRoot、Ubuntu Base 首次安装、Termux 终端快捷键栏、LuaLS、omp 和 bash-prompt。
 - LuaLS 使用项目真实路径工作；新建项目生成 `.luarc.json` 并加载 LuaJIT 与 LuaLS 内置 LÖVE 11.5 API library。
 - Lua 文件支持长按选择符号后，在文本选区操作浮动菜单中转到定义和查找用法；结果在 Bottom Sheet 中显示并在项目内安全跳转，LuaLS 悬浮 `file:` 链接不再交给外部 Intent，点击窗口外区域会关闭悬浮窗口。
-- 应用和编辑器主题均支持亮色、暗色和跟随系统；应用主题通过 Material3/系统栏主题生效，编辑器主题使用 `quietlight` 或 `darcula` 并独立于应用主题解析。
+- 应用和编辑器主题均支持亮色、暗色和跟随系统；应用顶栏与状态栏固定为亮色纯白/暗色纯黑，并使用对应的黑/白标题、导航及 action 图标，编辑器主题使用 `quietlight` 或 `darcula` 并独立于应用主题解析。
 - 选区浮动菜单中的定义和用法按钮跟随编辑器颜色方案；点击时保留符号位置，关闭菜单后执行 LuaLS 导航。
 - 项目搜索支持文件、文本和符号三类查询，提供普通/正则模式、LuaLS 语义结果与本地降级结果；版本控制面板支持页面初始化仓库、按 VS Code 结构查看已暂存/未暂存文件、文件级和全部暂存/取消暂存、提交消息与提交，以及带旧/新行号的红绿 Diff。
 - 项目属性可编辑应用名、包名、版本、方向、权限和图标；Android APK 发布会重新读取最新项目元数据，写入 `game.love`、Manifest 和图标后签名，并提供分享/安装。

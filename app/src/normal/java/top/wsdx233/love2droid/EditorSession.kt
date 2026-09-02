@@ -15,6 +15,7 @@ class EditorTab(
     var selectionEnd: Int = 0
     var scrollX: Int = 0
     var scrollY: Int = 0
+    var readOnly: Boolean = false
     internal var lineEnding: EditorLineEnding = EditorLineEnding.LF
     internal var diskSnapshot: EditorFileSnapshot? = null
     internal var lastObservedExternalSnapshot: EditorFileSnapshot? = null

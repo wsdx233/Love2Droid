@@ -1,3 +1,5 @@
 <resources>
     <color name="browser_selected">#332196F3</color>
+    <color name="action_bar_background">#FFFFFFFF</color>
+    <color name="action_bar_foreground">#FF000000</color>
 </resources>

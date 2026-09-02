@@ -11,16 +11,16 @@
         android:id="@+id/setup_top_inset"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:background="?attr/colorPrimary"
+        android:background="@color/action_bar_background"
         android:importantForAccessibility="no" />
 
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/setup_toolbar"
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
-        android:background="?attr/colorPrimary"
+        android:background="@color/action_bar_background"
         app:title="@string/proot_setup_title"
-        app:titleTextColor="@android:color/white" />
+        app:titleTextColor="@color/action_bar_foreground" />
 
     <com.google.android.material.progressindicator.LinearProgressIndicator
         android:id="@+id/setup_progress"

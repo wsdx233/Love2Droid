@@ -11,6 +11,7 @@
     <string name="open_file">打开文件</string>
     <string name="open">打开</string>
     <string name="save">保存</string>
+    <string name="undo">撤销</string>
     <string name="cancel">取消</string>
     <string name="delete">删除</string>
     <string name="rename">重命名</string>
@@ -89,10 +90,12 @@
     <string name="android_install_permission_required">请允许 Love2Droid 安装未知来源应用，然后再次点“安装 APK”。</string>
     <string name="discard_changes">放弃修改</string>
     <string name="close_file">关闭文件</string>
-    <string name="file_operations">文件操作</string>
     <string name="new_action">新建</string>
 
     <string name="save_as">另存为…</string>
+    <string name="symbol_bar">符号栏</string>
+    <string name="read_only">只读</string>
+    <string name="lsp_hover_info">LuaLS 悬浮信息</string>
     <string name="unnamed_file">未命名</string>
     <string name="no_active_document">请先打开或新建文件</string>
     <string name="file_changed_while_reading">文件在读取期间发生变化，请重试。</string>

@@ -65,6 +65,9 @@ class ProjectManagerActivity : AppCompatActivity() {
             navigationIcon = ContextCompat.getDrawable(this@ProjectManagerActivity, R.drawable.ic_arrow_back)
             setNavigationOnClickListener { finish() }
             inflateMenu(R.menu.project_manager_menu)
+            menu.findItem(R.id.action_import_love).icon
+                ?.mutate()
+                ?.setTint(ContextCompat.getColor(this@ProjectManagerActivity, R.color.action_bar_foreground))
             setOnMenuItemClickListener { item ->
                 if (item.itemId == R.id.action_import_love) {
                     loveImportLauncher.launch(arrayOf("application/zip", "application/x-love", "application/octet-stream", "*/*"))

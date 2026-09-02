@@ -11,15 +11,16 @@
         android:id="@+id/project_top_inset"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:background="?attr/colorPrimary"
+        android:background="@color/action_bar_background"
         android:importantForAccessibility="no" />
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/project_toolbar"
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
-        android:background="?attr/colorPrimary"
+        android:background="@color/action_bar_background"
         app:title="@string/project_manager"
-        app:titleTextColor="@android:color/white" />
+        app:navigationIconTint="@color/action_bar_foreground"
+        app:titleTextColor="@color/action_bar_foreground" />
 
     <TextView
         android:id="@+id/project_empty"

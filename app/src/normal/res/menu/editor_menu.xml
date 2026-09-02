@@ -24,35 +24,54 @@
         </menu>
     </item>
     <item
-        android:id="@+id/action_file"
-        android:icon="@drawable/ic_more_vert"
-        android:title="@string/file_operations"
-        app:showAsAction="always">
-        <menu>
-            <item
-                android:id="@+id/action_save"
-                android:icon="@drawable/ic_save"
-                android:title="@string/save" />
-            <item
-                android:id="@+id/action_save_as"
-                android:icon="@drawable/ic_save_as"
-                android:title="@string/save_as" />
-            <item
-                android:id="@+id/action_find_replace"
-                android:title="@string/find_replace" />
-            <item
-                android:id="@+id/action_package_android"
-                android:title="@string/android_package_title" />
-            <item
-                android:id="@+id/action_word_wrap"
-                android:checkable="true"
-                android:title="@string/word_wrap" />
-            <item
-                android:id="@+id/action_settings"
-                android:title="@string/settings" />
-            <item
-                android:id="@+id/action_projects"
-                android:title="@string/project_manager" />
-        </menu>
-    </item>
+        android:id="@+id/action_save"
+        android:icon="@drawable/ic_save"
+        android:title="@string/save"
+        app:showAsAction="always" />
+    <item
+        android:id="@+id/action_undo"
+        android:icon="@drawable/undo_rounded"
+        android:title="@string/undo"
+        app:showAsAction="always" />
+    <item
+        android:id="@+id/action_save_as"
+        android:icon="@drawable/save_as_rounded"
+        android:title="@string/save_as"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_find_replace"
+        android:title="@string/find_replace"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_package_android"
+        android:title="@string/android_package_title"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_word_wrap"
+        android:checkable="true"
+        android:title="@string/word_wrap"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_symbol_bar"
+        android:checkable="true"
+        android:title="@string/symbol_bar"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_read_only"
+        android:checkable="true"
+        android:title="@string/read_only"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_lsp_hover"
+        android:checkable="true"
+        android:title="@string/lsp_hover_info"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_settings"
+        android:title="@string/settings"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_projects"
+        android:title="@string/project_manager"
+        app:showAsAction="never" />
 </menu>

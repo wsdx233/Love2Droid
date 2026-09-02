@@ -1,0 +1,4 @@
+<resources>
+    <color name="action_bar_background">#FF000000</color>
+    <color name="action_bar_foreground">#FFFFFFFF</color>
+</resources>

@@ -49,6 +49,14 @@ internal class SettingsStore(context: Context) {
     var editorLineNumbers: Boolean
         get() = preferences.getBoolean(KEY_EDITOR_LINE_NUMBERS, true)
         set(value) = preferences.edit().putBoolean(KEY_EDITOR_LINE_NUMBERS, value).apply()
+    var editorSymbolBar: Boolean
+        get() = preferences.getBoolean(KEY_EDITOR_SYMBOL_BAR, true)
+        set(value) = preferences.edit().putBoolean(KEY_EDITOR_SYMBOL_BAR, value).apply()
+
+    var editorHoverInfo: Boolean
+        get() = preferences.getBoolean(KEY_EDITOR_HOVER_INFO, true)
+        set(value) = preferences.edit().putBoolean(KEY_EDITOR_HOVER_INFO, value).apply()
+
 
     var terminalFontSize: Float
         get() = preferences.getFloat(KEY_TERMINAL_FONT_SIZE, DEFAULT_TERMINAL_FONT_SIZE)
@@ -74,6 +82,8 @@ internal class SettingsStore(context: Context) {
         private const val KEY_EDITOR_FONT_SIZE = "editor_font_size"
         private const val KEY_EDITOR_WORD_WRAP = "editor_word_wrap"
         private const val KEY_EDITOR_LINE_NUMBERS = "editor_line_numbers"
+        private const val KEY_EDITOR_SYMBOL_BAR = "editor_symbol_bar"
+        private const val KEY_EDITOR_HOVER_INFO = "editor_hover_info"
         private const val KEY_TERMINAL_FONT_SIZE = "terminal_font_size"
         private const val KEY_TERMINAL_KEEP_SCREEN_ON = "terminal_keep_screen_on"
         private const val KEY_TERMINAL_TRANSCRIPT_ROWS = "terminal_transcript_rows"

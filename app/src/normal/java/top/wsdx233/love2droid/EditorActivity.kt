@@ -20,6 +20,7 @@ import android.view.Gravity
 import android.util.TypedValue
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.view.Menu
 import android.view.MenuItem
 import android.view.animation.PathInterpolator
 import android.view.View
@@ -354,6 +355,7 @@ class EditorActivity : AppCompatActivity() {
         toolbar.setNavigationOnClickListener { drawer.openDrawer(GravityCompat.START) }
         toolbar.inflateMenu(R.menu.editor_menu)
         tintToolbarMenuIcons()
+        updateEditorMenuState()
         toolbar.setOnMenuItemClickListener(::onToolbarItemSelected)
 
 
@@ -384,6 +386,7 @@ class EditorActivity : AppCompatActivity() {
                     toast(getString(R.string.lua_lsp_connection_failed, error.message ?: error.javaClass.simpleName))
                 },
                 onFileLink = ::openHoverFileLink,
+                hoverInfoEnabled = settings.editorHoverInfo,
             )
         }
         browserAdapter = FileBrowserAdapter(
@@ -416,14 +419,36 @@ class EditorActivity : AppCompatActivity() {
             window.decorView.post { openProjectManagerIfNeeded() }
         }
     }
-    private fun tintToolbarMenuIcons() {
-        val iconColor = ContextCompat.getColor(this, android.R.color.white)
-        for (index in 0 until toolbar.menu.size()) {
-            val item = toolbar.menu.getItem(index)
-            val icon = item.icon ?: continue
-            val tinted = DrawableCompat.wrap(icon.mutate())
-            DrawableCompat.setTint(tinted, iconColor)
-            item.icon = tinted
+    private fun tintToolbarMenuIcons(menu: Menu = toolbar.menu) {
+        val iconColor = ContextCompat.getColor(this, R.color.action_bar_foreground)
+        for (index in 0 until menu.size()) {
+            val item = menu.getItem(index)
+            item.icon?.let { icon ->
+                val tinted = DrawableCompat.wrap(icon.mutate())
+                DrawableCompat.setTint(tinted, iconColor)
+                item.icon = tinted
+            }
+            item.subMenu?.let(::tintToolbarMenuIcons)
+        }
+    }
+
+    private fun updateEditorMenuState() {
+        val activeTab = editorSession.activeEditorTab
+        toolbar.menu.findItem(R.id.action_undo).isEnabled = activeTab != null && !activeTab.readOnly
+        toolbar.menu.findItem(R.id.action_word_wrap).isChecked = editor.isWordwrap
+        toolbar.menu.findItem(R.id.action_symbol_bar).isChecked = settings.editorSymbolBar
+        toolbar.menu.findItem(R.id.action_read_only).apply {
+            isEnabled = activeTab != null
+            isChecked = activeTab?.readOnly == true
+        }
+        toolbar.menu.findItem(R.id.action_lsp_hover).isChecked = settings.editorHoverInfo
+    }
+
+    private fun updateSymbolBarVisibility() {
+        symbolScroll.visibility = if (editorSession.activeEditorTab != null && settings.editorSymbolBar) {
+            View.VISIBLE
+        } else {
+            View.GONE
         }
     }
     private fun setupWindowInsets() {
@@ -986,7 +1011,7 @@ class EditorActivity : AppCompatActivity() {
 
 
     private fun insertSymbol(symbol: String) {
-        if (!editor.isShown) return
+        if (!editor.isShown || !editor.isEditable) return
         val start = editor.cursor.left
         val end = editor.cursor.right
         editor.text.replace(start, end, symbol)
@@ -997,7 +1022,7 @@ class EditorActivity : AppCompatActivity() {
     }
 
     private fun insertSymbolPair(opening: String, closing: String) {
-        if (!editor.isShown) return
+        if (!editor.isShown || !editor.isEditable) return
         val start = editor.cursor.left
         val end = editor.cursor.right
         val selectedText = if (start == end) "" else editor.text.substring(start, end)
@@ -1176,6 +1201,15 @@ class EditorActivity : AppCompatActivity() {
                 saveActiveDocument()
                 true
             }
+            R.id.action_undo -> {
+                val tab = editorSession.activeEditorTab
+                if (tab == null) {
+                    toast(getString(R.string.no_active_document))
+                } else if (!tab.readOnly) {
+                    editor.undo()
+                }
+                true
+            }
             R.id.action_save_as -> {
                 saveActiveDocumentAs()
                 true
@@ -1196,6 +1230,29 @@ class EditorActivity : AppCompatActivity() {
                 } else {
                     toast(getString(R.string.no_active_document))
                 }
+                true
+            }
+            R.id.action_symbol_bar -> {
+                settings.editorSymbolBar = !settings.editorSymbolBar
+                updateSymbolBarVisibility()
+                updateEditorMenuState()
+                true
+            }
+            R.id.action_read_only -> {
+                val tab = editorSession.activeEditorTab
+                if (tab == null) {
+                    toast(getString(R.string.no_active_document))
+                } else {
+                    tab.readOnly = !tab.readOnly
+                    editor.editable = !tab.readOnly
+                    updateEditorMenuState()
+                }
+                true
+            }
+            R.id.action_lsp_hover -> {
+                settings.editorHoverInfo = !settings.editorHoverInfo
+                lspController?.setHoverInfoEnabled(settings.editorHoverInfo)
+                updateEditorMenuState()
                 true
             }
             R.id.action_package_android -> {
@@ -1396,12 +1453,13 @@ class EditorActivity : AppCompatActivity() {
         terminalView.clearFocus()
         editor.visibility = View.GONE
         terminalView.visibility = View.GONE
-        symbolScroll.visibility = View.GONE
+        updateSymbolBarVisibility()
         terminalKeyBar.visibility = View.GONE
         editorSearchController.setEditorAvailable(false)
         welcomePage.visibility = View.VISIBLE
         scheduleLsp(null)
         if (::editor.isInitialized) editor.setBreakpointLines(emptyList())
+        updateEditorMenuState()
     }
 
     private fun finishTerminalTabs() {
@@ -2173,6 +2231,7 @@ class EditorActivity : AppCompatActivity() {
 
     private fun showEditorTab(tab: EditorTab) {
         suppressEditorEvents = true
+        editor.editable = true
         val language = createEditorLanguage(tab.languageScope)
         editor.setEditorLanguage(language)
         editor.setText(tab.text)
@@ -2190,23 +2249,25 @@ class EditorActivity : AppCompatActivity() {
         )
         editor.scroller.startScroll(tab.scrollX, tab.scrollY, 0, 0, 0)
         editor.scroller.abortAnimation()
+        editor.editable = !tab.readOnly
         suppressEditorEvents = false
         updateEditorBreakpointHighlights()
         terminalView.visibility = View.GONE
         terminalKeyBar.visibility = View.GONE
         editor.visibility = View.VISIBLE
         editorSearchController.setEditorAvailable(true)
-        symbolScroll.visibility = View.VISIBLE
+        updateSymbolBarVisibility()
         welcomePage.visibility = View.GONE
         scheduleLsp(tab, language)
         updateSymbolNavigationButtons()
+        updateEditorMenuState()
     }
 
     private fun showTerminalTab(tab: TerminalTab) {
         editor.clearFocus()
         editor.visibility = View.GONE
         editorSearchController.setEditorAvailable(false)
-        symbolScroll.visibility = View.GONE
+        updateSymbolBarVisibility()
         welcomePage.visibility = View.GONE
         terminalView.visibility = View.VISIBLE
         editor.setBreakpointLines(emptyList())
@@ -2219,6 +2280,7 @@ class EditorActivity : AppCompatActivity() {
         terminalView.requestFocus()
         scheduleLsp(null)
         updateSymbolNavigationButtons()
+        updateEditorMenuState()
     }
 
     private fun captureEditorState() {
@@ -2840,6 +2902,9 @@ class EditorActivity : AppCompatActivity() {
             editor.isWordwrap = settings.editorWordWrap
             terminalView.setTextSize(terminalDefaultTextSizePx.toInt())
             terminalView.keepScreenOn = settings.terminalKeepScreenOn
+            lspController?.setHoverInfoEnabled(settings.editorHoverInfo)
+            updateSymbolBarVisibility()
+            updateEditorMenuState()
             applyEditorTheme()
             refreshOpenEditorFiles()
             refreshFileList()

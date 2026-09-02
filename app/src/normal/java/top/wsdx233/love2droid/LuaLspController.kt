@@ -30,6 +30,7 @@ class LuaLspController(
     private val codeEditor: CodeEditor,
     private val onConnectionError: (Throwable) -> Unit,
     private val onFileLink: (String) -> Unit,
+    @Volatile private var hoverInfoEnabled: Boolean,
 ) {
     private val appContext = context.applicationContext
     private val mutex = Mutex()
@@ -50,6 +51,7 @@ class LuaLspController(
             val lspEditor = lspProject.createEditor(file.absolutePath)
             activeEditor = lspEditor
             withContext(Dispatchers.Main.immediate) {
+                lspEditor.isEnableHover = hoverInfoEnabled
                 lspEditor.wrapperLanguage = wrapperLanguage
                 lspEditor.editor = codeEditor
             }
@@ -86,6 +88,14 @@ class LuaLspController(
 
     internal fun dismissHover() {
         activeEditor?.hoverWindow?.dismiss()
+    }
+
+    internal fun setHoverInfoEnabled(enabled: Boolean) {
+        hoverInfoEnabled = enabled
+        activeEditor?.let { current ->
+            current.isEnableHover = enabled
+            if (enabled) current.hoverWindow?.layout = SafeHoverLayout(onFileLink)
+        }
     }
 
     internal fun isNavigationAvailable(file: File): Boolean = activeEditorFor(file) != null
