@@ -1,10 +1,42 @@
 package top.wsdx233.love2droid
 
 import android.content.Context
+import androidx.appcompat.app.AppCompatDelegate
+
+internal enum class ThemeMode(val storedValue: String) {
+    LIGHT("light"),
+    DARK("dark"),
+    SYSTEM("system"),
+    ;
+
+    companion object {
+        fun fromStored(value: String?): ThemeMode = entries.firstOrNull { it.storedValue == value } ?: SYSTEM
+    }
+}
+
+internal fun ThemeMode.toAppCompatNightMode(): Int = when (this) {
+    ThemeMode.LIGHT -> AppCompatDelegate.MODE_NIGHT_NO
+    ThemeMode.DARK -> AppCompatDelegate.MODE_NIGHT_YES
+    ThemeMode.SYSTEM -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+}
+
+internal fun ThemeMode.resolveEditorThemeId(systemIsDark: Boolean): String = when (this) {
+    ThemeMode.LIGHT -> "quietlight"
+    ThemeMode.DARK -> "darcula"
+    ThemeMode.SYSTEM -> if (systemIsDark) "darcula" else "quietlight"
+}
 
 /** Small, process-safe store for preferences that affect the editor workspace. */
 internal class SettingsStore(context: Context) {
     private val preferences = context.applicationContext.getSharedPreferences(NAME, Context.MODE_PRIVATE)
+
+    var appThemeMode: ThemeMode
+        get() = ThemeMode.fromStored(preferences.getString(KEY_APP_THEME_MODE, ThemeMode.SYSTEM.storedValue))
+        set(value) = preferences.edit().putString(KEY_APP_THEME_MODE, value.storedValue).apply()
+
+    var editorThemeMode: ThemeMode
+        get() = ThemeMode.fromStored(preferences.getString(KEY_EDITOR_THEME_MODE, ThemeMode.DARK.storedValue))
+        set(value) = preferences.edit().putString(KEY_EDITOR_THEME_MODE, value.storedValue).apply()
 
     var editorFontSize: Float
         get() = preferences.getFloat(KEY_EDITOR_FONT_SIZE, DEFAULT_EDITOR_FONT_SIZE)
@@ -37,6 +69,8 @@ internal class SettingsStore(context: Context) {
 
     companion object {
         private const val NAME = "workspace-settings"
+        private const val KEY_APP_THEME_MODE = "app_theme_mode"
+        private const val KEY_EDITOR_THEME_MODE = "editor_theme_mode"
         private const val KEY_EDITOR_FONT_SIZE = "editor_font_size"
         private const val KEY_EDITOR_WORD_WRAP = "editor_word_wrap"
         private const val KEY_EDITOR_LINE_NUMBERS = "editor_line_numbers"

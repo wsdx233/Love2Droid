@@ -246,6 +246,7 @@ dependencies {
     implementation 'com.google.oboe:oboe:1.9.3'
     implementation 'io.github.rosemoe:editor:0.24.6'
     implementation 'io.github.rosemoe:language-textmate:0.24.6'
+    implementation 'androidx.documentfile:documentfile:1.1.0'
     testImplementation 'junit:junit:4.13.2'
     implementation 'io.github.rosemoe:editor-lsp:0.24.6'
     implementation 'org.eclipse.lsp4j:org.eclipse.lsp4j:1.0.0'

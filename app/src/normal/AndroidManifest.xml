@@ -6,6 +6,7 @@
     <uses-sdk tools:overrideLibrary="io.github.rosemoe.sora.lsp" />
 
     <application
+        android:name=".Love2DroidApplication"
         android:allowNativeHeapPointerTagging="false"
         android:extractNativeLibs="true"
         android:icon="@drawable/love"

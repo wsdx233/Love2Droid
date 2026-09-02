@@ -1,6 +1,5 @@
 package top.wsdx233.love2droid
 
-import android.graphics.Color
 import android.os.Bundle
 import android.util.TypedValue
 import android.view.Gravity
@@ -11,11 +10,14 @@ import android.widget.ScrollView
 import android.widget.SeekBar
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.color.MaterialColors
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.materialswitch.MaterialSwitch
 
 class SettingsActivity : AppCompatActivity() {
@@ -57,6 +59,26 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun render() {
         content.removeAllViews()
+
+        addSection(R.string.settings_appearance)
+        addChoicePreference(
+            R.string.settings_app_theme,
+            R.string.settings_app_theme_summary,
+            settings.appThemeMode,
+        ) { mode ->
+            settings.appThemeMode = mode
+            AppCompatDelegate.setDefaultNightMode(mode.toAppCompatNightMode())
+            render()
+        }
+        addChoicePreference(
+            R.string.settings_editor_theme,
+            R.string.settings_editor_theme_summary,
+            settings.editorThemeMode,
+        ) { mode ->
+            settings.editorThemeMode = mode
+            render()
+        }
+
         addSection(R.string.settings_editor)
         addSeekPreference(
             R.string.settings_editor_font_size,
@@ -123,6 +145,42 @@ class SettingsActivity : AppCompatActivity() {
         content.addView(view, LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
     }
 
+    private fun addChoicePreference(
+        title: Int,
+        summary: Int,
+        selected: ThemeMode,
+        onChanged: (ThemeMode) -> Unit,
+    ) {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            isClickable = true
+            setPadding(0, dp(10), 0, dp(10))
+        }
+        row.addView(preferenceLabels(title, summary), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        row.addView(TextView(this).apply {
+            text = getString(selected.labelRes())
+            setTextColor(currentSecondaryTextColor())
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            gravity = Gravity.CENTER
+            contentDescription = getString(title)
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        row.setOnClickListener {
+            val modes = ThemeMode.entries
+            MaterialAlertDialogBuilder(this)
+                .setTitle(title)
+                .setSingleChoiceItems(
+                    modes.map { getString(it.labelRes()) }.toTypedArray(),
+                    selected.ordinal,
+                ) { dialog, which ->
+                    onChanged(modes[which])
+                    dialog.dismiss()
+                }
+                .show()
+        }
+        content.addView(row)
+    }
+
     private fun addSwitchPreference(title: Int, summary: Int, checked: Boolean, onChanged: (Boolean) -> Unit) {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -158,9 +216,12 @@ class SettingsActivity : AppCompatActivity() {
         val summaryView = TextView(this).apply {
             text = getString(summary)
             textSize = 13f
-            setTextColor(Color.GRAY)
+            setTextColor(currentSecondaryTextColor())
         }
-        val value = TextView(this).apply { setTextColor(Color.GRAY); textSize = 13f }
+        val value = TextView(this).apply {
+            setTextColor(currentSecondaryTextColor())
+            textSize = 13f
+        }
         val bar = SeekBar(this).apply {
             max = (maximum - minimum) / step
             progress = ((initial.coerceIn(minimum, maximum) - minimum) / step)
@@ -190,7 +251,7 @@ class SettingsActivity : AppCompatActivity() {
             addView(TextView(this@SettingsActivity).apply {
                 text = summary
                 textSize = 13f
-                setTextColor(Color.GRAY)
+                setTextColor(currentSecondaryTextColor())
             })
         }
         content.addView(labels, LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
@@ -203,13 +264,22 @@ class SettingsActivity : AppCompatActivity() {
             addView(TextView(this@SettingsActivity).apply {
                 text = getString(summary)
                 textSize = 13f
-                setTextColor(Color.GRAY)
+                setTextColor(currentSecondaryTextColor())
             })
         }
     }
 
+    private fun ThemeMode.labelRes(): Int = when (this) {
+        ThemeMode.LIGHT -> R.string.settings_theme_light
+        ThemeMode.DARK -> R.string.settings_theme_dark
+        ThemeMode.SYSTEM -> R.string.settings_theme_system
+    }
+
     private fun currentTextColor(): Int =
-        com.google.android.material.color.MaterialColors.getColor(content, com.google.android.material.R.attr.colorOnSurface)
+        MaterialColors.getColor(content, com.google.android.material.R.attr.colorOnSurface)
+
+    private fun currentSecondaryTextColor(): Int =
+        MaterialColors.getColor(content, com.google.android.material.R.attr.colorOnSurfaceVariant)
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 }

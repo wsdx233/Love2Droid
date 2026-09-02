@@ -1,5 +1,6 @@
 package top.wsdx233.love2droid
 
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Typeface
 import android.text.InputType
@@ -41,7 +42,6 @@ internal class ProjectSearchSheet(
     private val dialog = BottomSheetDialog(activity)
     private val queryInput = EditText(activity)
     private val regexButton = MaterialButton(activity)
-    private val searchButton = MaterialButton(activity)
     private val tabs = TabLayout(activity)
     private val progress = ProgressBar(activity)
     private val message = TextView(activity)
@@ -94,18 +94,56 @@ internal class ProjectSearchSheet(
             isCheckable = true
             isAllCaps = false
             minWidth = 0
-            addOnCheckedChangeListener { _, _ -> scheduleSearch() }
-        }
-        searchRow.addView(regexButton, LinearLayout.LayoutParams(dp(48), dp(44)))
-        searchButton.apply {
-            setIconResource(R.drawable.ic_search)
-            contentDescription = activity.getString(R.string.project_search)
-            minWidth = 0
+            insetLeft = 0
+            insetRight = 0
             insetTop = 0
             insetBottom = 0
-            setOnClickListener { scheduleSearch(immediate = true) }
+            setPadding(dp(8), 0, dp(8), 0)
+            val primary = MaterialColors.getColor(
+                activity,
+                androidx.appcompat.R.attr.colorPrimary,
+                Color.BLUE,
+            )
+            val primaryContainer = MaterialColors.getColor(
+                activity,
+                com.google.android.material.R.attr.colorPrimaryContainer,
+                primary,
+            )
+            val onPrimaryContainer = MaterialColors.getColor(
+                activity,
+                com.google.android.material.R.attr.colorOnPrimaryContainer,
+                Color.WHITE,
+            )
+            val onSurfaceVariant = MaterialColors.getColor(
+                activity,
+                com.google.android.material.R.attr.colorOnSurfaceVariant,
+                Color.DKGRAY,
+            )
+            val outline = MaterialColors.getColor(
+                activity,
+                com.google.android.material.R.attr.colorOutline,
+                onSurfaceVariant,
+            )
+            val checkedState = intArrayOf(android.R.attr.state_checked)
+            val uncheckedState = intArrayOf()
+            backgroundTintList = ColorStateList(
+                arrayOf(checkedState, uncheckedState),
+                intArrayOf(primaryContainer, Color.TRANSPARENT),
+            )
+            setTextColor(
+                ColorStateList(
+                    arrayOf(checkedState, uncheckedState),
+                    intArrayOf(onPrimaryContainer, primary),
+                ),
+            )
+            strokeWidth = dp(1)
+            strokeColor = ColorStateList(
+                arrayOf(checkedState, uncheckedState),
+                intArrayOf(primary, outline),
+            )
+            addOnCheckedChangeListener { _, _ -> scheduleSearch() }
         }
-        searchRow.addView(searchButton, LinearLayout.LayoutParams(dp(48), dp(44)))
+        searchRow.addView(regexButton, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(44)))
         content.addView(searchRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
         listOf(

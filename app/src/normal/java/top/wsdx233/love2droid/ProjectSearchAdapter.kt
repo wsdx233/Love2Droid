@@ -39,6 +39,10 @@ internal class ProjectSearchAdapter(
         val density = context.resources.displayMetrics.density
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
+            layoutParams = RecyclerView.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            )
             minimumHeight = (72 * density).toInt()
             setPadding((20 * density).toInt(), (10 * density).toInt(), (20 * density).toInt(), (10 * density).toInt())
             background = context.obtainStyledAttributes(intArrayOf(android.R.attr.selectableItemBackground)).let {

@@ -32,6 +32,7 @@ import android.widget.LinearLayout
 import android.widget.PopupMenu
 import android.widget.TextView
 import android.widget.Toast
+import android.graphics.Rect
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
@@ -54,6 +55,7 @@ import com.termux.terminal.TerminalSessionClient
 import com.termux.view.TerminalView
 import com.termux.view.TerminalViewClient
 import io.github.rosemoe.sora.event.ContentChangeEvent
+import io.github.rosemoe.sora.event.ColorSchemeUpdateEvent
 import io.github.rosemoe.sora.event.ClickEvent
 import io.github.rosemoe.sora.event.SelectionChangeEvent
 import io.github.rosemoe.sora.lang.EmptyLanguage
@@ -67,6 +69,7 @@ import org.eclipse.tm4e.core.registry.IThemeSource
 import io.github.rosemoe.sora.langs.textmate.registry.model.ThemeModel
 import io.github.rosemoe.sora.langs.textmate.registry.provider.AssetsFileResolver
 import io.github.rosemoe.sora.widget.CodeEditor
+import io.github.rosemoe.sora.widget.schemes.EditorColorScheme
 import io.github.rosemoe.sora.widget.SelectionMovement
 import io.github.rosemoe.sora.widget.subscribeAlways
 import com.google.android.material.bottomsheet.BottomSheetDialog
@@ -85,8 +88,10 @@ class EditorActivity : AppCompatActivity() {
     private lateinit var drawer: androidx.drawerlayout.widget.DrawerLayout
     private lateinit var toolbar: MaterialToolbar
     private lateinit var tabContainer: LinearLayout
+    private lateinit var tabScroll: View
     private lateinit var symbolBar: LinearLayout
     private lateinit var symbolScroll: View
+    private lateinit var editorContainer: View
     private lateinit var editor: CodeEditor
     private lateinit var editorSearchController: EditorSearchController
     private lateinit var welcomePage: View
@@ -118,9 +123,12 @@ class EditorActivity : AppCompatActivity() {
     private lateinit var editorTopInset: View
     private lateinit var drawerTopInset: View
     private var textMateReady = false
+    private var appliedEditorThemeId: String? = null
+    private val symbolBarButtons = mutableListOf<TextView>()
     private var lspJob: Job? = null
     private var workspaceRestoreJob: Job? = null
     private var symbolNavigationJob: Job? = null
+    private var selectedSymbolForNavigation: SelectedSymbol? = null
     private var directoryObserver: FileObserver? = null
     private var directoryRefreshGeneration = 0L
     private val directoryRefreshHandler = Handler(Looper.getMainLooper())
@@ -128,12 +136,22 @@ class EditorActivity : AppCompatActivity() {
     private var symbolUsagesButton: ImageButton? = null
     private var pendingProjectIconSelection: ((Uri?) -> Unit)? = null
     private var pendingSigningKeySelection: ((Uri?) -> Unit)? = null
+    private data class PendingSafTransfer(
+        val projectId: String,
+        val projectRoot: File,
+        val sourceOrTarget: File,
+    )
+    private var pendingDirectoryImport: PendingSafTransfer? = null
+    private var pendingFileImport: PendingSafTransfer? = null
+    private var pendingDirectoryExport: PendingSafTransfer? = null
+    private var pendingFileExport: PendingSafTransfer? = null
     private val directoryRefreshRunnable = Runnable { refreshFileList() }
     private var terminalCounter = 0
     private var ctrlPressed = false
     private var altPressed = false
     private var ctrlButton: TextView? = null
     private var altButton: TextView? = null
+
     private val mapleTypeface: Typeface by lazy {
         requireNotNull(ResourcesCompat.getFont(this, R.font.maple_mono_nf_cn_regular))
     }
@@ -240,6 +258,37 @@ class EditorActivity : AppCompatActivity() {
         pendingSigningKeySelection = null
         callback?.invoke(uri)
     }
+    private val importDirectoryLauncher = registerForActivityResult(
+        DocumentsUiOpenDocumentTreeContract(),
+    ) { uri ->
+        val pending = pendingDirectoryImport
+        pendingDirectoryImport = null
+        if (uri != null && pending != null) importDirectory(uri, pending)
+    }
+    private val importFileLauncher = registerForActivityResult(
+        DocumentsUiOpenDocumentContract(),
+    ) { uri ->
+        val pending = pendingFileImport
+        pendingFileImport = null
+        if (uri != null && pending != null) importFile(uri, pending)
+    }
+
+
+    private val exportDirectoryLauncher = registerForActivityResult(
+        DocumentsUiOpenDocumentTreeContract(),
+    ) { uri ->
+        val pending = pendingDirectoryExport
+        pendingDirectoryExport = null
+        if (uri != null && pending != null) exportDirectory(uri, pending)
+    }
+
+    private val exportFileLauncher = registerForActivityResult(
+        DocumentsUiCreateDocumentContract(),
+    ) { uri ->
+        val pending = pendingFileExport
+        pendingFileExport = null
+        if (uri != null && pending != null) exportFile(uri, pending)
+    }
 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
         if (event.actionMasked == MotionEvent.ACTION_DOWN) {
@@ -257,10 +306,12 @@ class EditorActivity : AppCompatActivity() {
         drawer = findViewById(R.id.drawer_layout)
         toolbar = findViewById(R.id.toolbar)
         tabContainer = findViewById(R.id.tab_container)
+        tabScroll = findViewById(R.id.tab_scroll)
         symbolBar = findViewById(R.id.symbol_bar)
         symbolScroll = findViewById(R.id.symbol_scroll)
         editorTopInset = findViewById(R.id.editor_top_inset)
         drawerTopInset = findViewById(R.id.drawer_top_inset)
+        editorContainer = findViewById(R.id.editor_container)
         editor = findViewById(R.id.code_editor)
         terminalView = findViewById(R.id.terminal_view)
         terminalKeyBar = findViewById(R.id.terminal_key_bar)
@@ -314,6 +365,7 @@ class EditorActivity : AppCompatActivity() {
                 }
             }
         })
+        setupTextMate()
         setupSymbolBar()
         setupTerminal()
         setupEditorInput()
@@ -338,7 +390,6 @@ class EditorActivity : AppCompatActivity() {
             setHasFixedSize(true)
         }
 
-        setupTextMate()
         editor.subscribeAlways<ContentChangeEvent> {
             if (!suppressEditorEvents) {
                 editorSession.activeEditorTab?.let { tab ->
@@ -395,6 +446,7 @@ class EditorActivity : AppCompatActivity() {
     }
 
     private fun setupSymbolBar() {
+        symbolBarButtons.clear()
         val selectableBackground = obtainStyledAttributes(
             intArrayOf(android.R.attr.selectableItemBackgroundBorderless),
         ).let { attributes ->
@@ -411,11 +463,12 @@ class EditorActivity : AppCompatActivity() {
                 gravity = Gravity.CENTER
                 minWidth = dp(44)
                 minHeight = dp(48)
-                setTextColor(Color.LTGRAY)
+                setTextColor(editor.colorScheme.getColor(EditorColorScheme.TEXT_NORMAL))
                 background = selectableBackground?.constantState?.newDrawable()
                 contentDescription = label
                 setOnClickListener { action() }
             }
+            symbolBarButtons += button
             symbolBar.addView(button, LinearLayout.LayoutParams(dp(44), ViewGroup.LayoutParams.MATCH_PARENT))
         }
 
@@ -594,10 +647,14 @@ class EditorActivity : AppCompatActivity() {
         editor.subscribeAlways<SelectionChangeEvent> {
             updateSymbolNavigationButtons()
         }
+        editor.subscribeAlways<ColorSchemeUpdateEvent> {
+            applyEditorSurfaceColors()
+        }
         editor.subscribeAlways<ClickEvent> {
             lspController?.dismissHover()
         }
         updateSymbolNavigationButtons()
+        applyEditorSurfaceColors()
     }
 
     private fun setupSymbolNavigationButtons() {
@@ -612,24 +669,25 @@ class EditorActivity : AppCompatActivity() {
             attributes.recycle()
             drawable
         }
-        val iconTint = MaterialColors.getColor(
-            this,
-            com.google.android.material.R.attr.colorOnSurface,
-            Color.WHITE,
-        )
 
-        fun addAction(icon: Int, description: Int, action: () -> Unit): ImageButton {
+        fun addAction(icon: Int, description: Int, action: (SelectedSymbol) -> Unit): ImageButton {
             return ImageButton(this).apply {
-                layoutParams = ViewGroup.LayoutParams(dp(45), dp(45))
+                layoutParams = LinearLayout.LayoutParams(dp(45), dp(45))
                 setImageResource(icon)
-                imageTintList = android.content.res.ColorStateList.valueOf(iconTint)
                 background = selectableBackground?.constantState?.newDrawable()
                 contentDescription = getString(description)
                 setPadding(dp(12), dp(12), dp(12), dp(12))
+                isClickable = true
+                isFocusable = false
                 visibility = View.GONE
                 setOnClickListener {
+                    android.util.Log.d(TAG, "Symbol action clicked: ${getString(description)}")
+                    val selected = selectedSymbolForNavigation ?: currentSelectedSymbol() ?: return@setOnClickListener
+                    val projectId = currentProject?.id ?: return@setOnClickListener
                     actionWindow.dismiss()
-                    action()
+                    if (currentProject?.id == projectId) {
+                        action(selected)
+                    }
                 }
             }.also(buttonRow::addView)
         }
@@ -637,19 +695,56 @@ class EditorActivity : AppCompatActivity() {
         symbolDefinitionButton = addAction(
             R.drawable.ic_symbol_definition,
             R.string.go_to_definition,
-        ) {
-            currentSelectedSymbol()?.let { selected ->
-                findDefinition(selected.file, selected.line, selected.column)
-            }
+        ) { selected ->
+            findDefinition(selected.file, selected.line, selected.column)
         }
         symbolUsagesButton = addAction(
             R.drawable.ic_symbol_references,
             R.string.find_usages,
-        ) {
-            currentSelectedSymbol()?.let { selected ->
-                findUsages(selected.file, selected.line, selected.column)
+        ) { selected ->
+            findUsages(selected.file, selected.line, selected.column)
+        }
+        val customButtons = listOfNotNull(symbolDefinitionButton, symbolUsagesButton)
+        actionWindow.getPopup().setTouchInterceptor { _, event ->
+            if (event.actionMasked != MotionEvent.ACTION_UP) {
+                false
+            } else {
+                val target = customButtons.firstOrNull { button ->
+                    if (button.visibility != View.VISIBLE) {
+                        false
+                    } else {
+                        val rect = Rect()
+                        button.getGlobalVisibleRect(rect) &&
+                            event.rawX >= rect.left && event.rawX < rect.right &&
+                            event.rawY >= rect.top && event.rawY < rect.bottom
+                    }
+                }
+                target?.performClick() == true
             }
         }
+        buttonRow.requestLayout()
+        horizontalScroll.requestLayout()
+    }
+
+    private fun updateSymbolNavigationButtonColors() {
+        val tint = android.content.res.ColorStateList.valueOf(
+            editor.colorScheme.getColor(EditorColorScheme.TEXT_ACTION_WINDOW_ICON_COLOR),
+        )
+        symbolDefinitionButton?.imageTintList = tint
+        symbolUsagesButton?.imageTintList = tint
+    }
+
+    private fun applyEditorSurfaceColors() {
+        if (!::editor.isInitialized) return
+        val colors = editor.colorScheme
+        val background = colors.getColor(EditorColorScheme.WHOLE_BACKGROUND)
+        editorContainer.setBackgroundColor(background)
+        editor.setBackgroundColor(background)
+        tabScroll.setBackgroundColor(background)
+        symbolScroll.setBackgroundColor(background)
+        symbolBarButtons.forEach { it.setTextColor(colors.getColor(EditorColorScheme.TEXT_NORMAL)) }
+        updateSymbolNavigationButtonColors()
+        refreshTabs()
     }
 
     private data class SelectedSymbol(
@@ -669,19 +764,23 @@ class EditorActivity : AppCompatActivity() {
 
     private fun updateSymbolNavigationButtons() {
         val selected = currentSelectedSymbol()
-        val visible = selected != null && lspController?.isNavigationAvailable(selected.file) == true
-        val visibility = if (visible) View.VISIBLE else View.GONE
+        selectedSymbolForNavigation = selected?.takeIf {
+            lspController?.isNavigationAvailable(it.file) == true
+        }
+        val visibility = if (selectedSymbolForNavigation != null) View.VISIBLE else View.GONE
         symbolDefinitionButton?.visibility = visibility
         symbolUsagesButton?.visibility = visibility
     }
 
     private fun findDefinition(file: File, line: Int, column: Int) {
+        android.util.Log.d(TAG, "Starting definition request")
         val controller = lspController ?: return
         val project = currentProject ?: return
         symbolNavigationJob?.cancel()
         symbolNavigationJob = lifecycleScope.launch {
             try {
                 val locations = controller.findDefinitions(file, line, column)
+                android.util.Log.d(TAG, "Definition locations: ${locations.size}")
                 if (currentProject?.id != project.id) return@launch
                 if (locations.isEmpty()) {
                     toast(getString(R.string.symbol_definition_not_found))
@@ -690,10 +789,11 @@ class EditorActivity : AppCompatActivity() {
                 val targets = withContext(Dispatchers.IO) {
                     locations.mapNotNull { resolveProjectNavigationTarget(project.root, it) }
                 }
-                when {
-                    targets.isEmpty() -> toast(getString(R.string.symbol_location_outside_project))
-                    targets.size == 1 -> openFile(targets.single().file, targets.single())
-                    else -> showNavigationResults(R.string.definition_results, project, targets)
+                android.util.Log.d(TAG, "Definition targets: ${targets.size}")
+                if (targets.isEmpty()) {
+                    toast(getString(R.string.symbol_location_outside_project))
+                } else {
+                    showNavigationResults(R.string.definition_results, project, targets)
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -1259,18 +1359,166 @@ class EditorActivity : AppCompatActivity() {
         val menu = PopupMenu(this, anchor)
         menu.menu.add(0, MENU_NEW_FILE, 0, R.string.new_file)
         menu.menu.add(0, MENU_NEW_FOLDER, 1, R.string.new_folder)
-        menu.menu.add(0, MENU_PASTE, 2, R.string.paste).isEnabled = clipboardFiles.isNotEmpty()
-        menu.menu.add(0, MENU_REFRESH, 3, R.string.refresh)
+        menu.menu.add(0, MENU_IMPORT, 2, R.string.import_action)
+        menu.menu.add(0, MENU_EXPORT, 3, R.string.export_action)
+        menu.menu.add(0, MENU_PASTE, 4, R.string.paste).isEnabled = clipboardFiles.isNotEmpty()
+        menu.menu.add(0, MENU_REFRESH, 5, R.string.refresh)
         menu.setOnMenuItemClickListener { selected ->
             when (selected.itemId) {
                 MENU_NEW_FILE -> createChild(directory, false)
                 MENU_NEW_FOLDER -> createChild(directory, true)
+                MENU_IMPORT -> showImportMenu(directory)
+                MENU_EXPORT -> startDirectoryExport(directory)
                 MENU_PASTE -> pasteInto(directory)
                 MENU_REFRESH -> refreshFileList()
             }
             true
         }
         menu.show()
+    }
+
+    private fun showImportMenu(targetDirectory: File) {
+        val project = currentProject ?: return
+        if (!targetDirectory.isDirectory || !StorageUtils.isWithin(project.root, targetDirectory)) return
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.import_action)
+            .setItems(
+                arrayOf(getString(R.string.import_file), getString(R.string.import_folder)),
+            ) { _, which ->
+                when (which) {
+                    0 -> startFileImport(targetDirectory)
+                    1 -> startDirectoryImport(targetDirectory)
+                }
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun startFileImport(targetDirectory: File) {
+        val project = currentProject ?: return
+        if (!targetDirectory.isDirectory || !StorageUtils.isWithin(project.root, targetDirectory)) return
+        pendingFileImport = PendingSafTransfer(project.id, project.root, targetDirectory)
+        importFileLauncher.launch(arrayOf("*/*"))
+    }
+
+    private fun startDirectoryImport(targetDirectory: File) {
+        val project = currentProject ?: return
+        if (!targetDirectory.isDirectory || !StorageUtils.isWithin(project.root, targetDirectory)) return
+        pendingDirectoryImport = PendingSafTransfer(project.id, project.root, targetDirectory)
+        importDirectoryLauncher.launch(null)
+    }
+
+    private fun startDirectoryExport(sourceDirectory: File) {
+        val project = currentProject ?: return
+        if (!sourceDirectory.isDirectory || !StorageUtils.isWithin(project.root, sourceDirectory)) return
+        pendingDirectoryExport = PendingSafTransfer(project.id, project.root, sourceDirectory)
+        exportDirectoryLauncher.launch(null)
+    }
+
+    private fun startFileExport(sourceFile: File) {
+        val project = currentProject ?: return
+        if (!sourceFile.isFile || !StorageUtils.isWithin(project.root, sourceFile)) return
+        pendingFileExport = PendingSafTransfer(project.id, project.root, sourceFile)
+        exportFileLauncher.launch(sourceFile.name)
+    }
+
+    private fun isCurrentSafTransfer(pending: PendingSafTransfer): Boolean {
+        val project = currentProject ?: return false
+        return project.id == pending.projectId && runCatching {
+            project.root.canonicalFile == pending.projectRoot.canonicalFile
+        }.getOrDefault(false)
+    }
+
+    private fun importFile(uri: Uri, pending: PendingSafTransfer) {
+        if (!isCurrentSafTransfer(pending)) {
+            toast(getString(R.string.saf_project_changed))
+            return
+        }
+        lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    SafFileTransfer.importFile(this@EditorActivity, uri, pending.sourceOrTarget)
+                }
+                if (isCurrentSafTransfer(pending)) {
+                    refreshFileList()
+                    toast(getString(R.string.import_success))
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                toast(getString(R.string.import_failed, error.message ?: error.javaClass.simpleName))
+            }
+        }
+    }
+
+    private fun importDirectory(uri: Uri, pending: PendingSafTransfer) {
+        if (!isCurrentSafTransfer(pending)) {
+            toast(getString(R.string.saf_project_changed))
+            return
+        }
+        lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    SafFileTransfer.importDirectory(this@EditorActivity, uri, pending.sourceOrTarget)
+                }
+                if (isCurrentSafTransfer(pending)) {
+                    refreshFileList()
+                    toast(getString(R.string.import_success))
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                toast(getString(R.string.import_failed, error.message ?: error.javaClass.simpleName))
+            }
+        }
+    }
+
+    private fun exportDirectory(uri: Uri, pending: PendingSafTransfer) {
+        if (!isCurrentSafTransfer(pending)) {
+            toast(getString(R.string.saf_project_changed))
+            return
+        }
+        lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    SafFileTransfer.exportDirectory(
+                        this@EditorActivity,
+                        pending.projectRoot,
+                        pending.sourceOrTarget,
+                        uri,
+                    )
+                }
+                if (isCurrentSafTransfer(pending)) toast(getString(R.string.export_success))
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                toast(getString(R.string.export_failed, error.message ?: error.javaClass.simpleName))
+            }
+        }
+    }
+
+    private fun exportFile(uri: Uri, pending: PendingSafTransfer) {
+        if (!isCurrentSafTransfer(pending)) {
+            toast(getString(R.string.saf_project_changed))
+            return
+        }
+        lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    SafFileTransfer.exportFile(
+                        this@EditorActivity,
+                        pending.projectRoot,
+                        pending.sourceOrTarget,
+                        uri,
+                    )
+                }
+                if (isCurrentSafTransfer(pending)) toast(getString(R.string.export_success))
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                toast(getString(R.string.export_failed, error.message ?: error.javaClass.simpleName))
+            }
+        }
     }
 
     private fun navigateToParentDirectory(): Boolean {
@@ -1366,8 +1614,10 @@ class EditorActivity : AppCompatActivity() {
         menu.menu.add(0, MENU_CUT, 3, R.string.cut)
         menu.menu.add(0, MENU_DELETE, 4, R.string.delete)
         menu.menu.add(0, MENU_DETAILS, 5, R.string.details)
-        if (selectedPaths.size == 2) menu.menu.add(0, MENU_RANGE, 6, R.string.select_range)
-        if (selectionMode) menu.menu.add(0, MENU_CLEAR_SELECTION, 7, R.string.clear_selection)
+        if (item.directory) menu.menu.add(0, MENU_IMPORT, 6, R.string.import_action)
+        menu.menu.add(0, MENU_EXPORT, 7, R.string.export_action)
+        if (selectedPaths.size == 2) menu.menu.add(0, MENU_RANGE, 8, R.string.select_range)
+        if (selectionMode) menu.menu.add(0, MENU_CLEAR_SELECTION, 9, R.string.clear_selection)
         menu.setOnMenuItemClickListener { selected ->
             when (selected.itemId) {
                 MENU_OPEN -> openBrowserItem(item)
@@ -1376,6 +1626,8 @@ class EditorActivity : AppCompatActivity() {
                 MENU_CUT -> copySelection(item.file, true)
                 MENU_DELETE -> deleteSelection(item.file)
                 MENU_DETAILS -> showDetails(item.file)
+                MENU_IMPORT -> showImportMenu(item.file)
+                MENU_EXPORT -> if (item.directory) startDirectoryExport(item.file) else startFileExport(item.file)
                 MENU_RANGE -> selectRange()
                 MENU_CLEAR_SELECTION -> clearSelection()
             }
@@ -1625,10 +1877,13 @@ class EditorActivity : AppCompatActivity() {
             toast("文件过大，暂不载入编辑器")
             return
         }
+        android.util.Log.d(TAG, "Opening navigation target: ${file.name}:${target?.startLine}")
         editorSession.find(file)?.let { tab ->
             val index = editorSession.tabs.indexOf(tab)
             if (editorSession.activeIndex != index) selectTab(index)
-            target?.let(::moveToNavigationTarget)
+            target?.let { navigationTarget ->
+                editor.post { moveToNavigationTarget(navigationTarget) }
+            }
             return
         }
         lifecycleScope.launch {
@@ -1638,7 +1893,9 @@ class EditorActivity : AppCompatActivity() {
                 val tab = EditorTab(file, text, LanguageResolver.scopeFor(file))
                 val index = editorSession.add(tab)
                 selectTab(index)
-                target?.let(::moveToNavigationTarget)
+                target?.let { navigationTarget ->
+                    editor.post { moveToNavigationTarget(navigationTarget) }
+                }
             } catch (error: Exception) {
                 toast(error.message ?: "无法打开文件")
             }
@@ -1647,16 +1904,21 @@ class EditorActivity : AppCompatActivity() {
 
     private fun moveToNavigationTarget(target: EditorNavigationTarget) {
         val activeFile = editorSession.activeEditorTab?.file ?: return
-        if (runCatching { activeFile.canonicalFile != target.file.canonicalFile }.getOrDefault(true)) return
+        if (runCatching { activeFile.canonicalFile != target.file.canonicalFile }.getOrDefault(true)) {
+            android.util.Log.w(TAG, "Navigation target file is not active")
+            return
+        }
         val lastLine = (editor.lineCount - 1).coerceAtLeast(0)
         val startLine = target.startLine.coerceIn(0, lastLine)
         val startColumn = target.startColumn.coerceIn(0, editor.text.getColumnCount(startLine))
         val endLine = target.endLine.coerceIn(startLine, lastLine)
         val rawEndColumn = target.endColumn.coerceIn(0, editor.text.getColumnCount(endLine))
         val endColumn = if (endLine == startLine) rawEndColumn.coerceAtLeast(startColumn) else rawEndColumn
-        editor.setSelectionRegion(startLine, startColumn, endLine, endColumn, false)
-        editor.ensurePositionVisible(startLine, startColumn, true)
+        editor.setSelectionRegion(startLine, startColumn, endLine, endColumn, true)
+        editor.postOnAnimation { editor.ensurePositionVisible(startLine, startColumn, true) }
+        android.util.Log.d(TAG, "Navigation target applied: $startLine:$startColumn")
     }
+
 
     private fun selectTab(index: Int) {
         if (editorSession.activeIndex != index) captureEditorState()
@@ -2221,6 +2483,8 @@ class EditorActivity : AppCompatActivity() {
         private const val MENU_RANGE = 10
         private const val MENU_CLEAR_SELECTION = 11
         private const val MENU_REFRESH = 12
+        private const val MENU_IMPORT = 13
+        private const val MENU_EXPORT = 14
         private const val MAX_TAB_NAME_CHARS = 15
         private const val OMP_SESSION_DISCOVERY_INTERVAL_MS = 500L
         private const val TERMINAL_KEY_COLOR = 0xFF424242.toInt()

@@ -31,7 +31,7 @@
             android:id="@+id/tab_scroll"
             android:layout_width="match_parent"
             android:layout_height="24dp"
-            android:background="#18181B"
+            android:background="@android:color/transparent"
             android:fillViewport="false"
             android:scrollbars="none">
 
@@ -52,13 +52,13 @@
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
-            android:background="#101114">
+            android:background="@android:color/transparent">
 
             <io.github.rosemoe.sora.widget.CodeEditor
                 android:id="@+id/code_editor"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:background="#101114"
+                android:background="@android:color/transparent"
                 android:paddingTop="8dp"
                 android:paddingBottom="8dp"
                 android:textSize="12sp" />
@@ -84,7 +84,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/welcome_title"
-                    android:textColor="#E4E4E7"
+                    android:textColor="?attr/colorOnSurface"
                     android:textSize="22sp"
                     android:textStyle="bold" />
 
@@ -94,7 +94,7 @@
                     android:layout_marginTop="8dp"
                     android:gravity="center"
                     android:text="@string/welcome_message"
-                    android:textColor="#A1A1AA"
+                    android:textColor="?attr/colorOnSurfaceVariant"
                     android:textSize="14sp" />
 
                 <com.google.android.material.button.MaterialButton
@@ -123,7 +123,7 @@
             android:id="@+id/symbol_scroll"
             android:layout_width="match_parent"
             android:layout_height="52dp"
-            android:background="#18181B"
+            android:background="@android:color/transparent"
             android:fillViewport="false"
             android:overScrollMode="never"
             android:scrollbars="none">

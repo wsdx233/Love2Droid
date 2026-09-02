@@ -51,6 +51,12 @@ projects/
 - 文本保存使用 `StorageUtils.writeTextAtomic`，不直接覆盖源文件。
 - 递归文件 I/O 和大型文件读取不得在主线程执行。
 
+## SAF 文件导入与导出
+
+- 导入根据用户选择的类型使用 `ACTION_OPEN_DOCUMENT` 选择单个外部文件，或使用 `ACTION_OPEN_DOCUMENT_TREE` 选择外部源目录；文件或目录本身复制到项目内目标目录。文件夹导出使用 `ACTION_OPEN_DOCUMENT_TREE` 选择外部目标目录，通过 `DocumentFile` 复制目录本身及全部内容；文件导出使用 `ACTION_CREATE_DOCUMENT` 写入用户选择的目标文档。
+- `DocumentsUiContracts` 优先将 SAF Intent 定向到 `com.google.android.documentsui` 或 `com.android.documentsui`，找不到标准 DocumentsUI 时才退回系统解析，规避国内定制文件选择器兼容问题。
+- URI 内容流和递归复制均在 Activity 的 `Dispatchers.IO` 协程中执行；不把外部 URI 转换为路径，不覆盖目标中的同名条目，失败时清理本次新建的目录。
+
 ## Play 数据流
 
 Play 使用不可变 `.love` 快照，不让 runtime 读取编辑器可能处于半写入状态的工作目录：
@@ -118,6 +124,7 @@ Android 发布与 Play 分离；发布结果是可安装、可分享的独立 AP
 - `ProjectSearchEngine` 与 `GitClient`：后台搜索和只读 Git 协议；Bottom Sheet 只负责展示与用户动作。
 - `StorageUtils`：路径边界、原子写和递归文件操作。
 - runtime 边界：保存、校验、打包后启动 LÖVE，不处理文件浏览器选择。
+- `SafFileTransfer`：通过 `DocumentFile` 和内容流在项目边界内递归导入/导出；不解析外部 URI 路径。
 
 ## 长期风险约束
 
