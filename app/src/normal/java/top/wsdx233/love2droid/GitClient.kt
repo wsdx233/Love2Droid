@@ -16,6 +16,15 @@ internal data class GitStatusEntry(
     val relativePath: String,
     val originalPath: String? = null,
 )
+internal val GitStatusEntry.isUntracked: Boolean
+    get() = indexStatus == '?' && workTreeStatus == '?'
+
+internal val GitStatusEntry.isStaged: Boolean
+    get() = indexStatus != ' ' && indexStatus != '?'
+
+internal val GitStatusEntry.hasWorkTreeChanges: Boolean
+    get() = workTreeStatus != ' ' || isUntracked
+
 
 internal data class GitCommitEntry(
     val graph: String,
@@ -110,6 +119,10 @@ internal class GitClient(context: Context) {
         executeGit(projectRoot, listOf("rev-parse", "--is-inside-work-tree")).stdout.trim() == "true"
     }.getOrDefault(false)
 
+    suspend fun initialize(projectRoot: File) {
+        executeGit(projectRoot, listOf("init"))
+    }
+
     suspend fun status(projectRoot: File): List<GitStatusEntry> {
         val result = executeGit(
             projectRoot,
@@ -134,16 +147,55 @@ internal class GitClient(context: Context) {
         return GitOutputParser.parseHistory(result.stdout)
     }
 
-    suspend fun unstagedDiff(projectRoot: File, relativePath: String? = null): String {
-        val command = mutableListOf("diff", "--no-ext-diff", "--no-color", "--stat", "--patch")
-        if (relativePath != null) {
-            val file = StorageUtils.resolveChild(projectRoot, relativePath)
-            require(file.exists() || File(projectRoot, relativePath).parentFile?.exists() == true) {
-                "Git path is outside the project"
-            }
-            command += listOf("--", StorageUtils.relativePath(projectRoot, file))
+    suspend fun stage(projectRoot: File, relativePath: String) {
+        executeGit(projectRoot, listOf("add", "--", checkedPath(projectRoot, relativePath)))
+    }
+
+    suspend fun stageAll(projectRoot: File) {
+        executeGit(projectRoot, listOf("add", "--all"))
+    }
+
+    suspend fun unstage(projectRoot: File, relativePath: String) {
+        val path = checkedPath(projectRoot, relativePath)
+        if (hasHead(projectRoot)) {
+            executeGit(projectRoot, listOf("restore", "--staged", "--", path))
+        } else {
+            executeGit(
+                projectRoot,
+                listOf("rm", "--cached", "--ignore-unmatch", "--", path),
+            )
         }
-        return executeGit(projectRoot, command, outputLimit = DIFF_OUTPUT_LIMIT).stdout
+    }
+
+    suspend fun unstageAll(projectRoot: File) {
+        if (hasHead(projectRoot)) {
+            executeGit(projectRoot, listOf("restore", "--staged", "--", "."))
+        } else {
+            executeGit(
+                projectRoot,
+                listOf("rm", "--cached", "--ignore-unmatch", "-r", "--", "."),
+            )
+        }
+    }
+
+    suspend fun commit(projectRoot: File, message: String) {
+        require(message.isNotBlank()) { appContext.getString(R.string.git_commit_message_required) }
+        executeGit(projectRoot, listOf("commit", "-m", message.trim()))
+    }
+
+    suspend fun diff(projectRoot: File, relativePath: String? = null, staged: Boolean = false): String {
+        if (relativePath != null) {
+            val path = checkedPath(projectRoot, relativePath)
+            val entry = status(projectRoot).firstOrNull { it.relativePath == path }
+            if (!staged && entry?.isUntracked == true) return untrackedDiff(projectRoot, path)
+            return executeDiff(projectRoot, path, staged)
+        }
+        val trackedDiff = executeDiff(projectRoot, null, staged)
+        if (staged) return trackedDiff
+        val untrackedDiffs = status(projectRoot)
+            .filter(GitStatusEntry::isUntracked)
+            .map { untrackedDiff(projectRoot, checkedPath(projectRoot, it.relativePath)) }
+        return (listOf(trackedDiff) + untrackedDiffs).filter(String::isNotBlank).joinToString("\n")
     }
 
     suspend fun commitDetails(projectRoot: File, hash: String): String {
@@ -164,14 +216,49 @@ internal class GitClient(context: Context) {
         ).stdout
     }
 
+    private suspend fun executeDiff(projectRoot: File, path: String?, staged: Boolean): String {
+        val command = mutableListOf("diff", "--no-ext-diff", "--no-color", "--unified=3", "--patch")
+        if (staged) command += "--cached"
+        if (path != null) command += listOf("--", path)
+        return executeGit(projectRoot, command, outputLimit = DIFF_OUTPUT_LIMIT).stdout
+    }
+
+    private suspend fun untrackedDiff(projectRoot: File, path: String): String = executeGit(
+        projectRoot,
+        listOf(
+            "diff",
+            "--no-index",
+            "--no-ext-diff",
+            "--no-color",
+            "--unified=3",
+            "--patch",
+            "--",
+            "/dev/null",
+            path,
+        ),
+        acceptedExitCodes = setOf(0, 1),
+        outputLimit = DIFF_OUTPUT_LIMIT,
+    ).stdout
+
+    private suspend fun hasHead(projectRoot: File): Boolean = runCatching {
+        executeGit(projectRoot, listOf("rev-parse", "--verify", "--quiet", "HEAD"))
+        true
+    }.getOrDefault(false)
+
+    private fun checkedPath(projectRoot: File, relativePath: String): String {
+        val file = StorageUtils.resolveChild(projectRoot, relativePath)
+        return StorageUtils.relativePath(projectRoot, file)
+    }
+
     private suspend fun executeGit(
         projectRoot: File,
         arguments: List<String>,
+        acceptedExitCodes: Set<Int> = setOf(0),
         outputLimit: Int = COMMAND_OUTPUT_LIMIT,
     ): CommandResult = execute(
         projectRoot = projectRoot,
         command = listOf("/usr/bin/git", "--no-pager", "-c", "color.ui=false", "-c", "core.quotepath=false") + arguments,
-        acceptedExitCodes = setOf(0),
+        acceptedExitCodes = acceptedExitCodes,
         outputLimit = outputLimit,
     )
 

@@ -84,7 +84,7 @@ Android 发布与 Play 分离；发布结果是可安装、可分享的独立 AP
 - 编辑器内搜索由 `EditorSearchController` 封装 Sora `EditorSearcher`，维护普通/正则查询、替换展开状态和标签切换后的重新提交。
 - 项目文件与文本搜索由 `ProjectSearchEngine` 在后台执行，跳过产品元数据、`.git/`、二进制和超限文件；所有结果仍受项目根目录边界约束。
 - 符号搜索优先使用 LuaLS `workspace/symbol`，无语义结果时退化到本地 Lua 标识符索引，并在结果模型中标记来源。
-- Git 后端只通过 PRoot 内的 `git` CLI 执行固定参数命令。`GitClient` 限制输出大小，解析 porcelain/NUL 分隔机器格式；当前 UI 只读展示状态、历史、提交详情和 Diff，不实现写操作或凭据管理。
+- Git 后端只通过 PRoot 内的 `git` CLI 执行固定参数命令。`GitClient` 限制输出大小，解析 porcelain/NUL 分隔机器格式，并提供仓库初始化、文件级暂存/取消暂存、全部暂存/取消暂存、提交和工作区/暂存区 Diff；自定义 Diff 解析器把 unified patch 转为带行号的红绿列表。UI 不实现分支、合并、推送或凭据管理。
 
 ## 编辑器、语法与 LSP
 
