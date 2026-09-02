@@ -95,6 +95,7 @@ final class GameDebugOverlay extends FrameLayout {
     private final ExecutorService nativeExecutor = Executors.newSingleThreadExecutor();
     private final AtomicBoolean refreshInFlight = new AtomicBoolean(false);
     private final List<WatchEntry> watches = new ArrayList<>();
+    private final DebugWatchStore watchStore;
 
     private final Map<Integer, String> watchValues = new HashMap<>();
     private ImageButton fullscreenButton;
@@ -148,10 +149,11 @@ final class GameDebugOverlay extends FrameLayout {
     private int sourceLoadGeneration;
     private int lastOrientation;
 
-    GameDebugOverlay(LoveGameActivity activity, Uri gameUri) {
+    GameDebugOverlay(LoveGameActivity activity, Uri gameUri, String projectId) {
         super(activity);
         this.activity = activity;
         this.gameUri = gameUri;
+        watchStore = new DebugWatchStore(activity, projectId);
         lastOrientation = getResources().getConfiguration().orientation;
         setClipToPadding(false);
         setFocusable(false);
@@ -172,6 +174,8 @@ final class GameDebugOverlay extends FrameLayout {
         hudParams.gravity = Gravity.TOP | Gravity.START;
         hudParams.setMargins(dp(16), dp(16), dp(16), 0);
         addView(hud, hudParams);
+        restoreWatches();
+        renderHud();
     }
 
     void attach() {
@@ -793,6 +797,22 @@ final class GameDebugOverlay extends FrameLayout {
         button.setOnClickListener(view -> action.run());
         row.addView(button, new LinearLayout.LayoutParams(WRAP, dp(58)));
     }
+    private void restoreWatches() {
+        for (DebugWatchStore.Watch restored : watchStore.load()) {
+            WatchEntry entry = new WatchEntry(nextWatchId++, restored.expression);
+            entry.pinned = restored.pinned;
+            watches.add(entry);
+        }
+    }
+
+    private void persistWatches() {
+        List<DebugWatchStore.Watch> stored = new ArrayList<>(watches.size());
+        for (WatchEntry entry : watches)
+            stored.add(new DebugWatchStore.Watch(entry.expression, entry.pinned));
+        if (!watchStore.save(stored))
+            Toast.makeText(activity, R.string.debug_watch_save_failed, Toast.LENGTH_SHORT).show();
+    }
+
 
 
 
@@ -802,12 +822,17 @@ final class GameDebugOverlay extends FrameLayout {
             watchInput.setError(s(R.string.debug_watch_empty));
             return;
         }
-        if (expression.length() > 2048) {
+        if (expression.length() > DebugWatchStore.MAX_EXPRESSION_LENGTH) {
             watchInput.setError(s(R.string.debug_watch_too_long));
+            return;
+        }
+        if (watches.size() >= DebugWatchStore.MAX_WATCHES) {
+            watchInput.setError(s(R.string.debug_watch_limit, DebugWatchStore.MAX_WATCHES));
             return;
         }
         WatchEntry entry = new WatchEntry(nextWatchId++, expression);
         watches.add(entry);
+        persistWatches();
         watchInput.setText("");
         renderWatchRows();
     }
@@ -828,14 +853,15 @@ final class GameDebugOverlay extends FrameLayout {
             pin.setColorFilter(entry.pinned ? COLOR_PRIMARY : COLOR_MUTED, PorterDuff.Mode.SRC_IN);
             pin.setOnClickListener(view -> {
                 entry.pinned = !entry.pinned;
+                persistWatches();
                 renderWatchRows();
-                renderHud();
             });
             top.addView(pin, iconParams());
             ImageButton remove = iconButton(R.drawable.ic_close, R.string.debug_remove_watch);
             remove.setOnClickListener(view -> {
                 watches.remove(entry);
                 watchValues.remove(entry.id);
+                persistWatches();
                 renderWatchRows();
             });
             top.addView(remove, iconParams());

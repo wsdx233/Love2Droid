@@ -28,6 +28,8 @@
     <string name="debug_pin_watch">固定到画面</string>
     <string name="debug_unpin_watch">取消固定</string>
     <string name="debug_remove_watch">删除监视</string>
+    <string name="debug_watch_save_failed">无法保存监视状态</string>
+    <string name="debug_watch_limit">最多监视 %1$d 个表达式</string>
     <string name="debug_source_waiting">暂停后显示当前代码位置</string>
     <string name="debug_source_loading">正在读取代码</string>
     <string name="debug_source_unavailable">无法读取当前代码</string>

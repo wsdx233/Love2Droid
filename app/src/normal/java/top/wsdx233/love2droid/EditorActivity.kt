@@ -2704,6 +2704,10 @@ class EditorActivity : AppCompatActivity() {
                     startActivity(
                         Intent(this@EditorActivity, top.wsdx233.love2droid.runtime.LoveGameActivity::class.java)
                             .setData(uri)
+                            .putExtra(
+                                top.wsdx233.love2droid.runtime.LoveGameActivity.EXTRA_DEBUG_PROJECT_ID,
+                                project.id,
+                            )
                             .putStringArrayListExtra(
                                 top.wsdx233.love2droid.runtime.LoveGameActivity.EXTRA_DEBUG_BREAKPOINT_FILES,
                                 ArrayList(breakpoints.map(ProjectBreakpoint::file)),

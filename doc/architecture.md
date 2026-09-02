@@ -126,6 +126,7 @@ Android 发布与 Play 分离；发布结果是可安装、可分享的独立 AP
 - runtime 边界：保存、校验、打包后启动 LÖVE，不处理文件浏览器选择。
 - `SafFileTransfer`：通过 `DocumentFile` 和内容流在项目边界内递归导入/导出；不解析外部 URI 路径。
 - `GameDebugOverlay`：游戏内黑色半透明悬浮球、HUD 和自适应调试面板；负责日志筛选、监视、REPL、执行控制、暂停源码展示和面板动画，不负责断点编辑。
+- `DebugWatchStore`：按项目 id 在应用私有 `files/debug-watches/` 中原子保存监视表达式和固定状态；调试 runtime 负责读写，`ProjectRepository` 在项目重命名和删除时同步迁移或清理。
 - `love_debug.cpp`：native 调试命令/日志边界、Lua 保护求值、断点与单步 hook；固定内存上限，不持有 Android View。
 
 ## 长期风险约束

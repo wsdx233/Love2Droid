@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import org.json.JSONArray
 import org.json.JSONObject
+import top.wsdx233.love2droid.runtime.DebugWatchStore
 import java.io.File
 import java.io.IOException
 import java.util.Locale
@@ -166,6 +167,7 @@ class ProjectRepository(context: Context) {
         }
         val updated = project.copy(id = newId, displayName = cleanName, root = movedRoot)
         iconStore.renameProject(project.id, newId)
+        DebugWatchStore.renameProject(appContext, project.id, newId)
         writeMetadata(updated)
         if (preferences.getString("last_project_id", null) == project.id) {
             preferences.edit().putString("last_project_id", newId).apply()
@@ -177,6 +179,7 @@ class ProjectRepository(context: Context) {
         require(StorageUtils.isWithin(projectsRoot, project.root)) { "Project is outside storage root" }
         StorageUtils.deleteRecursively(project.root)
         iconStore.deleteProject(project.id)
+        DebugWatchStore.deleteProject(appContext, project.id)
         if (preferences.getString("last_project_id", null) == project.id) {
             preferences.edit().remove("last_project_id").apply()
         }

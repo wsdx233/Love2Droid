@@ -16,6 +16,7 @@ import top.wsdx233.love2droid.R;
 public class LoveGameActivity extends org.love2d.android.GameActivity {
     public static final String EXTRA_DEBUG_BREAKPOINT_FILES = "debugBreakpointFiles";
     public static final String EXTRA_DEBUG_BREAKPOINT_LINES = "debugBreakpointLines";
+    public static final String EXTRA_DEBUG_PROJECT_ID = "debugProjectId";
 
     private GameDebugOverlay debugOverlay;
 
@@ -44,6 +45,7 @@ public class LoveGameActivity extends org.love2d.android.GameActivity {
         setTheme(R.style.Theme_Love2Droid_Game);
         Intent intent = getIntent();
         Uri gameUri = intent == null ? null : intent.getData();
+        String projectId = intent == null ? null : intent.getStringExtra(EXTRA_DEBUG_PROJECT_ID);
         ArrayList<String> breakpointFiles = intent == null
             ? null : intent.getStringArrayListExtra(EXTRA_DEBUG_BREAKPOINT_FILES);
         ArrayList<Integer> breakpointLines = intent == null
@@ -62,7 +64,7 @@ public class LoveGameActivity extends org.love2d.android.GameActivity {
                     }
                 }
             }
-            debugOverlay = new GameDebugOverlay(this, gameUri);
+            debugOverlay = new GameDebugOverlay(this, gameUri, projectId);
             debugOverlay.attach();
         }
     }
