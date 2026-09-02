@@ -6,9 +6,9 @@
 
 - LÖVE Android runtime 与编辑器集成在同一 APK；游戏使用独立 `LoveGameActivity` 和 `:game` 进程。
 - 应用专属项目目录、项目元数据、项目管理和 Drawer 单目录文件浏览器。
-- 文件新建、重命名、复制/剪切、粘贴、删除和详情；文件浏览器支持滑动进入多选、再次滑动选择同目录区间，以及底部全选、反选和取消选择操作栏；文件夹和顶部目录菜单支持通过指定 DocumentsUI 的 SAF 导入文件或文件夹并导出，文件支持 SAF 导出。
-- Sora Editor、TextMate 语法注册、文件/终端混合多标签、未命名文档和原子保存。
-- `.love` 快照构建、`FileProvider` Content URI 和 Play 启动闭环。
+- 文件新建、重命名、复制/剪切、粘贴、删除和详情；文件浏览器支持滑动进入多选、再次滑动选择同目录区间，以及底部全选、反选和取消选择操作栏；文件夹和顶部目录菜单支持通过指定 DocumentsUI 的 SAF 导入文件或文件夹并导出，文件支持 SAF 导出；项目管理支持 `.love`/`.zip` 导入和 `.love` 导出。
+- Sora Editor、TextMate 语法注册、文件/终端混合多标签、未命名文档和原子保存；打开文件使用后台受限 UTF-8 加载，拒绝二进制、非 UTF-8 和超过 5 MB 的文件，并保留 LF/CRLF/CR 换行风格。
+- `.love` 快照构建、FileProvider Content URI 和 Play 启动闭环。
 - arm64 PRoot、Ubuntu Base 首次安装、Termux 终端快捷键栏、LuaLS、omp 和 bash-prompt。
 - LuaLS 使用项目真实路径工作；新建项目生成 `.luarc.json` 并加载 LuaJIT 与 LuaLS 内置 LÖVE 11.5 API library。
 - Lua 文件支持长按选择符号后，在文本选区操作浮动菜单中转到定义和查找用法；结果在 Bottom Sheet 中显示并在项目内安全跳转，LuaLS 悬浮 `file:` 链接不再交给外部 Intent，点击窗口外区域会关闭悬浮窗口。
@@ -42,8 +42,12 @@
 
 - 打开文件时编辑内容被覆盖；
 - 保存后 dirty 圆点未刷新；
-- 游戏退出影响编辑器进程。
-- 横竖屏切换不再重建编辑器 Activity；游戏窗口恢复 LÖVE/SDL 原生方向语义，不再强制视为可调整大小；调试悬浮球在横竖屏双向旋转后停靠到右侧，并保持旋转前的纵向比例。
+- 游戏退出影响编辑器进程；
+- 外部修改或删除已打开文件时，clean 标签自动重载，dirty 标签在切换/保存/恢复时要求明确选择重新载入或保留编辑内容，暂停自动保存不会盲目覆盖外部内容。
+- 文件打开在后台完成大小、二进制和严格 UTF-8 检测；5 MB 以上和不可安全编辑的文件不会创建文本标签。
+- 保存会保留已识别的 LF、CRLF 或 CR 换行风格；TextMate 已扩展 TOML 和 GLSL（`.vert`/`.frag` 等）grammar，并按编辑器主题设置加载 `quietlight`/`darcula`。
+- `.love`/`.zip` 项目归档导入检查 `main.lua`、路径越界、重复项和解压上限；导出沿用项目打包过滤规则。
+- 横竖屏切换不再重建编辑器 Activity；游戏窗口恢复 LÖVE/SDL 原生方向语义，不再强制视为可调整大小；调试悬浮球在横竖屏双向旋转后停靠在右侧，并保持旋转前的纵向比例。
 - 终端 PRoot 注入 Git `core.createObject=rename`，避免 Android 共享存储上的硬链接对象写入失败；打包流程在开始构建时重新读取项目属性，避免使用旧快照。
 - LuaLS 悬浮窗口点击 `file://` 链接不再因 `FileUriExposedException` 崩溃。
 
@@ -53,6 +57,7 @@
 
 - [编辑器文件健壮性](plan/editor-file-robustness.md)：外部修改冲突、换行风格、二进制探测和大文件保护。
 - [项目最近打开时间](plan/project-recency.md)：记录并展示项目最近打开时间。
+- [游戏内置实时触控调试控制台](plan/in-game-debug-console.md)：现代化非阻塞触控 UI、实时日志流、变量监视 (Watch)、REPL 符号栏与轻量断点单步调试。
 
 ## 已知限制与非计划事项
 

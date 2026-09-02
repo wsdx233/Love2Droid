@@ -1,0 +1,48 @@
+{
+  "scopeName": "source.glsl",
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#preprocessor" },
+    { "include": "#storage" },
+    { "include": "#type" },
+    { "include": "#builtin" },
+    { "include": "#constant" },
+    { "include": "#string" }
+  ],
+  "repository": {
+    "comment": {
+      "patterns": [
+        { "name": "comment.line.double-slash.glsl", "match": "//[^\\n]*$" },
+        { "name": "comment.block.glsl", "begin": "/\\*", "end": "\\*/" }
+      ]
+    },
+    "preprocessor": {
+      "name": "meta.preprocessor.glsl",
+      "match": "^\\s*#\\s*[A-Za-z_]+"
+    },
+    "storage": {
+      "name": "storage.type.glsl",
+      "match": "\\b(?:attribute|buffer|const|in|inout|out|uniform|varying|volatile|readonly|writeonly|coherent|restrict|shared|precise|layout)\\b"
+    },
+    "type": {
+      "name": "support.type.glsl",
+      "match": "\\b(?:void|bool|int|uint|float|double|atomic_uint|vec[234]|dvec[234]|bvec[234]|ivec[234]|uvec[234]|mat[234](?:x[234])?|dmat[234](?:x[234])?|sampler(?:1D|2D|3D|Cube|2DShadow|CubeShadow|2DArray|2DMS|2DMSArray)|isampler\\w*|usampler\\w*)\\b"
+    },
+    "builtin": {
+      "name": "support.function.glsl",
+      "match": "\\b(?:gl_[A-Za-z0-9_]+|abs|acos|asin|atan|ceil|clamp|cos|cross|degrees|distance|dot|exp|floor|fract|length|log|max|min|mix|normalize|pow|radians|reflect|refract|round|sign|sin|smoothstep|sqrt|step|tan|texture|texture2D|texture3D|transpose)\\b"
+    },
+    "constant": {
+      "patterns": [
+        { "name": "constant.language.glsl", "match": "\\b(?:true|false)\\b" },
+        { "name": "constant.numeric.glsl", "match": "(?<![A-Za-z0-9_])[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][+-]?\\d+)?[fFuU]?\\b" }
+      ]
+    },
+    "string": {
+      "name": "string.quoted.double.glsl",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [{ "name": "constant.character.escape.glsl", "match": "\\\\." }]
+    }
+  }
+}

@@ -126,6 +126,22 @@ class ProjectRepository(context: Context) {
         }
     }
 
+    fun importLoveArchive(input: java.io.InputStream, archiveName: String): Project {
+        val cleanName = archiveName.substringAfterLast('/').substringBeforeLast('.')
+            .trim().ifBlank { "Imported Project" }
+        val id = uniqueProjectId(slugify(cleanName))
+        val root = File(projectsRoot, id)
+        try {
+            LoveArchiveTransfer.import(input, root)
+            val project = Project(id, cleanName, "", root, 0L)
+            writeMetadata(project)
+            return project
+        } catch (error: Throwable) {
+            if (root.exists()) StorageUtils.deleteRecursively(root)
+            throw error
+        }
+    }
+
     fun renameProject(project: Project, newDisplayName: String, requestedId: String): Project {
         val cleanName = newDisplayName.trim()
         val newId = requestedId.trim()
@@ -170,6 +186,15 @@ class ProjectRepository(context: Context) {
             displayName,
         )
         return Project(root.name, displayName, description, root, lastOpened, androidProperties)
+    }
+    private fun uniqueProjectId(base: String): String {
+        if (!File(projectsRoot, base).exists()) return base
+        for (suffix in 2..9999) {
+            val suffixText = "-$suffix"
+            val candidate = base.take((64 - suffixText.length).coerceAtLeast(1)) + suffixText
+            if (!File(projectsRoot, candidate).exists()) return candidate
+        }
+        throw IOException("无法为导入项目分配目录 ID")
     }
 
     private fun writeMetadata(project: Project) {

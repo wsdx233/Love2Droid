@@ -53,9 +53,9 @@ projects/
 
 ## SAF 文件导入与导出
 
-- 导入根据用户选择的类型使用 `ACTION_OPEN_DOCUMENT` 选择单个外部文件，或使用 `ACTION_OPEN_DOCUMENT_TREE` 选择外部源目录；文件或目录本身复制到项目内目标目录。文件夹导出使用 `ACTION_OPEN_DOCUMENT_TREE` 选择外部目标目录，通过 `DocumentFile` 复制目录本身及全部内容；文件导出使用 `ACTION_CREATE_DOCUMENT` 写入用户选择的目标文档。
+- 普通文件/目录导入导出根据用户选择的类型使用 `ACTION_OPEN_DOCUMENT`、`ACTION_OPEN_DOCUMENT_TREE` 或 `ACTION_CREATE_DOCUMENT`；项目管理页面额外使用 SAF 选择 `.love`/`.zip` 导入文件和 `.love` 导出目标。
 - `DocumentsUiContracts` 优先将 SAF Intent 定向到 `com.google.android.documentsui` 或 `com.android.documentsui`，找不到标准 DocumentsUI 时才退回系统解析，规避国内定制文件选择器兼容问题。
-- URI 内容流和递归复制均在 Activity 的 `Dispatchers.IO` 协程中执行；不把外部 URI 转换为路径，不覆盖目标中的同名条目，失败时清理本次新建的目录。
+- URI 内容流、递归复制和 ZIP 解压/压缩均在 Activity 的 `Dispatchers.IO` 协程中执行；归档导入拒绝绝对路径、`..`、重复项、ZIP Slip、过量条目和解压炸弹，并要求根目录存在 `main.lua`。
 
 ## Play 数据流
 
@@ -94,9 +94,9 @@ Android 发布与 Play 分离；发布结果是可安装、可分享的独立 AP
 
 ## 编辑器、语法与 LSP
 
-- Sora `CodeEditor` 提供文本编辑；TextMate grammar 只由 `app/src/main/assets/textmate/languages.json` 注册。
-- 扩展名映射只维护在 `LanguageResolver`。grammar 缺失时退化到纯文本并显示可理解错误，不能阻塞打开文件。
-- Lua 文件在 Android 8.0 及以上通过 Sora `editor-lsp` 连接 PRoot 内的 Lua Language Server；Android 6.0/7.x 保留 TextMate 编辑能力，不加载 `editor-lsp`。
+- Sora `CodeEditor` 提供文本编辑；TextMate grammar 只由 `app/src/main/assets/textmate/languages.json` 注册，主题由 `EditorActivity` 加载 `quietlight` 与 `darcula`。
+- 扩展名映射只维护在 `LanguageResolver`。grammar 缺失时退化到纯文本并显示可理解错误，不能阻塞打开文件；当前额外覆盖 TOML 和 GLSL 着色器扩展名。
+- `EditorFileLoader` 在 `Dispatchers.IO` 严格解码 UTF-8，先探测二进制和 5 MB 上限，并识别换行风格；标签保存磁盘大小/修改时间基线，外部变化由 Activity 自动重载或提示确认。
 - 每个项目根目录对应一个 `LspProject`，文档 URI 使用真实项目文件路径。
 - LSP 的 stdin/stdout 只承载 JSON-RPC；stderr 独立排空到日志。
 - PRoot bind 保持 Android 主体与 Ubuntu guest 中的项目绝对路径一致，避免 workspace URI 分叉。
@@ -117,7 +117,8 @@ Android 发布与 Play 分离；发布结果是可安装、可分享的独立 AP
 - `ProjectRepository`：项目目录和元数据；不持有编辑器 View。
 - `EditorSession`：标签、dirty、光标和滚动状态；不负责项目列表 UI。
 - `LanguageResolver`：扩展名到语言定义的唯一映射入口。
-- `LovePackageBuilder`：项目目录到 `.love` 临时快照。
+- `EditorFileLoader`：受限 UTF-8 文本加载、二进制/大文件探测、换行识别和文件基线。
+- `LovePackageBuilder` 与 `LoveArchiveTransfer`：项目目录到 `.love` 快照，以及 SAF `.love`/`.zip` 归档导入导出。
 - `AndroidApkAssembler` 与 `AndroidBinaryXmlEditor`：纯归档/二进制 Manifest 变换；不持有 Activity 或签名密钥。
 - `AndroidSigningStore`：AndroidKeyStore 和 PKCS#12 导入边界；项目元数据只保存稳定身份标识，不保存私钥或密码。
 - `AndroidApkBuilder`：串联 `.love`、模板、runtime 条目与签名，输出 cache APK。

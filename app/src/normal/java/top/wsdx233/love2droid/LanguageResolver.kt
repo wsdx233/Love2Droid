@@ -22,6 +22,13 @@ object LanguageResolver {
         "css" to "source.css",
         "sh" to "source.shell",
         "bash" to "source.shell",
+        "toml" to "source.toml",
+        "glsl" to "source.glsl",
+        "vert" to "source.glsl",
+        "frag" to "source.glsl",
+        "geom" to "source.glsl",
+        "comp" to "source.glsl",
+        "shader" to "source.glsl",
     )
 
     fun scopeFor(file: File): String? {
@@ -44,6 +51,8 @@ object LanguageResolver {
             "json" -> "JSON"
             "css" -> "CSS"
             "sh", "bash" -> "Shell"
+            "toml" -> "TOML"
+            "glsl", "vert", "frag", "geom", "comp", "shader" -> "GLSL"
             else -> if (extension.isBlank()) "Text" else extension.uppercase()
         }
     }

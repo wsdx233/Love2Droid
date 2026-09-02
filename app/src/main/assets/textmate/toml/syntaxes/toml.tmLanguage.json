@@ -1,0 +1,46 @@
+{
+  "scopeName": "source.toml",
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#table" },
+    { "include": "#key" },
+    { "include": "#string" },
+    { "include": "#date" },
+    { "include": "#number" },
+    { "include": "#boolean" }
+  ],
+  "repository": {
+    "comment": {
+      "name": "comment.line.number-sign.toml",
+      "match": "#[^\\n]*$"
+    },
+    "table": {
+      "name": "entity.name.section.toml",
+      "match": "^\\s*\\[\\[?[^\\]]+\\]\\]?"
+    },
+    "key": {
+      "name": "variable.other.key.toml",
+      "match": "(?m)^[\\t ]*(?:[A-Za-z0-9_-]+|\"[^\"]+\")(?:[\\t ]*\\.[\\t ]*(?:[A-Za-z0-9_-]+|\"[^\"]+\"))*"
+    },
+    "string": {
+      "patterns": [
+        { "name": "string.quoted.double.toml", "begin": "\"\"\"", "end": "\"\"\"" },
+        { "name": "string.quoted.single.toml", "begin": "'''", "end": "'''" },
+        { "name": "string.quoted.double.toml", "begin": "\"", "end": "\"", "patterns": [{ "name": "constant.character.escape.toml", "match": "\\\\." }] },
+        { "name": "string.quoted.single.toml", "begin": "'", "end": "'" }
+      ]
+    },
+    "date": {
+      "name": "constant.other.date.toml",
+      "match": "\\b\\d{4}-\\d{2}-\\d{2}(?:T|\\s)\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})?\\b"
+    },
+    "number": {
+      "name": "constant.numeric.toml",
+      "match": "(?<![A-Za-z0-9_])[+-]?(?:0x[0-9A-Fa-f_]+|0o[0-7_]+|0b[01_]+|\\d[\\d_]*(?:\\.\\d[\\d_]*)?(?:[eE][+-]?\\d[\\d_]*)?)(?![A-Za-z0-9_])"
+    },
+    "boolean": {
+      "name": "constant.language.boolean.toml",
+      "match": "\\b(?:true|false)\\b"
+    }
+  }
+}

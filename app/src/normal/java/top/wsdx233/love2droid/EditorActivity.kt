@@ -128,6 +128,7 @@ class EditorActivity : AppCompatActivity() {
     private var lspJob: Job? = null
     private var workspaceRestoreJob: Job? = null
     private var symbolNavigationJob: Job? = null
+    private val openingFiles = mutableSetOf<String>()
     private var selectedSymbolForNavigation: SelectedSymbol? = null
     private var directoryObserver: FileObserver? = null
     private var directoryRefreshGeneration = 0L
@@ -145,7 +146,10 @@ class EditorActivity : AppCompatActivity() {
     private var pendingFileImport: PendingSafTransfer? = null
     private var pendingDirectoryExport: PendingSafTransfer? = null
     private var pendingFileExport: PendingSafTransfer? = null
-    private val directoryRefreshRunnable = Runnable { refreshFileList() }
+    private val directoryRefreshRunnable = Runnable {
+        refreshFileList()
+        refreshOpenEditorFiles()
+    }
     private var terminalCounter = 0
     private var ctrlPressed = false
     private var altPressed = false
@@ -1176,19 +1180,21 @@ class EditorActivity : AppCompatActivity() {
             openProjectManagerIfNeeded(force = true)
             return
         }
-        if (!saveAllBlocking(requireNamed = true)) return
-        AndroidPackagingSheet(
-            activity = this,
-            scope = lifecycleScope,
-            repository = projectRepository,
-            project = project,
-            chooseSigningKey = { callback ->
-                pendingSigningKeySelection = callback
-                signingKeyLauncher.launch(
-                    arrayOf("application/x-pkcs12", "application/pkcs12", "application/octet-stream"),
-                )
-            },
-        ).show()
+        saveAllThen(requireNamed = true) {
+            if (currentProject?.id != project.id) return@saveAllThen
+            AndroidPackagingSheet(
+                activity = this,
+                scope = lifecycleScope,
+                repository = projectRepository,
+                project = project,
+                chooseSigningKey = { callback ->
+                    pendingSigningKeySelection = callback
+                    signingKeyLauncher.launch(
+                        arrayOf("application/x-pkcs12", "application/pkcs12", "application/octet-stream"),
+                    )
+                },
+            ).show()
+        }
     }
 
     private fun openProjectManagerIfNeeded(force: Boolean = false) {
@@ -1199,7 +1205,12 @@ class EditorActivity : AppCompatActivity() {
     }
 
     private fun switchProject(project: Project) {
-        if (!saveAllBlocking(requireNamed = true)) return
+        saveAllThen(requireNamed = true) {
+            switchProjectNow(project)
+        }
+    }
+
+    private fun switchProjectNow(project: Project) {
         persistWorkspace()
         workspaceRestoreJob?.cancel()
         stopDirectoryObserver()
@@ -1223,8 +1234,8 @@ class EditorActivity : AppCompatActivity() {
         showEmptyEditor()
         refreshFileList()
         restoreWorkspace(project)
-
     }
+
     private fun refreshFileList() {
         directoryRefreshGeneration += 1
         val refreshGeneration = directoryRefreshGeneration
@@ -1891,10 +1902,6 @@ class EditorActivity : AppCompatActivity() {
     private fun openFile(file: File, target: EditorNavigationTarget? = null) {
         val project = currentProject ?: return
         if (!file.isFile || !StorageUtils.isWithin(project.root, file)) return
-        if (file.length() > MAX_EDITOR_BYTES) {
-            toast("文件过大，暂不载入编辑器")
-            return
-        }
         android.util.Log.d(TAG, "Opening navigation target: ${file.name}:${target?.startLine}")
         editorSession.find(file)?.let { tab ->
             val index = editorSession.tabs.indexOf(tab)
@@ -1904,20 +1911,139 @@ class EditorActivity : AppCompatActivity() {
             }
             return
         }
+        val key = runCatching { file.canonicalPath }.getOrElse { file.absolutePath }
+        if (!openingFiles.add(key)) return
         lifecycleScope.launch {
             try {
-                val text = withContext(Dispatchers.IO) { file.readText(Charsets.UTF_8) }
-                captureEditorState()
-                val tab = EditorTab(file, text, LanguageResolver.scopeFor(file))
-                val index = editorSession.add(tab)
-                selectTab(index)
-                target?.let { navigationTarget ->
-                    editor.post { moveToNavigationTarget(navigationTarget) }
+                when (val loaded = withContext(Dispatchers.IO) { EditorFileLoader.load(file) }) {
+                    is EditorFileLoadResult.Text -> {
+                        if (currentProject?.id != project.id || editorSession.find(file) != null) return@launch
+                        captureEditorState()
+                        val tab = EditorTab(file, loaded.content, LanguageResolver.scopeFor(file)).apply {
+                            lineEnding = loaded.lineEnding
+                            diskSnapshot = loaded.snapshot
+                        }
+                        val index = editorSession.add(tab)
+                        selectTab(index)
+                        target?.let { navigationTarget ->
+                            editor.post { moveToNavigationTarget(navigationTarget) }
+                        }
+                    }
+                    is EditorFileLoadResult.TooLarge -> toast(
+                        getString(R.string.file_too_large, StorageUtils.formatBytes(loaded.size), EditorFileLoader.MAX_EDITOR_BYTES / (1024 * 1024)),
+                    )
+                    EditorFileLoadResult.Binary -> toast(getString(R.string.binary_file_not_editable))
+                    EditorFileLoadResult.InvalidUtf8 -> toast(getString(R.string.invalid_utf8_file))
+                    EditorFileLoadResult.ChangedDuringRead -> toast(getString(R.string.file_changed_while_reading))
+                    EditorFileLoadResult.Missing -> toast(getString(R.string.file_missing))
                 }
+            } catch (error: CancellationException) {
+                throw error
             } catch (error: Exception) {
-                toast(error.message ?: "无法打开文件")
+                toast(error.message ?: getString(R.string.open_file_failed))
+            } finally {
+                openingFiles.remove(key)
             }
         }
+    }
+
+    private fun externalSnapshot(tab: EditorTab): EditorFileSnapshot? {
+        val file = tab.file ?: return null
+        val current = EditorFileLoader.snapshot(file)
+        return if (!tab.externalChangeAcknowledged && current != tab.diskSnapshot) current else null
+    }
+
+    private fun acknowledgeExternalChange(tab: EditorTab, observed: EditorFileSnapshot?) {
+        tab.diskSnapshot = observed
+        tab.externalChangeAcknowledged = true
+        tab.lastObservedExternalSnapshot = null
+    }
+
+    private fun reloadEditorTab(tab: EditorTab, onFinished: () -> Unit) {
+        val file = tab.file ?: return onFinished()
+        lifecycleScope.launch {
+            when (val loaded = withContext(Dispatchers.IO) { EditorFileLoader.load(file) }) {
+                is EditorFileLoadResult.Text -> {
+                    tab.text = loaded.content
+                    tab.lineEnding = loaded.lineEnding
+                    tab.diskSnapshot = loaded.snapshot
+                    tab.lastObservedExternalSnapshot = null
+                    tab.externalChangeAcknowledged = false
+                    tab.dirty = false
+                    if (editorSession.activeEditorTab === tab) showEditorTab(tab)
+                    onFinished()
+                }
+                is EditorFileLoadResult.TooLarge -> {
+                    toast(getString(R.string.file_too_large, StorageUtils.formatBytes(loaded.size), EditorFileLoader.MAX_EDITOR_BYTES / (1024 * 1024)))
+                    onFinished()
+                }
+                EditorFileLoadResult.Binary -> {
+                    toast(getString(R.string.binary_file_not_editable))
+                    onFinished()
+                }
+                EditorFileLoadResult.InvalidUtf8 -> {
+                    toast(getString(R.string.invalid_utf8_file))
+                    onFinished()
+                }
+                EditorFileLoadResult.ChangedDuringRead -> {
+                    toast(getString(R.string.file_changed_while_reading))
+                    onFinished()
+                }
+                EditorFileLoadResult.Missing -> {
+                    toast(getString(R.string.file_missing))
+                    onFinished()
+                }
+            }
+        }
+    }
+
+    private fun handleExternalChange(
+        tab: EditorTab,
+        observed: EditorFileSnapshot?,
+        onContinue: () -> Unit,
+        onKeep: (() -> Unit)? = null,
+        onReload: (() -> Unit)? = null,
+    ) {
+        if (!tab.dirty) {
+            if (observed == null) {
+                toast(getString(R.string.external_file_deleted, tab.file?.name.orEmpty()))
+                onContinue()
+            } else {
+                reloadEditorTab(tab, onContinue)
+            }
+            return
+        }
+        showExternalChangeDialog(
+            tab = tab,
+            observed = observed,
+            onKeep = {
+                acknowledgeExternalChange(tab, observed)
+                (onKeep ?: onContinue)()
+            },
+            onReload = onReload ?: onContinue,
+        )
+    }
+
+    private fun showExternalChangeDialog(
+        tab: EditorTab,
+        observed: EditorFileSnapshot?,
+        onKeep: () -> Unit,
+        onReload: () -> Unit,
+    ) {
+        val fileName = tab.file?.name.orEmpty()
+        val builder = MaterialAlertDialogBuilder(this)
+            .setTitle(getString(R.string.external_file_changed_title, fileName))
+            .setMessage(
+                getString(
+                    if (observed == null) R.string.external_file_deleted_message else R.string.external_file_changed_message,
+                ),
+            )
+            .setNegativeButton(R.string.cancel, null)
+            .setNeutralButton(R.string.keep_editor_content) { _, _ -> onKeep() }
+        if (observed != null) {
+            builder.setPositiveButton(R.string.reload_file) { _, _ -> reloadEditorTab(tab, onReload) }
+        }
+        builder.show()
     }
 
     private fun moveToNavigationTarget(target: EditorNavigationTarget) {
@@ -1939,7 +2065,21 @@ class EditorActivity : AppCompatActivity() {
 
 
     private fun selectTab(index: Int) {
-        if (editorSession.activeIndex != index) captureEditorState()
+        if (index !in editorSession.tabs.indices) return
+        if (editorSession.activeIndex != index) {
+            captureEditorState()
+            val outgoing = editorSession.activeEditorTab
+            val observed = outgoing?.let(::externalSnapshot)
+            if (outgoing != null && observed != null) {
+                handleExternalChange(outgoing, observed, onContinue = { selectTabNow(index) })
+                return
+            }
+        }
+        selectTabNow(index)
+    }
+
+    private fun selectTabNow(index: Int) {
+        if (index !in editorSession.tabs.indices) return
         editorSession.select(index)
         when (val tab = editorSession.activeTab) {
             is EditorTab -> showEditorTab(tab)
@@ -2028,6 +2168,8 @@ class EditorActivity : AppCompatActivity() {
         val state: WorkspaceTabSnapshot,
         val file: File?,
         val text: String?,
+        val lineEnding: EditorLineEnding = EditorLineEnding.LF,
+        val diskSnapshot: EditorFileSnapshot? = null,
     )
 
     private fun persistWorkspace() {
@@ -2054,6 +2196,9 @@ class EditorActivity : AppCompatActivity() {
                         selectionEnd = tab.selectionEnd,
                         scrollX = tab.scrollX,
                         scrollY = tab.scrollY,
+                        lineEnding = tab.lineEnding.value,
+                        diskLength = tab.diskSnapshot?.length,
+                        diskLastModified = tab.diskSnapshot?.lastModified,
                     )
                 }
                 is TerminalTab -> WorkspaceTabSnapshot(
@@ -2087,13 +2232,32 @@ class EditorActivity : AppCompatActivity() {
                         val file = state.path
                             ?.takeIf { it.isNotBlank() }
                             ?.let { path -> runCatching { StorageUtils.resolveChild(project.root, path) }.getOrNull() }
-                        if (state.path?.isNotBlank() == true &&
-                            (file == null || !file.isFile || file.length() > MAX_EDITOR_BYTES)
-                        ) {
+                        val disk = file?.let { runCatching { EditorFileLoader.load(it) }.getOrNull() }
+                        val diskText = disk as? EditorFileLoadResult.Text
+                        val text = when {
+                            state.dirty && state.text != null -> state.text
+                            diskText != null -> diskText.content
+                            file == null && state.path.isNullOrBlank() -> state.text.orEmpty()
+                            else -> null
+                        }
+                        if (text == null) {
                             null
                         } else {
-                            val text = state.text ?: file?.readText(Charsets.UTF_8) ?: ""
-                            RestoredWorkspaceTab(index, state, file, text)
+                            val storedSnapshot = if (state.dirty && state.diskLength != null && state.diskLastModified != null) {
+                                EditorFileSnapshot(state.diskLength, state.diskLastModified)
+                            } else {
+                                diskText?.snapshot ?: file?.let(EditorFileLoader::snapshot)
+                            }
+                            RestoredWorkspaceTab(
+                                originalIndex = index,
+                                state = state,
+                                file = file,
+                                text = text,
+                                lineEnding = state.lineEnding?.let { value ->
+                                    EditorLineEnding.entries.firstOrNull { it.value == value }
+                                } ?: diskText?.lineEnding ?: EditorLineEnding.LF,
+                                diskSnapshot = storedSnapshot,
+                            )
                         }
                     }
                 }
@@ -2117,6 +2281,8 @@ class EditorActivity : AppCompatActivity() {
                             selectionEnd = state.selectionEnd
                             scrollX = state.scrollX
                             scrollY = state.scrollY
+                            lineEnding = restored.lineEnding
+                            diskSnapshot = restored.diskSnapshot
                         })
                     }
                     WorkspaceTabType.TERMINAL -> {
@@ -2257,7 +2423,8 @@ class EditorActivity : AppCompatActivity() {
     }
 
     private fun closeTab(index: Int) {
-        when (val tab = editorSession.tabs.getOrNull(index) ?: return) {
+        val tab = editorSession.tabs.getOrNull(index) ?: return
+        when (tab) {
             is TerminalTab -> {
                 tab.session.finishIfRunning()
                 removeTab(index)
@@ -2272,12 +2439,16 @@ class EditorActivity : AppCompatActivity() {
                             ),
                         )
                         .setNegativeButton(R.string.cancel, null)
-                        .setNeutralButton(R.string.discard_changes) { _, _ -> removeTab(index) }
+                        .setNeutralButton(R.string.discard_changes) { _, _ -> removeTabFor(tab) }
                         .setPositiveButton(R.string.save_changes) { _, _ ->
                             if (tab.file == null) {
-                                saveTabAs(tab) { removeTab(index) }
-                            } else if (saveTabBlocking(tab)) {
-                                removeTab(index)
+                                saveTabAs(tab) { removeTabFor(tab) }
+                            } else {
+                                saveTabIfReady(
+                                    tab,
+                                    onSaved = { if (saveTabBlocking(tab)) removeTabFor(tab) },
+                                    onReload = { if (!tab.dirty) removeTabFor(tab) },
+                                )
                             }
                         }
                         .show()
@@ -2286,6 +2457,11 @@ class EditorActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    private fun removeTabFor(tab: WorkspaceTab) {
+        val index = editorSession.tabs.indexOf(tab)
+        if (index >= 0) removeTab(index)
     }
 
     private fun removeTab(index: Int) {
@@ -2303,8 +2479,10 @@ class EditorActivity : AppCompatActivity() {
         }
         if (tab.file == null) {
             saveTabAs(tab)
-        } else if (saveTabBlocking(tab)) {
-            refreshTabs()
+        } else {
+            saveTabIfReady(tab, onSaved = {
+                if (saveTabBlocking(tab)) refreshTabs()
+            })
         }
     }
 
@@ -2312,6 +2490,27 @@ class EditorActivity : AppCompatActivity() {
         captureEditorState()
         editorSession.activeEditorTab?.let(::saveTabAs)
             ?: toast(getString(R.string.no_active_document))
+    }
+
+    private fun saveTabIfReady(
+        tab: EditorTab,
+        onSaved: () -> Unit,
+        onReload: () -> Unit = {},
+    ) {
+        val observed = externalSnapshot(tab)
+        if (observed == null) {
+            onSaved()
+        } else if (!tab.dirty) {
+            reloadEditorTab(tab) { onSaved() }
+        } else {
+            handleExternalChange(
+                tab = tab,
+                observed = observed,
+                onContinue = onSaved,
+                onKeep = onSaved,
+                onReload = onReload,
+            )
+        }
     }
 
     private fun saveTabAs(tab: EditorTab, onSaved: () -> Unit = {}) {
@@ -2331,9 +2530,12 @@ class EditorActivity : AppCompatActivity() {
                 return@promptForText
             }
             runCatching {
-                StorageUtils.writeTextAtomic(target, tab.text)
+                StorageUtils.writeTextAtomic(target, EditorFileLoader.normalizeLineEndings(tab.text, tab.lineEnding))
                 tab.file = target
                 tab.languageScope = LanguageResolver.scopeFor(target)
+                tab.diskSnapshot = EditorFileLoader.snapshot(target)
+                tab.lastObservedExternalSnapshot = null
+                tab.externalChangeAcknowledged = false
                 tab.dirty = false
                 if (editorSession.activeEditorTab === tab) applyEditorLanguage(tab)
             }.onSuccess {
@@ -2346,9 +2548,17 @@ class EditorActivity : AppCompatActivity() {
 
     private fun saveTabBlocking(tab: EditorTab): Boolean {
         val file = tab.file ?: return false
+        val observed = externalSnapshot(tab)
+        if (observed != null) {
+            toast(getString(R.string.external_file_save_blocked, file.name))
+            return false
+        }
         val saved = runCatching {
-            StorageUtils.writeTextAtomic(file, tab.text)
+            StorageUtils.writeTextAtomic(file, EditorFileLoader.normalizeLineEndings(tab.text, tab.lineEnding))
             tab.dirty = false
+            tab.diskSnapshot = EditorFileLoader.snapshot(file)
+            tab.lastObservedExternalSnapshot = null
+            tab.externalChangeAcknowledged = false
         }.onFailure { toast(it.message ?: "保存失败") }.isSuccess
         if (saved) {
             lspController?.let { controller ->
@@ -2358,16 +2568,36 @@ class EditorActivity : AppCompatActivity() {
         return saved
     }
 
-    private fun saveAllBlocking(requireNamed: Boolean = false): Boolean {
+    private fun saveAllThen(requireNamed: Boolean = false, onSaved: () -> Unit) {
         captureEditorState()
         val editorTabs = editorSession.tabs.filterIsInstance<EditorTab>()
         if (requireNamed && editorTabs.any { it.dirty && it.file == null }) {
-            toast("存在未命名未保存文件，请先另存为")
-            return false
+            toast(getString(R.string.unnamed_file_save_required))
+            return
         }
-        val saved = editorTabs.filter { it.file != null }.all(::saveTabBlocking)
-        if (saved) refreshTabs()
-        return saved
+        saveNextTab(editorTabs.filter { it.dirty && it.file != null }, 0, onSaved)
+    }
+
+    private fun saveNextTab(tabs: List<EditorTab>, index: Int, onSaved: () -> Unit) {
+        if (index >= tabs.size) {
+            refreshTabs()
+            onSaved()
+            return
+        }
+        val tab = tabs[index]
+        val next = { saveNextTab(tabs, index + 1, onSaved) }
+        val observed = externalSnapshot(tab)
+        if (observed == null) {
+            if (saveTabBlocking(tab)) next()
+        } else {
+            handleExternalChange(
+                tab = tab,
+                observed = observed,
+                onContinue = next,
+                onKeep = { if (saveTabBlocking(tab)) next() },
+                onReload = { if (!tab.dirty) next() },
+            )
+        }
     }
 
     private fun playCurrentProject() {
@@ -2375,24 +2605,27 @@ class EditorActivity : AppCompatActivity() {
             openProjectManagerIfNeeded(force = true)
             return
         }
-        if (!saveAllBlocking(requireNamed = true)) return
-        lifecycleScope.launch {
-            try {
-                val packageFile = withContext(Dispatchers.IO) {
-                    ProjectValidator.validate(project)?.let { throw IOException(it) }
-                    LovePackageBuilder.build(project, cacheDir)
+        saveAllThen(requireNamed = true) {
+            if (currentProject?.id != project.id) return@saveAllThen
+            lifecycleScope.launch {
+                try {
+                    val packageFile = withContext(Dispatchers.IO) {
+                        ProjectValidator.validate(project)?.let { throw IOException(it) }
+                        LovePackageBuilder.build(project, cacheDir)
+                    }
+                    val uri = FileProvider.getUriForFile(this@EditorActivity, "$packageName.fileprovider", packageFile)
+                    startActivity(
+                        Intent(this@EditorActivity, top.wsdx233.love2droid.runtime.LoveGameActivity::class.java)
+                            .setData(uri)
+                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),
+                    )
+                } catch (error: Exception) {
+                    toast(error.message ?: "无法启动项目")
                 }
-                val uri = FileProvider.getUriForFile(this@EditorActivity, "$packageName.fileprovider", packageFile)
-                startActivity(
-                    Intent(this@EditorActivity, top.wsdx233.love2droid.runtime.LoveGameActivity::class.java)
-                        .setData(uri)
-                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),
-                )
-            } catch (error: Exception) {
-                toast(error.message ?: "无法启动项目")
             }
         }
     }
+
 
     private fun applyEditorLanguage(tab: EditorTab) {
         val language = createEditorLanguage(tab.languageScope)
@@ -2415,35 +2648,77 @@ class EditorActivity : AppCompatActivity() {
             val providers = FileProviderRegistry.getInstance()
             providers.addFileProvider(AssetsFileResolver(applicationContext.assets))
             val themes = ThemeRegistry.getInstance()
-            val themePath = "textmate/darcula.json"
-            val themeStream = requireNotNull(providers.tryGetInputStream(themePath)) { "缺少 $themePath" }
-            themes.loadTheme(
-                ThemeModel(
-                    IThemeSource.fromInputStream(themeStream, themePath, null),
-                    "darcula",
-                ).apply { isDark = true },
-            )
+            listOf(
+                "quietlight" to "textmate/quietlight.json",
+                "darcula" to "textmate/darcula.json",
+            ).forEach { (id, path) ->
+                providers.tryGetInputStream(path)?.use { stream ->
+                    themes.loadTheme(
+                        ThemeModel(
+                            IThemeSource.fromInputStream(stream, path, null),
+                            id,
+                        ).apply { isDark = id == "darcula" },
+                    )
+                } ?: error("缺少 $path")
+            }
             GrammarRegistry.getInstance().loadGrammars("textmate/languages.json")
             requireNotNull(GrammarRegistry.getInstance().findGrammar("source.lua")) { "Lua grammar 未注册" }
-            themes.setTheme("darcula")
-            editor.colorScheme = TextMateColorScheme.create(themes)
             textMateReady = true
+            applyEditorTheme()
         }.onFailure { error ->
             textMateReady = false
             toast(getString(R.string.syntax_highlighting_failed, error.message ?: error.javaClass.simpleName))
         }
     }
 
+    private fun applyEditorTheme() {
+        if (!textMateReady) return
+        val themeId = settings.editorThemeMode.resolveEditorThemeId(isSystemEditorThemeDark())
+        if (appliedEditorThemeId == themeId) return
+        runCatching {
+            val themes = ThemeRegistry.getInstance()
+            themes.setTheme(themeId)
+            editor.colorScheme = TextMateColorScheme.create(themes)
+            appliedEditorThemeId = themeId
+            applyEditorSurfaceColors()
+        }.onFailure { error ->
+            toast(getString(R.string.syntax_highlighting_failed, error.message ?: error.javaClass.simpleName))
+        }
+    }
+
+    private fun isSystemEditorThemeDark(): Boolean =
+        (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+
     private fun toast(message: String) {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
 
-    override fun onPause() {
-        saveAllBlocking()
-        persistWorkspace()
-        super.onPause()
+    private fun saveAllOnPause() {
+        captureEditorState()
+        editorSession.tabs.filterIsInstance<EditorTab>().forEach { tab ->
+            val observed = externalSnapshot(tab)
+            if (observed != null) {
+                tab.lastObservedExternalSnapshot = observed
+            } else if (tab.dirty) {
+                saveTabBlocking(tab)
+            }
+        }
     }
 
+    private fun refreshOpenEditorFiles() {
+        editorSession.tabs.filterIsInstance<EditorTab>().toList().forEach { tab ->
+            val observed = externalSnapshot(tab) ?: return@forEach
+            if (tab.dirty) {
+                if (tab.lastObservedExternalSnapshot != observed && tab === editorSession.activeEditorTab) {
+                    tab.lastObservedExternalSnapshot = observed
+                    handleExternalChange(tab, observed, onContinue = {})
+                }
+            } else {
+                tab.lastObservedExternalSnapshot = observed
+                handleExternalChange(tab, observed, onContinue = {})
+            }
+        }
+    }
     override fun onDestroy() {
         persistWorkspace()
         directoryRefreshHandler.removeCallbacks(directoryRefreshRunnable)
@@ -2466,6 +2741,8 @@ class EditorActivity : AppCompatActivity() {
             editor.isWordwrap = settings.editorWordWrap
             terminalView.setTextSize(terminalDefaultTextSizePx.toInt())
             terminalView.keepScreenOn = settings.terminalKeepScreenOn
+            applyEditorTheme()
+            refreshOpenEditorFiles()
             refreshFileList()
         }
     }
@@ -2480,7 +2757,6 @@ class EditorActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "EditorActivity"
-        private const val MAX_EDITOR_BYTES = 5L * 1024 * 1024
         private const val DIRECTORY_REFRESH_DEBOUNCE_MS = 250L
         private const val SELECTION_ACTION_BAR_HEIGHT_DP = 56
         private const val SELECTION_BAR_SHOW_DURATION_MS = 160L

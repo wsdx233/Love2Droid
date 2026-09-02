@@ -22,6 +22,9 @@ internal data class WorkspaceTabSnapshot(
     val workingDirectory: String? = null,
     val ompSessionId: String? = null,
     val isOmp: Boolean = false,
+    val lineEnding: String? = null,
+    val diskLength: Long? = null,
+    val diskLastModified: Long? = null,
 )
 
 internal data class WorkspaceSnapshot(
@@ -60,6 +63,9 @@ internal object WorkspaceStore {
                                 selectionEnd = tab.optInt("selectionEnd", 0).coerceAtLeast(0),
                                 scrollX = tab.optInt("scrollX", 0).coerceAtLeast(0),
                                 scrollY = tab.optInt("scrollY", 0).coerceAtLeast(0),
+                                lineEnding = tab.optionalString("lineEnding"),
+                                diskLength = tab.optionalLong("diskLength"),
+                                diskLastModified = tab.optionalLong("diskLastModified"),
                             ),
                         )
                         "terminal" -> add(
@@ -103,6 +109,9 @@ internal object WorkspaceStore {
                     tab.put("selectionEnd", state.selectionEnd.coerceAtLeast(0))
                     tab.put("scrollX", state.scrollX.coerceAtLeast(0))
                     tab.put("scrollY", state.scrollY.coerceAtLeast(0))
+                    state.lineEnding?.let { tab.put("lineEnding", it) }
+                    state.diskLength?.let { tab.put("diskLength", it) }
+                    state.diskLastModified?.let { tab.put("diskLastModified", it) }
                 }
                 WorkspaceTabType.TERMINAL -> {
                     state.title?.let { tab.put("title", it) }
@@ -125,5 +134,9 @@ internal object WorkspaceStore {
     private fun JSONObject.optionalString(key: String): String? {
         if (!has(key) || isNull(key)) return null
         return optString(key)
+    }
+    private fun JSONObject.optionalLong(key: String): Long? {
+        if (!has(key) || isNull(key)) return null
+        return optLong(key)
     }
 }

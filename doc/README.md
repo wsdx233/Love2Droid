@@ -16,7 +16,7 @@
 
 `plan/` 只存放尚未实现且已经确认要实现的事项，每个主题一个文件：
 
-- [编辑器文件健壮性](plan/editor-file-robustness.md)
 - [项目最近打开时间](plan/project-recency.md)
+- [游戏内置实时触控调试控制台](plan/in-game-debug-console.md)
 
 计划完成或取消后，应从 `plan/` 移除，并同步更新 [status.md](status.md) 及受影响的稳定主题文档。

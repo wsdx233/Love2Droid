@@ -75,6 +75,18 @@
       "name": "shell",
       "scopeName": "source.shell",
       "languageConfiguration": "textmate/shell/language-configuration.json"
+    },
+    {
+      "grammar": "textmate/toml/syntaxes/toml.tmLanguage.json",
+      "name": "toml",
+      "scopeName": "source.toml",
+      "languageConfiguration": "textmate/toml/language-configuration.json"
+    },
+    {
+      "grammar": "textmate/glsl/syntaxes/glsl.tmLanguage.json",
+      "name": "glsl",
+      "scopeName": "source.glsl",
+      "languageConfiguration": "textmate/glsl/language-configuration.json"
     }
   ]
 }
