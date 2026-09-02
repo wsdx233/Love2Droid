@@ -18,6 +18,9 @@ hs_err_pid*
 # Local reference repositories
 /ref/
 
+# Local QEMU/PRoot debug environment
+/.proot-debug/
+
 # Signing material
 *.jks
 *.keystore
