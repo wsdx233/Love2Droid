@@ -44,7 +44,7 @@ Love2Droid 是单 `app` 模块 Android 应用，包名为 `top.wsdx233.love2droi
 - 文件保存继续使用 `StorageUtils.writeTextAtomic`；不要直接覆盖源文件。
 - Play 前必须保存可落盘标签、拒绝未保存的未命名文档、校验 `main.lua`，再由 `LovePackageBuilder` 生成 `.love` 快照。
 - Sora 语言扩展名映射只维护在 `LanguageResolver`；TextMate grammar 只通过 `assets/textmate/languages.json` 注册。缺失 grammar 必须退化到纯文本并给出可理解错误，不能阻塞打开文件。
-- UI 继续使用 Material 矢量图标和字符串资源；不要引入 `android.R.drawable` 旧图标，也不要在业务代码中新增可本地化的硬编码界面文本。
+- UI 继续使用 Material 矢量图标和字符串资源；不要引入 `android.R.drawable` 旧图标，也不要在业务代码中新增可本地化的硬编码界面文本。新增或替换图标必须通过 `npx add-material-symbols` 获取，默认使用 Rounded、未填充、weight 400；命令与清理要求见 [`doc/reference.md`](doc/reference.md#material-symbols)。
 - Drawer 文件操作、多选、标签切换和保存不得在主线程执行递归目录 I/O 或大型文件读取。
 - 不提交构建产物、Gradle/IDE 缓存、native 中间文件、heap dump、签名文件或 `ref/` 参考仓库。
 

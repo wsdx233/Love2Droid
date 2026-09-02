@@ -55,7 +55,7 @@
             android:exported="false"
             android:launchMode="standard"
             android:process=":game"
-            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+            android:theme="@style/Theme.Love2Droid.Game"
             tools:replace="android:exported,android:launchMode,android:theme">
             <intent-filter tools:node="removeAll" />
         </activity>

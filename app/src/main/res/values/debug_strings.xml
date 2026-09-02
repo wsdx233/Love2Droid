@@ -13,6 +13,7 @@
     <string name="debug_tab_watch">监视</string>
     <string name="debug_tab_breakpoints">断点</string>
     <string name="debug_log_search">搜索日志</string>
+    <string name="debug_log_filter">筛选日志</string>
     <string name="debug_clear_logs">清空日志</string>
     <string name="debug_filter_all">全部</string>
     <string name="debug_filter_info">信息</string>
@@ -41,4 +42,6 @@
     <string name="debug_repl_hint">输入 Lua 代码</string>
     <string name="debug_lock_logs">锁定日志滚动</string>
     <string name="debug_unlock_logs">解除日志滚动锁定</string>
+    <string name="debug_expand_repl">展开代码输入框</string>
+    <string name="debug_collapse_repl">收起代码输入框</string>
 </resources>

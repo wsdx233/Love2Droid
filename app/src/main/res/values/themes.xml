@@ -1,0 +1,19 @@
+<resources>
+    <style name="Theme.Love2Droid.Game" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowDisablePreview">true</item>
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:navigationBarColor">@android:color/black</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="colorPrimary">#6750A4</item>
+        <item name="colorPrimaryContainer">#EDE6FF</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorSurface">#FFFFFF</item>
+        <item name="colorOnSurface">#201D24</item>
+        <item name="colorOutline">#79747E</item>
+        <item name="android:colorAccent">#6750A4</item>
+    </style>
+</resources>

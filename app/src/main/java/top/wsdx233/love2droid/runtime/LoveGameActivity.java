@@ -7,6 +7,7 @@ import android.os.Bundle;
 import android.view.WindowManager;
 
 import java.util.ArrayList;
+import top.wsdx233.love2droid.R;
 
 /**
  * Product entry point for the upstream LÖVE Android runtime.
@@ -40,6 +41,7 @@ public class LoveGameActivity extends org.love2d.android.GameActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        setTheme(R.style.Theme_Love2Droid_Game);
         Intent intent = getIntent();
         Uri gameUri = intent == null ? null : intent.getData();
         ArrayList<String> breakpointFiles = intent == null

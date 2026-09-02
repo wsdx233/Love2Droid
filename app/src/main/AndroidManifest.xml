@@ -32,7 +32,7 @@
         <activity
             android:name="top.wsdx233.love2droid.runtime.LoveGameActivity"
             android:exported="true"
-            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+            android:theme="@style/Theme.Love2Droid.Game"
             android:windowSoftInputMode="adjustPan"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation"
             android:launchMode="singleInstance"

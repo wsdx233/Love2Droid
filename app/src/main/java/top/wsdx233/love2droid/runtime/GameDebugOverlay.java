@@ -1,11 +1,13 @@
 package top.wsdx233.love2droid.runtime;
 
+import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.PorterDuff;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.RippleDrawable;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
@@ -32,6 +34,13 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.core.content.ContextCompat;
+import com.google.android.material.button.MaterialButton;
+import com.google.android.material.card.MaterialCardView;
+import com.google.android.material.chip.Chip;
+import com.google.android.material.chip.ChipGroup;
+import com.google.android.material.navigation.NavigationBarView;
+import com.google.android.material.navigationrail.NavigationRailView;
+import com.google.android.material.tabs.TabLayout;
 
 import org.eclipse.tm4e.core.registry.IThemeSource;
 
@@ -58,6 +67,12 @@ import top.wsdx233.love2droid.R;
 final class GameDebugOverlay extends FrameLayout {
     private static final int BUBBLE_SIZE_DP = 56;
     private static final int EDGE_MARGIN_DP = 16;
+    private static final int TAB_CONSOLE_ID = 0x4c324401;
+    private static final int TAB_WATCH_ID = 0x4c324402;
+    private static final int TAB_BREAKPOINTS_ID = 0x4c324403;
+    private static final int LOG_TOOL_NONE = 0;
+    private static final int LOG_TOOL_SEARCH = 1;
+    private static final int LOG_TOOL_FILTER = 2;
     private static final int DRAG_THRESHOLD_DP = 8;
     private static final int PANEL_MAX_WIDTH_DP = 520;
     private static final int PANEL_MIN_WIDTH_DP = 360;
@@ -79,16 +94,27 @@ final class GameDebugOverlay extends FrameLayout {
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final ExecutorService nativeExecutor = Executors.newSingleThreadExecutor();
     private final AtomicBoolean refreshInFlight = new AtomicBoolean(false);
-    private final List<TextView> tabButtons = new ArrayList<>();
     private final List<WatchEntry> watches = new ArrayList<>();
 
     private final Map<Integer, String> watchValues = new HashMap<>();
+    private ImageButton fullscreenButton;
 
     private FrameLayout scrim;
     private LinearLayout panel;
+    private LinearLayout panelHeader;
+    private LinearLayout panelBody;
     private ImageButton pauseResumeButton;
     private LinearLayout hud;
     private FrameLayout content;
+    private TabLayout tabLayout;
+    private NavigationRailView navigationRail;
+    private LinearLayout logToolPanel;
+    private View logSearchPanel;
+    private View logFilterPanel;
+    private ImageButton logSearchToggle;
+    private ImageButton logFilterToggle;
+    private ImageButton logFollowButton;
+    private ImageButton replExpandButton;
     private TextView logsText;
     private TextView stackText;
     private TextView sourceLocation;
@@ -101,6 +127,9 @@ final class GameDebugOverlay extends FrameLayout {
     private boolean logsAutoFollow = true;
     private int activeTab;
     private String currentFilter = "all";
+    private boolean syncingTabSelection;
+    private boolean replExpanded;
+    private int visibleLogTool;
     private String latestLogs = "";
     private String latestState = "";
     private String loadedSource = "";
@@ -130,7 +159,9 @@ final class GameDebugOverlay extends FrameLayout {
         bubble = new ImageButton(activity);
         bubble.setImageDrawable(ContextCompat.getDrawable(activity, R.drawable.ic_terminal));
         bubble.setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN);
-        bubble.setBackground(roundDrawable(Color.argb(220, 0, 0, 0), dp(18), Color.argb(80, 255, 255, 255), dp(1)));
+        bubble.setBackground(rippleBackground(
+            roundDrawable(Color.argb(220, 0, 0, 0), dp(18), Color.argb(80, 255, 255, 255), dp(1)),
+            dp(18), Color.argb(80, 255, 255, 255)));
         bubble.setElevation(dp(8));
         bubble.setPadding(dp(14), dp(14), dp(14), dp(14));
         bubble.setContentDescription(activity.getString(R.string.debug_open_menu));
@@ -156,13 +187,16 @@ final class GameDebugOverlay extends FrameLayout {
     protected void onSizeChanged(int width, int height, int oldWidth, int oldHeight) {
         super.onSizeChanged(width, height, oldWidth, oldHeight);
         int orientation = getResources().getConfiguration().orientation;
-        if (orientation != lastOrientation && oldWidth > 0 && oldHeight > 0) {
+        boolean orientationChanged = orientation != lastOrientation;
+        if (orientationChanged && oldWidth > 0 && oldHeight > 0) {
             int bubbleWidth = bubble.getWidth() > 0 ? bubble.getWidth() : dp(BUBBLE_SIZE_DP);
             int bubbleHeight = bubble.getHeight() > 0 ? bubble.getHeight() : dp(BUBBLE_SIZE_DP);
             float y = GameDebugBubblePosition.mapVerticalPosition(
                 bubble.getY(), oldHeight, height, bubbleHeight);
             moveBubble(GameDebugBubblePosition.dockedRightX(
                 width, bubbleWidth, dp(EDGE_MARGIN_DP)), y);
+            if (panel != null)
+                configurePanelStructure(panel, orientation == Configuration.ORIENTATION_LANDSCAPE);
         } else {
             constrainBubbleToWindow();
         }
@@ -189,8 +223,10 @@ final class GameDebugOverlay extends FrameLayout {
 
 
     private boolean onBubbleTouch(View view, MotionEvent event) {
+        view.getBackground().setHotspot(event.getX(), event.getY());
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
+                view.setPressed(true);
                 downRawX = event.getRawX();
                 downRawY = event.getRawY();
                 downX = bubble.getX();
@@ -202,16 +238,20 @@ final class GameDebugOverlay extends FrameLayout {
                 float dy = event.getRawY() - downRawY;
                 if (!moved && Math.hypot(dx, dy) >= dp(DRAG_THRESHOLD_DP))
                     moved = true;
-                if (moved)
+                if (moved) {
+                    view.setPressed(false);
                     moveBubble(downX + dx, downY + dy);
+                }
                 return true;
             case MotionEvent.ACTION_UP:
+                view.setPressed(false);
                 if (!moved)
                     showPanel();
                 else
                     moveBubble(bubble.getX(), bubble.getY());
                 return true;
             case MotionEvent.ACTION_CANCEL:
+                view.setPressed(false);
                 return true;
             default:
                 return false;
@@ -239,26 +279,33 @@ final class GameDebugOverlay extends FrameLayout {
         }
         panelOpen = true;
         panelExpanded = false;
+        updateFullscreenButton();
         if (scrim == null) {
             scrim = new FrameLayout(activity);
             scrim.setBackgroundColor(Color.argb(138, 0, 0, 0));
             scrim.setClickable(true);
             scrim.setOnClickListener(view -> hidePanel());
+            scrim.setAlpha(0f);
             addView(scrim, new FrameLayout.LayoutParams(MATCH, MATCH));
             panel = buildPanel();
+            panel.setVisibility(INVISIBLE);
             addView(panel, panelLayoutParams());
         }
+
+        panel.animate().cancel();
+        scrim.animate().cancel();
+        updatePanelLayout(false);
+        FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) panel.getLayoutParams();
+        boolean landscape = isLandscape();
+        panel.setTranslationX(landscape ? -params.width - dp(24) : 0);
+        panel.setTranslationY(landscape ? 0 : params.height + dp(24));
+        scrim.setAlpha(0f);
         bubble.setVisibility(INVISIBLE);
         scrim.setVisibility(VISIBLE);
         panel.setVisibility(VISIBLE);
-        updatePanelLayout(false);
-        panel.post(() -> {
-            boolean landscape = isLandscape();
-            panel.setTranslationX(landscape ? -panel.getWidth() - dp(24) : 0);
-            panel.setTranslationY(landscape ? 0 : panel.getHeight() + dp(24));
-            panel.animate().translationX(0).translationY(0)
-                .setDuration(280L).start();
-        });
+        scrim.animate().alpha(1f).setDuration(180L).start();
+        panel.animate().translationX(0).translationY(0)
+            .setDuration(280L).start();
         showTab(activeTab);
         beginNativeRefresh();
     }
@@ -268,13 +315,16 @@ final class GameDebugOverlay extends FrameLayout {
             return;
         panelOpen = false;
         boolean landscape = isLandscape();
+        panel.animate().cancel();
+        scrim.animate().cancel();
+        scrim.animate().alpha(0f).setDuration(180L).start();
         panel.animate()
             .translationX(landscape ? -panel.getWidth() - dp(24) : 0)
             .translationY(landscape ? 0 : panel.getHeight() + dp(24))
             .setDuration(220L)
             .withEndAction(() -> {
-                panel.setVisibility(GONE);
-                scrim.setVisibility(GONE);
+                panel.setVisibility(INVISIBLE);
+                scrim.setVisibility(INVISIBLE);
                 bubble.setVisibility(VISIBLE);
             }).start();
         activity.getWindow().getDecorView().clearFocus();
@@ -292,7 +342,6 @@ final class GameDebugOverlay extends FrameLayout {
 
     private LinearLayout buildPanel() {
         LinearLayout root = new LinearLayout(activity);
-        root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(0, 0, 0, 0);
         root.setBackground(panelBackground(isLandscape()));
         root.setElevation(dp(12));
@@ -300,18 +349,36 @@ final class GameDebugOverlay extends FrameLayout {
         root.setFocusable(true);
         root.setOnClickListener(view -> { });
 
+        panelHeader = buildPanelHeader();
+        tabLayout = buildTabLayout();
+        navigationRail = buildNavigationRail();
+        panelBody = new LinearLayout(activity);
+        panelBody.setOrientation(LinearLayout.VERTICAL);
+        panelBody.setBackgroundColor(COLOR_SURFACE);
+
+        content = new FrameLayout(activity);
+        content.setBackgroundColor(COLOR_SURFACE);
+        content.addView(buildLogsPage(), fillParams());
+        content.addView(buildWatchPage(), fillParams());
+        content.addView(buildBreakpointPage(), fillParams());
+        configurePanelStructure(root, isLandscape());
+        showTab(activeTab);
+        return root;
+    }
+
+    private LinearLayout buildPanelHeader() {
         LinearLayout header = new LinearLayout(activity);
         header.setOrientation(LinearLayout.VERTICAL);
-        header.setPadding(dp(20), dp(12), dp(12), 0);
+        header.setPadding(dp(20), dp(10), dp(12), 0);
         header.setBackgroundColor(COLOR_SURFACE);
-        if (!isLandscape()) {
-            View handle = new View(activity);
-            handle.setBackground(roundDrawable(Color.rgb(120, 116, 126), dp(3), Color.TRANSPARENT, 0));
-            LinearLayout.LayoutParams handleParams = new LinearLayout.LayoutParams(dp(32), dp(4));
-            handleParams.gravity = Gravity.CENTER_HORIZONTAL;
-            handleParams.bottomMargin = dp(10);
-            header.addView(handle, handleParams);
-        }
+
+        View handle = new View(activity);
+        handle.setTag("debug_panel_handle");
+        handle.setBackground(roundDrawable(Color.rgb(120, 116, 126), dp(3), Color.TRANSPARENT, 0));
+        LinearLayout.LayoutParams handleParams = new LinearLayout.LayoutParams(dp(32), dp(4));
+        handleParams.gravity = Gravity.CENTER_HORIZONTAL;
+        handleParams.bottomMargin = dp(8);
+        header.addView(handle, handleParams);
 
         LinearLayout titleRow = new LinearLayout(activity);
         titleRow.setGravity(Gravity.CENTER_VERTICAL);
@@ -325,114 +392,246 @@ final class GameDebugOverlay extends FrameLayout {
                 activity.nativePauseDebug();
         });
         titleRow.addView(pauseResumeButton, iconParams());
-        ImageButton fullscreen = iconButton(R.drawable.ic_fullscreen, R.string.debug_fullscreen);
-        fullscreen.setOnClickListener(view -> {
+        fullscreenButton = iconButton(R.drawable.ic_open_in_full, R.string.debug_fullscreen);
+        fullscreenButton.setOnClickListener(view -> {
             panelExpanded = !panelExpanded;
-            fullscreen.setImageResource(panelExpanded ? R.drawable.ic_fullscreen_exit : R.drawable.ic_fullscreen);
-            fullscreen.setContentDescription(s(panelExpanded ? R.string.debug_exit_fullscreen : R.string.debug_fullscreen));
+            updateFullscreenButton();
             updatePanelLayout(true);
         });
-        titleRow.addView(fullscreen, iconParams());
+        titleRow.addView(fullscreenButton, iconParams());
         ImageButton exit = iconButton(R.drawable.ic_exit, R.string.debug_exit_game);
         exit.setOnClickListener(view -> activity.finish());
         titleRow.addView(exit, iconParams());
         ImageButton close = iconButton(R.drawable.ic_close, R.string.debug_close);
         close.setOnClickListener(view -> hidePanel());
         titleRow.addView(close, iconParams());
-        header.addView(titleRow, new LinearLayout.LayoutParams(MATCH, dp(64)));
+        header.addView(titleRow, new LinearLayout.LayoutParams(MATCH, dp(60)));
+        return header;
+    }
 
-        LinearLayout tabs = new LinearLayout(activity);
-        tabs.setGravity(Gravity.CENTER_VERTICAL);
-        tabs.setPadding(0, dp(4), 0, dp(4));
-        addTab(tabs, R.drawable.ic_terminal, R.string.debug_tab_console, 0);
-        addTab(tabs, R.drawable.ic_visibility, R.string.debug_tab_watch, 1);
-        addTab(tabs, R.drawable.ic_breakpoint, R.string.debug_tab_breakpoints, 2);
-        header.addView(tabs, new LinearLayout.LayoutParams(MATCH, dp(64)));
-        root.addView(header, new LinearLayout.LayoutParams(MATCH, ViewGroup.LayoutParams.WRAP_CONTENT));
+    private TabLayout buildTabLayout() {
+        TabLayout tabs = new TabLayout(activity);
+        tabs.setBackgroundColor(COLOR_SURFACE);
+        tabs.setTabMode(TabLayout.MODE_FIXED);
+        tabs.setTabGravity(TabLayout.GRAVITY_FILL);
+        tabs.setSelectedTabIndicatorColor(COLOR_PRIMARY);
+        tabs.setTabIconTint(tabIconColors());
+        tabs.setTabRippleColor(ColorStateList.valueOf(Color.argb(28, 103, 80, 164)));
+        tabs.addTab(tabs.newTab().setIcon(R.drawable.ic_terminal).setContentDescription(R.string.debug_tab_console));
+        tabs.addTab(tabs.newTab().setIcon(R.drawable.ic_visibility).setContentDescription(R.string.debug_tab_watch));
+        tabs.addTab(tabs.newTab().setIcon(R.drawable.ic_breakpoint).setContentDescription(R.string.debug_tab_breakpoints));
+        tabs.addOnTabSelectedListener(new TabLayout.OnTabSelectedListener() {
+            @Override public void onTabSelected(TabLayout.Tab tab) {
+                if (!syncingTabSelection)
+                    showTab(tab.getPosition());
+            }
+            @Override public void onTabUnselected(TabLayout.Tab tab) { }
+            @Override public void onTabReselected(TabLayout.Tab tab) { }
+        });
+        return tabs;
+    }
 
-        content = new FrameLayout(activity);
-        content.setBackgroundColor(COLOR_SURFACE);
-        content.addView(buildLogsPage(), fillParams());
-        content.addView(buildWatchPage(), fillParams());
-        content.addView(buildBreakpointPage(), fillParams());
-        root.addView(content, verticalWeightParams());
-        return root;
+    private NavigationRailView buildNavigationRail() {
+        NavigationRailView rail = new NavigationRailView(activity);
+        rail.setBackgroundColor(COLOR_SURFACE);
+        rail.setLabelVisibilityMode(NavigationBarView.LABEL_VISIBILITY_UNLABELED);
+        rail.setItemIconTintList(navigationIconColors());
+        rail.setItemRippleColor(ColorStateList.valueOf(Color.argb(28, 103, 80, 164)));
+        rail.setItemActiveIndicatorColor(ColorStateList.valueOf(COLOR_PRIMARY_CONTAINER));
+        rail.setItemActiveIndicatorEnabled(true);
+        rail.setMenuGravity(Gravity.TOP);
+        rail.setPadding(0, dp(12), 0, 0);
+        rail.getMenu().add(0, TAB_CONSOLE_ID, 0, R.string.debug_tab_console).setIcon(R.drawable.ic_terminal);
+        rail.getMenu().add(0, TAB_WATCH_ID, 1, R.string.debug_tab_watch).setIcon(R.drawable.ic_visibility);
+        rail.getMenu().add(0, TAB_BREAKPOINTS_ID, 2, R.string.debug_tab_breakpoints).setIcon(R.drawable.ic_breakpoint);
+        rail.setOnItemSelectedListener(item -> {
+            if (!syncingTabSelection)
+                showTab(tabIndexForId(item.getItemId()));
+            return true;
+        });
+        return rail;
+    }
+
+    private void configurePanelStructure(LinearLayout root, boolean landscape) {
+        root.removeAllViews();
+        panelBody.removeAllViews();
+        View handle = panelHeader.findViewWithTag("debug_panel_handle");
+        if (handle != null)
+            handle.setVisibility(landscape ? GONE : VISIBLE);
+        if (landscape) {
+            root.setOrientation(LinearLayout.HORIZONTAL);
+            panelBody.addView(panelHeader, new LinearLayout.LayoutParams(MATCH, WRAP));
+            panelBody.addView(content, verticalWeightParams());
+            root.addView(navigationRail, new LinearLayout.LayoutParams(dp(76), MATCH));
+            root.addView(panelBody, new LinearLayout.LayoutParams(0, MATCH, 1));
+        } else {
+            root.setOrientation(LinearLayout.VERTICAL);
+            root.addView(panelHeader, new LinearLayout.LayoutParams(MATCH, WRAP));
+            root.addView(tabLayout, new LinearLayout.LayoutParams(MATCH, dp(56)));
+            root.addView(content, verticalWeightParams());
+        }
+    }
+
+    private void updateFullscreenButton() {
+        if (fullscreenButton == null)
+            return;
+        fullscreenButton.setImageResource(panelExpanded ? R.drawable.ic_close_fullscreen : R.drawable.ic_open_in_full);
+        fullscreenButton.setContentDescription(s(panelExpanded ? R.string.debug_exit_fullscreen : R.string.debug_fullscreen));
     }
 
     private View buildLogsPage() {
         LinearLayout page = page();
+        logsScroll = new ScrollView(activity);
+        logsScroll.setFillViewport(false);
+        logsText = text("", 13, COLOR_INK, Typeface.MONOSPACE);
+        logsText.setGravity(Gravity.TOP | Gravity.START);
+        logsText.setTextIsSelectable(true);
+        logsText.setMovementMethod(ScrollingMovementMethod.getInstance());
+        logsText.setPadding(dp(16), dp(8), dp(16), dp(12));
+        logsScroll.addView(logsText, new ScrollView.LayoutParams(MATCH, WRAP));
+        page.addView(logsScroll, verticalWeightParams());
+
+        LinearLayout.LayoutParams consoleParams = new LinearLayout.LayoutParams(MATCH, WRAP);
+        consoleParams.setMargins(dp(12), dp(4), dp(12), dp(12));
+        page.addView(buildConsoleControls(), consoleParams);
+        return page;
+    }
+
+    private View buildConsoleControls() {
+        MaterialCardView card = new MaterialCardView(activity);
+        card.setCardBackgroundColor(Color.WHITE);
+        card.setRadius(dp(26));
+        card.setStrokeColor(Color.rgb(202, 196, 208));
+        card.setStrokeWidth(dp(1));
+        card.setCardElevation(0);
+
+        LinearLayout controls = new LinearLayout(activity);
+        controls.setOrientation(LinearLayout.VERTICAL);
+        controls.setPadding(dp(6), dp(6), dp(6), dp(6));
+
+        logToolPanel = new LinearLayout(activity);
+        logToolPanel.setOrientation(LinearLayout.VERTICAL);
+        logToolPanel.setVisibility(GONE);
+
         LinearLayout searchRow = new LinearLayout(activity);
         searchRow.setGravity(Gravity.CENTER_VERTICAL);
-        searchRow.setPadding(dp(16), dp(8), dp(12), dp(2));
+        searchRow.setPadding(dp(6), dp(4), dp(6), dp(4));
         logSearch = edit(s(R.string.debug_log_search), false);
-        searchRow.addView(logSearch, weightParams(0, 1));
+        searchRow.addView(logSearch, new LinearLayout.LayoutParams(MATCH, dp(52)));
+        logSearchPanel = searchRow;
+        logToolPanel.addView(searchRow, new LinearLayout.LayoutParams(MATCH, dp(60)));
+
+        HorizontalScrollView filterScroll = new HorizontalScrollView(activity);
+        filterScroll.setHorizontalScrollBarEnabled(false);
+        ChipGroup filterGroup = new ChipGroup(activity);
+        filterGroup.setSingleLine(true);
+        filterGroup.setSingleSelection(true);
+        filterGroup.setSelectionRequired(true);
+        filterGroup.setPadding(dp(6), dp(2), dp(6), dp(2));
+        addFilter(filterGroup, R.string.debug_filter_all, "all");
+        addFilter(filterGroup, R.string.debug_filter_info, "info");
+        addFilter(filterGroup, R.string.debug_filter_warn, "warn");
+        addFilter(filterGroup, R.string.debug_filter_error, "error");
+        filterScroll.addView(filterGroup, new HorizontalScrollView.LayoutParams(WRAP, MATCH));
+        logFilterPanel = filterScroll;
+        logToolPanel.addView(filterScroll, new LinearLayout.LayoutParams(MATCH, dp(56)));
+        controls.addView(logToolPanel, new LinearLayout.LayoutParams(MATCH, WRAP));
+
+        FrameLayout inputFrame = new FrameLayout(activity);
+        replInput = edit(s(R.string.debug_repl_hint), true);
+        replInput.setOnFocusChangeListener(null);
+        replInput.setBackgroundColor(Color.TRANSPARENT);
+        replInput.setGravity(Gravity.TOP | Gravity.START);
+        replInput.setTypeface(Typeface.MONOSPACE);
+        replInput.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        replInput.setPadding(dp(14), dp(12), dp(58), dp(10));
+        inputFrame.addView(replInput, new FrameLayout.LayoutParams(MATCH, dp(92)));
+        replExpandButton = iconButton(R.drawable.ic_expand_content, R.string.debug_expand_repl);
+        replExpandButton.setOnClickListener(view -> toggleReplExpanded());
+        FrameLayout.LayoutParams expandParams = new FrameLayout.LayoutParams(dp(48), dp(48), Gravity.TOP | Gravity.END);
+        expandParams.setMargins(0, dp(2), dp(2), 0);
+        inputFrame.addView(replExpandButton, expandParams);
+        controls.addView(inputFrame, new LinearLayout.LayoutParams(MATCH, WRAP));
+
+        LinearLayout toolbar = new LinearLayout(activity);
+        toolbar.setGravity(Gravity.CENTER_VERTICAL);
+        toolbar.setPadding(dp(2), 0, dp(2), dp(2));
+        logSearchToggle = iconButton(R.drawable.ic_search, R.string.debug_log_search);
+        logSearchToggle.setOnClickListener(view -> toggleLogTool(LOG_TOOL_SEARCH));
+        toolbar.addView(logSearchToggle, iconParams());
+        logFilterToggle = iconButton(R.drawable.ic_filter_alt, R.string.debug_log_filter);
+        logFilterToggle.setOnClickListener(view -> toggleLogTool(LOG_TOOL_FILTER));
+        toolbar.addView(logFilterToggle, iconParams());
         ImageButton clear = iconButton(R.drawable.ic_delete, R.string.debug_clear_logs);
         clear.setOnClickListener(view -> {
             activity.nativeClearDebugLogs();
             latestLogs = "";
             renderLogs();
         });
-        searchRow.addView(clear, iconParams());
-        ImageButton follow = iconButton(R.drawable.ic_lock, R.string.debug_lock_logs);
-        follow.setOnClickListener(view -> {
+        toolbar.addView(clear, iconParams());
+        logFollowButton = iconButton(R.drawable.ic_lock_open, R.string.debug_lock_logs);
+        logFollowButton.setOnClickListener(view -> {
             logsAutoFollow = !logsAutoFollow;
-            follow.setImageResource(logsAutoFollow ? R.drawable.ic_lock : R.drawable.ic_lock_open);
-            follow.setContentDescription(s(logsAutoFollow ? R.string.debug_lock_logs : R.string.debug_unlock_logs));
+            updateLogFollowButton();
         });
-        searchRow.addView(follow, iconParams());
-        page.addView(searchRow, new LinearLayout.LayoutParams(MATCH, dp(68)));
-
-        HorizontalScrollView filters = new HorizontalScrollView(activity);
-        filters.setHorizontalScrollBarEnabled(false);
-        LinearLayout filterRow = new LinearLayout(activity);
-        filterRow.setPadding(dp(16), 0, dp(16), dp(2));
-        addFilter(filterRow, R.string.debug_filter_all, "all");
-        addFilter(filterRow, R.string.debug_filter_info, "info");
-        addFilter(filterRow, R.string.debug_filter_warn, "warn");
-        addFilter(filterRow, R.string.debug_filter_error, "error");
-        filters.addView(filterRow, new HorizontalScrollView.LayoutParams(WRAP, MATCH));
-        page.addView(filters, new LinearLayout.LayoutParams(MATCH, dp(52)));
-
-        logsScroll = new ScrollView(activity);
-        logsScroll.setFillViewport(true);
-        logsText = text("", 13, COLOR_INK, Typeface.MONOSPACE);
-        logsText.setTextIsSelectable(true);
-        logsText.setMovementMethod(ScrollingMovementMethod.getInstance());
-        logsText.setPadding(dp(16), dp(8), dp(16), dp(16));
-        logsScroll.addView(logsText, new ScrollView.LayoutParams(MATCH, WRAP));
-        page.addView(logsScroll, verticalWeightParams());
-        page.addView(buildConsoleControls(), new LinearLayout.LayoutParams(MATCH, WRAP));
-        logSearch.addTextChangedListener(simpleWatcher(this::renderLogs));
-        return page;
-    }
-
-    private View buildConsoleControls() {
-        LinearLayout controls = new LinearLayout(activity);
-        controls.setOrientation(LinearLayout.VERTICAL);
-        controls.setPadding(0, dp(2), 0, dp(8));
-
-        LinearLayout runRow = new LinearLayout(activity);
-        runRow.setGravity(Gravity.CENTER_VERTICAL);
-        runRow.setPadding(dp(16), dp(6), dp(12), 0);
-        replInput = edit(s(R.string.debug_repl_hint), true);
-        replInput.setGravity(Gravity.TOP | Gravity.START);
-        replInput.setTypeface(Typeface.MONOSPACE);
-        replInput.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-        replInput.setMinHeight(dp(84));
-        replInput.setPadding(dp(14), dp(10), dp(14), dp(10));
-        runRow.addView(replInput, weightParams(0, 1));
-        ImageButton run = iconButton(R.drawable.ic_play, R.string.debug_execute);
-        run.setBackground(roundDrawable(COLOR_PRIMARY, dp(18), COLOR_PRIMARY, 0));
+        toolbar.addView(logFollowButton, iconParams());
+        toolbar.addView(new View(activity), new LinearLayout.LayoutParams(0, 1, 1));
+        ImageButton run = iconButton(R.drawable.ic_arrow_upward, R.string.debug_execute);
+        run.setBackground(rippleBackground(
+            roundDrawable(COLOR_PRIMARY, dp(20), COLOR_PRIMARY, 0),
+            dp(20), Color.argb(60, 255, 255, 255)));
         run.setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN);
-        runRow.addView(run, iconParams());
-        controls.addView(runRow, new LinearLayout.LayoutParams(MATCH, dp(102)));
         run.setOnClickListener(view -> submitRepl());
+        toolbar.addView(run, iconParams());
+        controls.addView(toolbar, new LinearLayout.LayoutParams(MATCH, dp(58)));
+        card.addView(controls, new MaterialCardView.LayoutParams(MATCH, WRAP));
+
+        logSearch.addTextChangedListener(simpleWatcher(this::renderLogs));
         replInput.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence text, int start, int count, int after) { }
             @Override public void onTextChanged(CharSequence text, int start, int before, int count) { }
             @Override public void afterTextChanged(Editable editable) { highlightLua(editable); }
         });
-        return controls;
+        updateLogToolVisibility();
+        updateLogFollowButton();
+        return card;
+    }
+
+    private void toggleLogTool(int tool) {
+        visibleLogTool = visibleLogTool == tool ? LOG_TOOL_NONE : tool;
+        updateLogToolVisibility();
+        if (visibleLogTool == LOG_TOOL_SEARCH)
+            logSearch.post(logSearch::requestFocus);
+    }
+
+    private void updateLogToolVisibility() {
+        if (logToolPanel == null)
+            return;
+        logSearchPanel.setVisibility(visibleLogTool == LOG_TOOL_SEARCH ? VISIBLE : GONE);
+        logFilterPanel.setVisibility(visibleLogTool == LOG_TOOL_FILTER ? VISIBLE : GONE);
+        logToolPanel.setVisibility(visibleLogTool == LOG_TOOL_NONE ? GONE : VISIBLE);
+        setIconButtonActive(logSearchToggle, visibleLogTool == LOG_TOOL_SEARCH);
+        setIconButtonActive(logFilterToggle, visibleLogTool == LOG_TOOL_FILTER);
+    }
+
+    private void updateLogFollowButton() {
+        if (logFollowButton == null)
+            return;
+        logFollowButton.setImageResource(logsAutoFollow ? R.drawable.ic_lock_open : R.drawable.ic_lock);
+        logFollowButton.setContentDescription(s(logsAutoFollow ? R.string.debug_lock_logs : R.string.debug_unlock_logs));
+        setIconButtonActive(logFollowButton, !logsAutoFollow);
+    }
+
+    private void toggleReplExpanded() {
+        replExpanded = !replExpanded;
+        int availableHeight = panel == null || panel.getHeight() == 0 ? getHeight() : panel.getHeight();
+        int height = replExpanded
+            ? Math.max(dp(160), Math.min(dp(280), availableHeight / 2))
+            : dp(92);
+        replInput.getLayoutParams().height = height;
+        replInput.requestLayout();
+        replExpandButton.setImageResource(replExpanded ? R.drawable.ic_collapse_content : R.drawable.ic_expand_content);
+        replExpandButton.setContentDescription(s(replExpanded ? R.string.debug_collapse_repl : R.string.debug_expand_repl));
     }
 
     private View buildWatchPage() {
@@ -526,21 +725,6 @@ final class GameDebugOverlay extends FrameLayout {
     }
 
 
-    private void addTab(LinearLayout tabs, int icon, int label, int index) {
-        TextView tab = text(s(label), 12, COLOR_MUTED, Typeface.DEFAULT);
-        Drawable drawable = ContextCompat.getDrawable(activity, icon);
-        if (drawable != null) {
-            drawable.setColorFilter(COLOR_MUTED, PorterDuff.Mode.SRC_IN);
-            tab.setCompoundDrawablesWithIntrinsicBounds(null, drawable, null, null);
-        }
-        tab.setCompoundDrawablePadding(dp(1));
-        tab.setSingleLine(true);
-        tab.setGravity(Gravity.CENTER);
-        tab.setPadding(dp(2), dp(2), dp(2), dp(2));
-        tab.setOnClickListener(view -> showTab(index));
-        tabButtons.add(tab);
-        tabs.addView(tab, weightParams(0, 1));
-    }
 
     private void showTab(int index) {
         activeTab = Math.max(0, Math.min(2, index));
@@ -548,32 +732,60 @@ final class GameDebugOverlay extends FrameLayout {
             for (int i = 0; i < content.getChildCount(); ++i)
                 content.getChildAt(i).setVisibility(i == activeTab ? VISIBLE : GONE);
         }
-        for (int i = 0; i < tabButtons.size(); ++i) {
-            TextView tab = tabButtons.get(i);
-            boolean selected = i == activeTab;
-            int color = selected ? COLOR_PRIMARY : COLOR_MUTED;
-            tab.setTextColor(color);
-            Drawable[] drawables = tab.getCompoundDrawables();
-            if (drawables.length > 1 && drawables[1] != null)
-                drawables[1].setColorFilter(color, PorterDuff.Mode.SRC_IN);
-            tab.setBackground(roundDrawable(selected ? COLOR_PRIMARY_CONTAINER : Color.TRANSPARENT, dp(18), Color.TRANSPARENT, 0));
+        syncingTabSelection = true;
+        if (tabLayout != null && tabLayout.getSelectedTabPosition() != activeTab) {
+            TabLayout.Tab tab = tabLayout.getTabAt(activeTab);
+            if (tab != null)
+                tab.select();
         }
+        int navigationId = tabIdForIndex(activeTab);
+        if (navigationRail != null && navigationRail.getSelectedItemId() != navigationId)
+            navigationRail.setSelectedItemId(navigationId);
+        syncingTabSelection = false;
         beginNativeRefresh();
     }
 
-    private void addFilter(LinearLayout row, int label, String filter) {
-        TextView chip = actionText(s(label), 0, false);
+    private int tabIdForIndex(int index) {
+        if (index == 1) return TAB_WATCH_ID;
+        if (index == 2) return TAB_BREAKPOINTS_ID;
+        return TAB_CONSOLE_ID;
+    }
+
+    private int tabIndexForId(int id) {
+        if (id == TAB_WATCH_ID) return 1;
+        if (id == TAB_BREAKPOINTS_ID) return 2;
+        return 0;
+    }
+
+    private ColorStateList tabIconColors() {
+        return new ColorStateList(
+            new int[][]{new int[]{android.R.attr.state_selected}, new int[]{}},
+            new int[]{COLOR_PRIMARY, COLOR_MUTED});
+    }
+
+    private ColorStateList navigationIconColors() {
+        return new ColorStateList(
+            new int[][]{new int[]{android.R.attr.state_checked}, new int[]{}},
+            new int[]{COLOR_PRIMARY, COLOR_MUTED});
+    }
+
+    private void addFilter(ChipGroup row, int label, String filter) {
+        Chip chip = new Chip(activity);
+        chip.setText(s(label));
+        chip.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        chip.setTextColor(COLOR_INK);
+        chip.setCheckable(true);
+        chip.setCheckedIconVisible(false);
+        chip.setChecked("all".equals(filter));
+        chip.setChipBackgroundColor(new ColorStateList(
+            new int[][]{new int[]{android.R.attr.state_checked}, new int[]{}},
+            new int[]{COLOR_PRIMARY_CONTAINER, Color.TRANSPARENT}));
+        chip.setRippleColor(ColorStateList.valueOf(Color.argb(28, 103, 80, 164)));
         chip.setOnClickListener(view -> {
             currentFilter = filter;
-            for (int i = 0; i < row.getChildCount(); ++i) {
-                View child = row.getChildAt(i);
-                if (child instanceof TextView)
-                    child.setBackground(roundDrawable(child == view ? COLOR_PRIMARY_CONTAINER : Color.TRANSPARENT, dp(18), Color.TRANSPARENT, 0));
-            }
             renderLogs();
         });
-        chip.setBackground(roundDrawable("all".equals(filter) ? COLOR_PRIMARY_CONTAINER : Color.TRANSPARENT, dp(18), Color.TRANSPARENT, 0));
-        row.addView(chip, new LinearLayout.LayoutParams(WRAP, dp(48)));
+        row.addView(chip, new ChipGroup.LayoutParams(WRAP, dp(48)));
     }
 
     private void addControl(LinearLayout row, int icon, int label, Runnable action) {
@@ -899,19 +1111,24 @@ final class GameDebugOverlay extends FrameLayout {
     }
 
     private TextView actionText(String value, int icon, boolean filled) {
-        TextView view = text(value, 14, filled ? Color.WHITE : COLOR_INK, Typeface.DEFAULT);
-        view.setGravity(Gravity.CENTER);
-        view.setCompoundDrawablePadding(dp(8));
+        MaterialButton button = new MaterialButton(activity);
+        button.setText(value);
+        button.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        button.setTextColor(filled ? Color.WHITE : COLOR_INK);
+        button.setAllCaps(false);
+        button.setGravity(Gravity.CENTER);
+        button.setCornerRadius(dp(18));
+        button.setInsetTop(0);
+        button.setInsetBottom(0);
+        button.setBackgroundTintList(ColorStateList.valueOf(filled ? COLOR_PRIMARY : Color.TRANSPARENT));
+        button.setStrokeColor(ColorStateList.valueOf(filled ? COLOR_PRIMARY : Color.rgb(225, 220, 230)));
+        button.setStrokeWidth(filled ? 0 : dp(1));
         if (icon != 0) {
-            Drawable drawable = ContextCompat.getDrawable(activity, icon);
-            if (drawable != null) {
-                drawable.setColorFilter(filled ? Color.WHITE : COLOR_INK, PorterDuff.Mode.SRC_IN);
-                view.setCompoundDrawablesWithIntrinsicBounds(drawable, null, null, null);
-            }
+            button.setIconResource(icon);
+            button.setIconTint(ColorStateList.valueOf(filled ? Color.WHITE : COLOR_INK));
+            button.setIconPadding(dp(8));
         }
-        view.setPadding(dp(14), 0, dp(14), 0);
-        view.setBackground(roundDrawable(filled ? COLOR_PRIMARY : Color.TRANSPARENT, dp(18), filled ? COLOR_PRIMARY : Color.rgb(225, 220, 230), filled ? 0 : dp(1)));
-        return view;
+        return button;
     }
 
 
@@ -921,10 +1138,18 @@ final class GameDebugOverlay extends FrameLayout {
         button.setColorFilter(COLOR_INK, PorterDuff.Mode.SRC_IN);
         button.setContentDescription(s(description));
         button.setPadding(dp(14), dp(14), dp(14), dp(14));
-        TypedValue value = new TypedValue();
-        if (activity.getTheme().resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, value, true))
-            button.setBackgroundResource(value.resourceId);
+        button.setBackground(rippleBackground(
+            roundDrawable(Color.TRANSPARENT, dp(24), Color.TRANSPARENT, 0),
+            dp(24), Color.argb(36, 103, 80, 164)));
         return button;
+    }
+
+    private void setIconButtonActive(ImageButton button, boolean active) {
+        if (button == null)
+            return;
+        button.setBackground(rippleBackground(
+            roundDrawable(active ? COLOR_PRIMARY_CONTAINER : Color.TRANSPARENT, dp(24), Color.TRANSPARENT, 0),
+            dp(24), Color.argb(36, 103, 80, 164)));
     }
 
     private Drawable roundDrawable(int fill, int radius, int stroke, int strokeWidth) {
@@ -933,6 +1158,11 @@ final class GameDebugOverlay extends FrameLayout {
         drawable.setCornerRadius(radius);
         if (strokeWidth > 0) drawable.setStroke(strokeWidth, stroke);
         return drawable;
+    }
+
+    private Drawable rippleBackground(Drawable content, int radius, int rippleColor) {
+        Drawable mask = roundDrawable(Color.WHITE, radius, Color.TRANSPARENT, 0);
+        return new RippleDrawable(ColorStateList.valueOf(rippleColor), content, mask);
     }
 
     private FrameLayout.LayoutParams panelLayoutParams() {
