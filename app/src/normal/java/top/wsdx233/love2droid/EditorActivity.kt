@@ -2460,8 +2460,8 @@ class EditorActivity : AppCompatActivity() {
                 adjustViewBounds = true
                 scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
                 setPadding(dp(3), dp(3), dp(3), dp(3))
-                minimumWidth = 0
-                minimumHeight = 0
+                minimumWidth = dp(48)
+                minimumHeight = dp(48)
                 contentDescription = getString(
                     if (tab is TerminalTab) R.string.close_terminal else R.string.close_file,
                 )
@@ -2496,8 +2496,8 @@ class EditorActivity : AppCompatActivity() {
             adjustViewBounds = true
             scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
             setPadding(dp(3), dp(3), dp(3), dp(3))
-            minimumWidth = 0
-            minimumHeight = 0
+            minimumWidth = dp(48)
+            minimumHeight = dp(48)
             contentDescription = getString(R.string.new_file)
             setOnClickListener { newDocument() }
         }

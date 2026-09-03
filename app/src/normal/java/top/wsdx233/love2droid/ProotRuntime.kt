@@ -17,6 +17,7 @@ object ProotRuntime {
     internal const val BASH_PROMPT_DIRTRIM_ENTRY = "PROMPT_DIRTRIM=1"
     internal const val BASH_PROMPT_PS1_ENTRY = "PS1=\"\$(prompt_get_ps1)\""
     private const val READY_MARKER_NAME = ".setup-complete"
+    private const val RESOLV_CONF_PATH = "etc/resolv.conf"
 
     data class LaunchSpec(
         val command: List<String>,
@@ -59,7 +60,8 @@ object ProotRuntime {
             luaLanguageServer(context).isFile &&
             isOmpReady(context) &&
             isBashPromptReady(context) &&
-            areHostGroupsConfigured(context)
+            areHostGroupsConfigured(context) &&
+            isResolverConfigured(context)
     }
     internal fun hostSupplementaryGroupIds(): Set<Int> {
         val procStatus = runCatching { File("/proc/self/status").readText(Charsets.UTF_8) }
@@ -136,6 +138,7 @@ object ProotRuntime {
         }
         return hasSource && hasDirTrim && hasPrompt
     }
+
 
 
     fun terminalLaunch(context: Context, projectRoot: File?): TerminalLaunchSpec {
@@ -286,6 +289,14 @@ object ProotRuntime {
         )
 
     }
+
+    internal fun resolverConfig(): String =
+        "nameserver 8.8.8.8\nnameserver 8.8.4.4\noptions use-vc timeout:2 attempts:2\n"
+
+    private fun isResolverConfigured(context: Context): Boolean =
+        runCatching {
+            File(rootfsDir(context), RESOLV_CONF_PATH).readText(Charsets.UTF_8) == resolverConfig()
+        }.getOrDefault(false)
 
     private fun resolveGuestShell(context: Context): String {
         val rootfs = rootfsDir(context)

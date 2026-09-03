@@ -364,7 +364,7 @@ configure_rootfs() {
         "$ROOTFS_DIR/dev/shm" \
         "$ROOTFS_DIR/root/.cache" \
         "$ROOTFS_DIR/root/.local/share"
-    printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' >"$ROOTFS_DIR/etc/resolv.conf"
+    printf 'nameserver 8.8.8.8\nnameserver 8.8.4.4\noptions use-vc timeout:2 attempts:2\n' >"$ROOTFS_DIR/etc/resolv.conf"
     printf '127.0.0.1 localhost\n::1 localhost\n' >"$ROOTFS_DIR/etc/hosts"
     configure_guest_groups
     printf 'APT::Sandbox::User "root";\n' >"$ROOTFS_DIR/etc/apt/apt.conf.d/99proot-nosandbox"

@@ -123,6 +123,7 @@ object ProotInstaller {
                     } else {
                         appendLog(appContext.getString(R.string.proot_log_rootfs_reused))
                     }
+                    configureResolver(appContext)
                     configureHostGroups(appContext)
                     repairRootfsPermissions(appContext)
                     if (ProotRuntime.luaLanguageServer(appContext).isFile) {
@@ -395,10 +396,6 @@ object ProotInstaller {
             context.getString(R.string.proot_install_configuring),
         )
         val rootfs = ProotRuntime.rootfsDir(context)
-        replaceTextFile(
-            File(rootfs, "etc/resolv.conf"),
-            "nameserver 1.1.1.1\nnameserver 8.8.8.8\n",
-        )
         replaceTextFile(File(rootfs, "etc/hosts"), "127.0.0.1 localhost\n::1 localhost\n")
         replaceTextFile(
             File(rootfs, "etc/apt/apt.conf.d/99proot-nosandbox"),
@@ -416,6 +413,13 @@ object ProotInstaller {
         runCatching { Os.chmod(File(rootfs, "var/tmp").absolutePath, 511) }
         appendLog(context.getString(R.string.proot_log_configured))
     }
+    private fun configureResolver(context: Context) {
+        replaceTextFile(
+            File(ProotRuntime.rootfsDir(context), "etc/resolv.conf"),
+            ProotRuntime.resolverConfig(),
+        )
+    }
+
     private fun configureHostGroups(context: Context) {
         val groupFile = File(ProotRuntime.rootfsDir(context), "etc/group")
         val existingContent = runCatching { groupFile.readText(Charsets.UTF_8) }.getOrDefault("")
