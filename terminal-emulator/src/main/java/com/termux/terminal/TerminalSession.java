@@ -16,6 +16,7 @@ import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * A terminal session, consisting of a process coupled to a terminal interface.
@@ -68,6 +69,7 @@ public final class TerminalSession extends TerminalOutput {
 
     /** Set by the application for user identification of session, not by terminal. */
     public String mSessionName;
+    private final AtomicBoolean mInputUpdateScheduled = new AtomicBoolean();
 
     final Handler mMainThreadHandler = new MainThreadHandler();
 
@@ -140,7 +142,7 @@ public final class TerminalSession extends TerminalOutput {
                         int read = termIn.read(buffer);
                         if (read == -1) return;
                         if (!mProcessToTerminalIOQueue.write(buffer, 0, read)) return;
-                        if (!mMainThreadHandler.hasMessages(MSG_NEW_INPUT)) {
+                        if (mInputUpdateScheduled.compareAndSet(false, true)) {
                             mMainThreadHandler.sendEmptyMessageDelayed(MSG_NEW_INPUT, OUTPUT_UPDATE_DELAY_MS);
                         }
                     }
@@ -351,8 +353,9 @@ public final class TerminalSession extends TerminalOutput {
         @Override
         public void handleMessage(Message msg) {
             if (msg.what == MSG_NEW_INPUT) {
+                mInputUpdateScheduled.set(false);
                 processPendingOutput();
-                if (mProcessToTerminalIOQueue.hasBytes() && !mMainThreadHandler.hasMessages(MSG_PROCESS_EXITED)) {
+                if (mProcessToTerminalIOQueue.hasBytes() && mInputUpdateScheduled.compareAndSet(false, true)) {
                     mMainThreadHandler.sendEmptyMessageDelayed(MSG_NEW_INPUT, OUTPUT_UPDATE_DELAY_MS);
                 }
                 return;

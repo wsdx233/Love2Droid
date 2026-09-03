@@ -175,7 +175,9 @@ class EditorActivity : AppCompatActivity() {
                 terminalScreenUpdateScheduled = true
                 terminalView.postOnAnimation {
                     terminalScreenUpdateScheduled = false
-                    if (::terminalView.isInitialized) terminalView.onScreenUpdated()
+                    if (::terminalView.isInitialized && terminalView.mTermSession === changedSession) {
+                        terminalView.onScreenUpdated()
+                    }
                 }
             }
         }
