@@ -28,7 +28,7 @@
 - 当前文件浏览目录；
 - 终端标签及其工作目录。
 
-应用下次打开项目时重建终端进程。OMP 命令只在终端子进程 PID 就绪后发送；未启动的恢复标签会在首次选中并创建终端进程时再发送，避免启动输入丢失。从 guest `/root` 启动 OMP 时使用 `--allow-home`，避免 OMP 自动切换到 `/tmp` 后使工作目录匹配失效。OMP 标签优先读取 OMP 为当前 PTY 写入的 terminal breadcrumb；Android/PRoot 无法从 shell PID 读取 PTY 时，会在 OMP 的 breadcrumb 目录中按更新时间和 cwd 遍历匹配，并回退扫描 JSONL 会话文件。新建会话在 JSONL 尚未落盘时也能通过 `fresh` breadcrumb 获取 ID；后续使用 `omp --allow-home -r <id>` 恢复。
+应用下次打开项目时重建终端进程。OMP 标签不再由应用记录或恢复 session ID；每次启动 OMP 都直接执行 `omp --allow-home --continue`，由 OMP 自己选择当前工作目录下第一个可恢复 session（通常为最近 session），没有可恢复 session 时创建新 session。未启动的恢复标签会在首次选中并创建终端进程时再发送命令，避免启动输入丢失。
 
 ## 已确认界面状态
 

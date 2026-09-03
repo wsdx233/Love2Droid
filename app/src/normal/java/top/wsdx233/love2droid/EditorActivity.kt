@@ -14,7 +14,6 @@ import android.os.FileObserver
 import android.os.Handler
 import android.os.Looper
 import android.os.Bundle
-import android.os.SystemClock
 import android.text.InputType
 import android.view.Gravity
 import android.util.TypedValue
@@ -173,7 +172,6 @@ class EditorActivity : AppCompatActivity() {
             if (::terminalView.isInitialized && terminalView.mTermSession === changedSession) {
                 terminalView.onScreenUpdated()
             }
-            observeOmpSession(changedSession)
         }
 
         override fun onTitleChanged(changedSession: TerminalSession) {
@@ -187,7 +185,6 @@ class EditorActivity : AppCompatActivity() {
         }
 
         override fun onSessionFinished(finishedSession: TerminalSession) {
-            observeOmpSession(finishedSession)
             editorSession.tabs.filterIsInstance<TerminalTab>()
                 .firstOrNull { it.session === finishedSession }
                 ?.let { tab ->
@@ -217,19 +214,9 @@ class EditorActivity : AppCompatActivity() {
                 .firstOrNull { it.session === session }
                 ?: return
             if (pid <= 0) return
-            tab.shellPid = pid
-            if (tab.pendingStartupCommand != null && tab.isOmp && tab.ompSessionId == null) {
-                tab.ompStartedAtMillis = System.currentTimeMillis()
-            }
             tab.pendingStartupCommand?.let { command ->
                 tab.pendingStartupCommand = null
                 session.write("$command\n")
-            }
-            if (tab.isOmp && tab.ompSessionId == null) {
-                terminalView.postDelayed(
-                    { observeOmpSession(session) },
-                    OMP_SESSION_DISCOVERY_INTERVAL_MS,
-                )
             }
         }
         override fun getTerminalCursorStyle(): Int = 0
@@ -1057,7 +1044,6 @@ class EditorActivity : AppCompatActivity() {
 
     private fun newTerminal(
         startupCommand: String? = null,
-        ompSessionId: String? = null,
         isOmp: Boolean = false,
     ) {
         if (!ProotRuntime.isEnvironmentReady(this)) {
@@ -1067,7 +1053,6 @@ class EditorActivity : AppCompatActivity() {
         val projectRoot = currentProject?.root?.takeIf { settings.ompUseProjectDirectory }
         createTerminalTab(
             startupCommand = startupCommand,
-            ompSessionId = ompSessionId,
             isOmp = isOmp,
             projectRoot = projectRoot,
             selectAfterCreate = true,
@@ -1076,7 +1061,6 @@ class EditorActivity : AppCompatActivity() {
 
     private fun createTerminalTab(
         startupCommand: String?,
-        ompSessionId: String?,
         isOmp: Boolean,
         projectRoot: File?,
         title: String? = null,
@@ -1099,7 +1083,6 @@ class EditorActivity : AppCompatActivity() {
                 workingDirectory = projectRoot?.let { root ->
                     currentProject?.let { project -> StorageUtils.relativePath(project.root, root) }
                 },
-                ompSessionId = ompSessionId,
                 isOmp = isOmp,
                 pendingStartupCommand = startupCommand,
             ),
@@ -1108,65 +1091,6 @@ class EditorActivity : AppCompatActivity() {
         return index
     }
 
-    private fun observeOmpSession(session: TerminalSession) {
-        val tab = editorSession.tabs.filterIsInstance<TerminalTab>()
-            .firstOrNull { it.session === session }
-            ?: return
-        if (!tab.isOmp || tab.ompSessionId != null) return
-        val now = SystemClock.elapsedRealtime()
-        val elapsed = now - tab.lastOmpSessionDiscoveryAtMillis
-        if (tab.ompSessionDiscoveryInFlight || elapsed < OMP_SESSION_DISCOVERY_INTERVAL_MS) {
-            if (!tab.ompSessionDiscoveryScheduled) {
-                tab.ompSessionDiscoveryScheduled = true
-                terminalView.postDelayed({
-                    tab.ompSessionDiscoveryScheduled = false
-                    observeOmpSession(session)
-                }, (OMP_SESSION_DISCOVERY_INTERVAL_MS - elapsed).coerceAtLeast(1L))
-            }
-            return
-        }
-        tab.lastOmpSessionDiscoveryAtMillis = now
-        tab.ompSessionDiscoveryInFlight = true
-        val workingDirectory = terminalWorkingDirectory(tab)
-        val usedSessionIds = editorSession.tabs
-            .filterIsInstance<TerminalTab>()
-            .mapNotNull { it.ompSessionId }
-            .toSet()
-        lifecycleScope.launch {
-            try {
-                val sessionId = withContext(Dispatchers.IO) {
-                    ProotRuntime.findOmpSessionId(
-                        this@EditorActivity,
-                        workingDirectory,
-                        tab.ompStartedAtMillis,
-                        usedSessionIds,
-                        tab.shellPid,
-                    )
-                }
-                val currentTab = editorSession.tabs.filterIsInstance<TerminalTab>()
-                    .firstOrNull { it.session === session }
-                val claimedByAnotherTab = sessionId != null && editorSession.tabs
-                    .filterIsInstance<TerminalTab>()
-                    .any { it !== tab && it.ompSessionId == sessionId }
-                if (currentTab === tab && sessionId != null && !claimedByAnotherTab) {
-                    tab.ompSessionId = sessionId
-                    persistWorkspace()
-                    refreshTabs()
-                }
-            } finally {
-                tab.ompSessionDiscoveryInFlight = false
-                if (tab.ompSessionDiscoveryScheduled) {
-                    terminalView.post { observeOmpSession(session) }
-                } else if (tab.ompSessionId == null && session.isRunning) {
-                    tab.ompSessionDiscoveryScheduled = true
-                    terminalView.postDelayed({
-                        tab.ompSessionDiscoveryScheduled = false
-                        observeOmpSession(session)
-                    }, OMP_SESSION_DISCOVERY_INTERVAL_MS)
-                }
-            }
-        }
-    }
 
     private fun terminalWorkingDirectory(tab: TerminalTab): File? {
         val project = currentProject ?: return null
@@ -1176,9 +1100,6 @@ class EditorActivity : AppCompatActivity() {
             ?.takeIf { it.isDirectory }
     }
 
-    private fun isSafeOmpSessionId(value: String): Boolean {
-        return ProotRuntime.ompSessionIdFromFileName("session_$value.jsonl") == value
-    }
 
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
@@ -2357,8 +2278,7 @@ class EditorActivity : AppCompatActivity() {
                     type = WorkspaceTabType.TERMINAL,
                     title = tab.title,
                     workingDirectory = tab.workingDirectory,
-                    ompSessionId = tab.ompSessionId,
-                    isOmp = tab.isOmp || tab.ompSessionId != null,
+                    isOmp = tab.isOmp,
                 )
             }
         }
@@ -2447,14 +2367,11 @@ class EditorActivity : AppCompatActivity() {
                             }.getOrNull()?.takeIf { it.isDirectory }
                                 ?: project.root
                         }
-                        val sessionId = restored.state.ompSessionId
-                            ?.takeIf(::isSafeOmpSessionId)
-                        val isOmp = restored.state.isOmp || sessionId != null
-                        val startup = if (isOmp) ProotRuntime.ompStartupCommand(sessionId) else null
+                        val isOmp = restored.state.isOmp
+                        val startup = if (isOmp) ProotRuntime.ompStartupCommand() else null
                         runCatching {
                             createTerminalTab(
                                 startupCommand = startup,
-                                ompSessionId = sessionId,
                                 isOmp = isOmp,
                                 projectRoot = terminalDirectory,
                                 title = restored.state.title,
@@ -2487,16 +2404,32 @@ class EditorActivity : AppCompatActivity() {
             attributes.recycle()
             drawable
         }
+        val tabTextColor = ContextCompat.getColor(this, R.color.action_bar_foreground)
+        val tabDividerColor = MaterialColors.getColor(
+            tabContainer,
+            com.google.android.material.R.attr.colorOutline,
+        )
         val activeIndicatorColor = MaterialColors.getColor(
             tabContainer,
             androidx.appcompat.R.attr.colorPrimary,
         )
         editorSession.tabs.forEachIndexed { index, tab ->
+            if (index > 0) {
+                tabContainer.addView(View(this).apply {
+                    setBackgroundColor(tabDividerColor)
+                }, LinearLayout.LayoutParams(dp(1), ViewGroup.LayoutParams.MATCH_PARENT))
+            }
             val tabRoot = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
                 background = tabRipple?.constantState?.newDrawable()?.mutate()
-                setOnClickListener { selectTab(index) }
+                setOnClickListener {
+                    if (index == editorSession.activeIndex) {
+                        showTabMenu(index, this)
+                    } else {
+                        selectTab(index)
+                    }
+                }
             }
             val content = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -2514,7 +2447,7 @@ class EditorActivity : AppCompatActivity() {
                 }
                 val dirty = (tab as? EditorTab)?.dirty == true
                 text = if (dirty) getString(R.string.dirty_tab_label, shortenedName) else shortenedName
-                setTextColor(if (index == editorSession.activeIndex) Color.WHITE else Color.LTGRAY)
+                setTextColor(tabTextColor)
                 typeface = mapleTypeface
                 textSize = 13f
                 gravity = Gravity.CENTER
@@ -2574,12 +2507,58 @@ class EditorActivity : AppCompatActivity() {
         ))
     }
 
+    private fun showTabMenu(index: Int, anchor: View) {
+        val tabs = editorSession.tabs
+        if (index !in tabs.indices) return
+        val menu = PopupMenu(this, anchor)
+        menu.menu.add(0, MENU_CLOSE_TAB, 0, R.string.close_tab)
+        val closeOthers = menu.menu.add(0, MENU_CLOSE_OTHERS, 1, R.string.close_other_tabs)
+        menu.menu.add(0, MENU_CLOSE_ALL, 2, R.string.close_all_tabs)
+        val closeLeft = menu.menu.add(0, MENU_CLOSE_LEFT, 3, R.string.close_left_tabs)
+        val closeRight = menu.menu.add(0, MENU_CLOSE_RIGHT, 4, R.string.close_right_tabs)
+        closeOthers.isEnabled = tabs.size > 1
+        closeLeft.isEnabled = index > 0
+        closeRight.isEnabled = index < tabs.lastIndex
+        menu.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                MENU_CLOSE_TAB -> closeTab(index)
+                MENU_CLOSE_OTHERS -> closeTabs(tabs.filterIndexed { tabIndex, _ -> tabIndex != index })
+                MENU_CLOSE_ALL -> closeTabs(tabs.toList())
+                MENU_CLOSE_LEFT -> closeTabs(tabs.take(index))
+                MENU_CLOSE_RIGHT -> closeTabs(tabs.drop(index + 1))
+            }
+            true
+        }
+        menu.show()
+    }
+
+    private fun closeTabs(tabs: List<WorkspaceTab>) {
+        closeNextTab(tabs, 0)
+    }
+
+    private fun closeNextTab(tabs: List<WorkspaceTab>, index: Int) {
+        if (index >= tabs.size) return
+        val tab = tabs[index]
+        if (!editorSession.tabs.contains(tab)) {
+            closeNextTab(tabs, index + 1)
+        } else {
+            closeTab(tab) { closeNextTab(tabs, index + 1) }
+        }
+    }
+
     private fun closeTab(index: Int) {
-        val tab = editorSession.tabs.getOrNull(index) ?: return
+        editorSession.tabs.getOrNull(index)?.let { closeTab(it) }
+    }
+
+    private fun closeTab(tab: WorkspaceTab, onClosed: () -> Unit = {}) {
+        if (!editorSession.tabs.contains(tab)) {
+            onClosed()
+            return
+        }
         when (tab) {
             is TerminalTab -> {
                 tab.session.finishIfRunning()
-                removeTab(index)
+                removeTabFor(tab, onClosed)
             }
             is EditorTab -> {
                 if (tab.dirty) {
@@ -2591,37 +2570,47 @@ class EditorActivity : AppCompatActivity() {
                             ),
                         )
                         .setNegativeButton(R.string.cancel, null)
-                        .setNeutralButton(R.string.discard_changes) { _, _ -> removeTabFor(tab) }
+                        .setNeutralButton(R.string.discard_changes) { _, _ -> removeTabFor(tab, onClosed) }
                         .setPositiveButton(R.string.save_changes) { _, _ ->
                             if (tab.file == null) {
-                                saveTabAs(tab) { removeTabFor(tab) }
+                                saveTabAs(tab) { removeTabFor(tab, onClosed) }
                             } else {
                                 saveTabIfReady(
                                     tab,
-                                    onSaved = { if (saveTabBlocking(tab)) removeTabFor(tab) },
-                                    onReload = { if (!tab.dirty) removeTabFor(tab) },
+                                    onSaved = { if (saveTabBlocking(tab)) removeTabFor(tab, onClosed) },
+                                    onReload = { if (!tab.dirty) removeTabFor(tab, onClosed) },
                                 )
                             }
                         }
                         .show()
                 } else {
-                    removeTab(index)
+                    removeTabFor(tab, onClosed)
                 }
             }
         }
     }
 
-    private fun removeTabFor(tab: WorkspaceTab) {
+    private fun removeTabFor(tab: WorkspaceTab, onRemoved: () -> Unit = {}) {
         val index = editorSession.tabs.indexOf(tab)
-        if (index >= 0) removeTab(index)
+        if (index >= 0) {
+            removeTab(index, onRemoved)
+        } else {
+            onRemoved()
+        }
     }
 
-    private fun removeTab(index: Int) {
+    private fun removeTab(index: Int, onRemoved: () -> Unit = {}) {
+        if (index !in editorSession.tabs.indices) {
+            onRemoved()
+            return
+        }
         captureEditorState()
         editorSession.remove(index)
         if (editorSession.activeIndex >= 0) selectTab(editorSession.activeIndex) else showEmptyEditor()
         refreshTabs()
+        onRemoved()
     }
+
 
     private fun saveActiveDocument() {
         captureEditorState()
@@ -2949,8 +2938,12 @@ class EditorActivity : AppCompatActivity() {
         private const val MENU_REFRESH = 12
         private const val MENU_IMPORT = 13
         private const val MENU_EXPORT = 14
+        private const val MENU_CLOSE_TAB = 15
+        private const val MENU_CLOSE_OTHERS = 16
+        private const val MENU_CLOSE_ALL = 17
+        private const val MENU_CLOSE_LEFT = 18
+        private const val MENU_CLOSE_RIGHT = 19
         private const val MAX_TAB_NAME_CHARS = 15
-        private const val OMP_SESSION_DISCOVERY_INTERVAL_MS = 500L
         private const val TERMINAL_KEY_COLOR = 0xFF424242.toInt()
         private const val TERMINAL_MODIFIER_COLOR = 0xFF5C6BC0.toInt()
     }

@@ -26,15 +26,9 @@ class TerminalTab(
     val session: TerminalSession,
     var title: String,
     val workingDirectory: String? = null,
-    var ompSessionId: String? = null,
     val isOmp: Boolean = false,
     var pendingStartupCommand: String? = null,
-    var ompStartedAtMillis: Long = 0L,
 ) : WorkspaceTab {
-    var shellPid: Int = 0
-    var ompSessionDiscoveryInFlight: Boolean = false
-    var ompSessionDiscoveryScheduled: Boolean = false
-    var lastOmpSessionDiscoveryAtMillis: Long = 0L
 }
 
 class EditorSession {

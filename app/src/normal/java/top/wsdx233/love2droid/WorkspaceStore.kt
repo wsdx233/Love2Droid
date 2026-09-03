@@ -20,7 +20,6 @@ internal data class WorkspaceTabSnapshot(
     val scrollY: Int = 0,
     val title: String? = null,
     val workingDirectory: String? = null,
-    val ompSessionId: String? = null,
     val isOmp: Boolean = false,
     val lineEnding: String? = null,
     val diskLength: Long? = null,
@@ -73,7 +72,6 @@ internal object WorkspaceStore {
                                 type = WorkspaceTabType.TERMINAL,
                                 title = tab.optionalString("title"),
                                 workingDirectory = tab.optionalString("workingDirectory"),
-                                ompSessionId = tab.optionalString("ompSessionId"),
                                 isOmp = tab.optBoolean("isOmp", false),
                             ),
                         )
@@ -116,7 +114,6 @@ internal object WorkspaceStore {
                 WorkspaceTabType.TERMINAL -> {
                     state.title?.let { tab.put("title", it) }
                     state.workingDirectory?.let { tab.put("workingDirectory", it) }
-                    state.ompSessionId?.let { tab.put("ompSessionId", it) }
                     tab.put("isOmp", state.isOmp)
                 }
             }
