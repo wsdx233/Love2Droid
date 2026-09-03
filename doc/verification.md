@@ -44,7 +44,7 @@ app/build/outputs/apk/normalNoRecord/debug/app-normal-noRecord-debug.apk
 不使用 Android 模拟器验证界面、输入法、文件系统、PRoot、Ubuntu、LuaLS 或 LÖVE runtime。相关变更需在 arm64 真机观察：
 
 - 首次安装、安装失败重试、应用重启、横竖屏切换、后台恢复。
-- Tab 栏在真机上单击文件或终端标签应一次完成切换；关闭和新建按钮的完整触摸热区均可直接操作。
+- Tab 栏在真机上单击文件或终端标签应一次完成切换；即使 OMP 终端连续刷新内容，标签点击仍应及时响应；关闭和新建按钮均可直接操作。
 - 打开普通终端，确认登录 shell 不输出 `groups: cannot find name for group ID`；关闭“OMP 使用项目目录”后新建 OMP 标签，确认 OMP 自动恢复当前目录下的第一个可恢复 session，没有可恢复 session 时创建新 session；退出并重启应用后，确认恢复的 OMP 标签仍直接执行 `omp --allow-home --continue`。
 - 首次安装以及从旧版本升级后，在普通终端确认 `/etc/resolv.conf` 包含 `8.8.8.8`、`8.8.4.4` 和 `options use-vc timeout:2 attempts:2`；执行 `getent hosts baidu.com` 与 `curl` 域名请求，确认默认命令无需临时设置 `RES_OPTIONS` 即可解析。
 - 新建项目 → 编辑 `main.lua` → Play → LÖVE 渲染 → 返回编辑器。

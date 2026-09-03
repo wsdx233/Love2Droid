@@ -30,7 +30,7 @@
         <HorizontalScrollView
             android:id="@+id/tab_scroll"
             android:layout_width="match_parent"
-            android:layout_height="48dp"
+            android:layout_height="24dp"
             android:background="@android:color/transparent"
             android:fillViewport="false"
             android:scrollbars="none">

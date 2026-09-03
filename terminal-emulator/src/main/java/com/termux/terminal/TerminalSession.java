@@ -32,6 +32,7 @@ public final class TerminalSession extends TerminalOutput {
 
     private static final int MSG_NEW_INPUT = 1;
     private static final int MSG_PROCESS_EXITED = 4;
+    private static final long OUTPUT_UPDATE_DELAY_MS = 16L;
 
     public final String mHandle = UUID.randomUUID().toString();
 
@@ -139,7 +140,9 @@ public final class TerminalSession extends TerminalOutput {
                         int read = termIn.read(buffer);
                         if (read == -1) return;
                         if (!mProcessToTerminalIOQueue.write(buffer, 0, read)) return;
-                        mMainThreadHandler.sendEmptyMessage(MSG_NEW_INPUT);
+                        if (!mMainThreadHandler.hasMessages(MSG_NEW_INPUT)) {
+                            mMainThreadHandler.sendEmptyMessageDelayed(MSG_NEW_INPUT, OUTPUT_UPDATE_DELAY_MS);
+                        }
                     }
                 } catch (Exception e) {
                     // Ignore, just shutting down.
@@ -337,35 +340,44 @@ public final class TerminalSession extends TerminalOutput {
     class MainThreadHandler extends Handler {
 
         final byte[] mReceiveBuffer = new byte[4 * 1024];
+        private boolean processPendingOutput() {
+            int bytesRead = mProcessToTerminalIOQueue.read(mReceiveBuffer, false);
+            if (bytesRead <= 0) return false;
+            mEmulator.append(mReceiveBuffer, bytesRead);
+            notifyScreenUpdate();
+            return true;
+        }
 
         @Override
         public void handleMessage(Message msg) {
-            int bytesRead = mProcessToTerminalIOQueue.read(mReceiveBuffer, false);
-            if (bytesRead > 0) {
-                mEmulator.append(mReceiveBuffer, bytesRead);
-                notifyScreenUpdate();
-            }
-
-            if (msg.what == MSG_PROCESS_EXITED) {
-                int exitCode = (Integer) msg.obj;
-                cleanupResources(exitCode);
-
-                String exitDescription = "\r\n[Process completed";
-                if (exitCode > 0) {
-                    // Non-zero process exit.
-                    exitDescription += " (code " + exitCode + ")";
-                } else if (exitCode < 0) {
-                    // Negated signal.
-                    exitDescription += " (signal " + (-exitCode) + ")";
+            if (msg.what == MSG_NEW_INPUT) {
+                processPendingOutput();
+                if (mProcessToTerminalIOQueue.hasBytes() && !mMainThreadHandler.hasMessages(MSG_PROCESS_EXITED)) {
+                    mMainThreadHandler.sendEmptyMessageDelayed(MSG_NEW_INPUT, OUTPUT_UPDATE_DELAY_MS);
                 }
-                exitDescription += " - press Enter]";
-
-                byte[] bytesToWrite = exitDescription.getBytes(StandardCharsets.UTF_8);
-                mEmulator.append(bytesToWrite, bytesToWrite.length);
-                notifyScreenUpdate();
-
-                mClient.onSessionFinished(TerminalSession.this);
+                return;
             }
+            if (msg.what != MSG_PROCESS_EXITED) return;
+
+            while (processPendingOutput()) { }
+            int exitCode = (Integer) msg.obj;
+            cleanupResources(exitCode);
+
+            String exitDescription = "\r\n[Process completed";
+            if (exitCode > 0) {
+                // Non-zero process exit.
+                exitDescription += " (code " + exitCode + ")";
+            } else if (exitCode < 0) {
+                // Negated signal.
+                exitDescription += " (signal " + (-exitCode) + ")";
+            }
+            exitDescription += " - press Enter]";
+
+            byte[] bytesToWrite = exitDescription.getBytes(StandardCharsets.UTF_8);
+            mEmulator.append(bytesToWrite, bytesToWrite.length);
+            notifyScreenUpdate();
+
+            mClient.onSessionFinished(TerminalSession.this);
         }
 
     }

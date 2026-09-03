@@ -127,6 +127,8 @@ class EditorActivity : AppCompatActivity() {
     private var textMateReady = false
     private var appliedEditorThemeId: String? = null
     private val symbolBarButtons = mutableListOf<TextView>()
+    private val tabLabels = mutableMapOf<WorkspaceTab, TextView>()
+    private var terminalScreenUpdateScheduled = false
     private var lspJob: Job? = null
     private var workspaceRestoreJob: Job? = null
     private var symbolNavigationJob: Job? = null
@@ -169,8 +171,12 @@ class EditorActivity : AppCompatActivity() {
 
     private val terminalSessionClient = object : TerminalSessionClient {
         override fun onTextChanged(changedSession: TerminalSession) {
-            if (::terminalView.isInitialized && terminalView.mTermSession === changedSession) {
-                terminalView.onScreenUpdated()
+            if (::terminalView.isInitialized && terminalView.mTermSession === changedSession && !terminalScreenUpdateScheduled) {
+                terminalScreenUpdateScheduled = true
+                terminalView.postOnAnimation {
+                    terminalScreenUpdateScheduled = false
+                    if (::terminalView.isInitialized) terminalView.onScreenUpdated()
+                }
             }
         }
 
@@ -178,9 +184,9 @@ class EditorActivity : AppCompatActivity() {
             val tab = editorSession.tabs.filterIsInstance<TerminalTab>()
                 .firstOrNull { it.session === changedSession }
             val title = changedSession.title?.trim().orEmpty()
-            if (tab != null && title.isNotEmpty()) {
+            if (tab != null && title.isNotEmpty() && tab.title != title) {
                 tab.title = title
-                refreshTabs()
+                updateTabLabel(tab)
             }
         }
 
@@ -189,7 +195,7 @@ class EditorActivity : AppCompatActivity() {
                 .firstOrNull { it.session === finishedSession }
                 ?.let { tab ->
                     tab.title = getString(R.string.terminal_finished, tab.title)
-                    refreshTabs()
+                    updateTabLabel(tab)
                 }
         }
 
@@ -2388,7 +2394,29 @@ class EditorActivity : AppCompatActivity() {
         }
     }
 
+    private fun tabDisplayText(tab: WorkspaceTab): String {
+        val name = when (tab) {
+            is EditorTab -> tab.file?.name ?: getString(R.string.unnamed_file)
+            is TerminalTab -> tab.title
+        }
+        val shortenedName = if (name.length > MAX_TAB_NAME_CHARS) {
+            name.take(MAX_TAB_NAME_CHARS) + "..."
+        } else {
+            name
+        }
+        return if ((tab as? EditorTab)?.dirty == true) {
+            getString(R.string.dirty_tab_label, shortenedName)
+        } else {
+            shortenedName
+        }
+    }
+
+    private fun updateTabLabel(tab: WorkspaceTab) {
+        tabLabels[tab]?.text = tabDisplayText(tab)
+    }
+
     private fun refreshTabs() {
+        tabLabels.clear()
         tabContainer.removeAllViews()
         val tabRipple = obtainStyledAttributes(
             intArrayOf(android.R.attr.selectableItemBackground),
@@ -2424,10 +2452,12 @@ class EditorActivity : AppCompatActivity() {
                 gravity = Gravity.CENTER
                 background = tabRipple?.constantState?.newDrawable()?.mutate()
                 setOnClickListener {
-                    if (index == editorSession.activeIndex) {
-                        showTabMenu(index, this)
+                    val currentIndex = editorSession.tabs.indexOf(tab)
+                    if (currentIndex < 0) return@setOnClickListener
+                    if (currentIndex == editorSession.activeIndex) {
+                        showTabMenu(currentIndex, this)
                     } else {
-                        selectTab(index)
+                        selectTab(currentIndex)
                     }
                 }
             }
@@ -2436,17 +2466,7 @@ class EditorActivity : AppCompatActivity() {
                 gravity = Gravity.CENTER
             }
             val label = TextView(this).apply {
-                val name = when (tab) {
-                    is EditorTab -> tab.file?.name ?: getString(R.string.unnamed_file)
-                    is TerminalTab -> tab.title
-                }
-                val shortenedName = if (name.length > MAX_TAB_NAME_CHARS) {
-                    name.take(MAX_TAB_NAME_CHARS) + "..."
-                } else {
-                    name
-                }
-                val dirty = (tab as? EditorTab)?.dirty == true
-                text = if (dirty) getString(R.string.dirty_tab_label, shortenedName) else shortenedName
+                text = tabDisplayText(tab)
                 setTextColor(tabTextColor)
                 typeface = mapleTypeface
                 textSize = 13f
@@ -2454,18 +2474,19 @@ class EditorActivity : AppCompatActivity() {
                 maxLines = 1
                 setPadding(dp(16), 0, dp(8), 0)
             }
+            tabLabels[tab] = label
             val close = ImageButton(this).apply {
                 setImageResource(R.drawable.ic_close)
                 background = iconRipple?.constantState?.newDrawable()?.mutate()
                 adjustViewBounds = true
                 scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
                 setPadding(dp(3), dp(3), dp(3), dp(3))
-                minimumWidth = dp(48)
-                minimumHeight = dp(48)
+                minimumWidth = 0
+                minimumHeight = 0
                 contentDescription = getString(
                     if (tab is TerminalTab) R.string.close_terminal else R.string.close_file,
                 )
-                setOnClickListener { closeTab(index) }
+                setOnClickListener { closeTab(tab) }
             }
             content.addView(label, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -2496,8 +2517,8 @@ class EditorActivity : AppCompatActivity() {
             adjustViewBounds = true
             scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
             setPadding(dp(3), dp(3), dp(3), dp(3))
-            minimumWidth = dp(48)
-            minimumHeight = dp(48)
+            minimumWidth = 0
+            minimumHeight = 0
             contentDescription = getString(R.string.new_file)
             setOnClickListener { newDocument() }
         }
