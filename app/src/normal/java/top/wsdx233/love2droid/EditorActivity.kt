@@ -1052,7 +1052,7 @@ class EditorActivity : AppCompatActivity() {
     }
 
     private fun newOmp() {
-        newTerminal(startupCommand = "omp", isOmp = true)
+        newTerminal(startupCommand = ProotRuntime.ompStartupCommand(), isOmp = true)
     }
 
     private fun newTerminal(
@@ -2444,7 +2444,7 @@ class EditorActivity : AppCompatActivity() {
                         val sessionId = restored.state.ompSessionId
                             ?.takeIf(::isSafeOmpSessionId)
                         val isOmp = restored.state.isOmp || sessionId != null
-                        val startup = if (isOmp) sessionId?.let { "omp -r $it" } ?: "omp" else null
+                        val startup = if (isOmp) ProotRuntime.ompStartupCommand(sessionId) else null
                         runCatching {
                             createTerminalTab(
                                 startupCommand = startup,

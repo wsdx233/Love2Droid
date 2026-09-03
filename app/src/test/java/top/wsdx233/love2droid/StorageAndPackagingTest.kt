@@ -105,6 +105,13 @@ class StorageAndPackagingTest {
         assertEquals(null, ProotRuntime.ompSessionIdFromFileName("not-a-session.txt"))
         assertEquals(null, ProotRuntime.ompSessionIdFromFileName("session.jsonl"))
     }
+    @Test
+    fun ompStartupKeepsGuestRootAsWorkingDirectory() {
+        val sessionId = "01a05bf3-0bc9-7147-af78-4c97af3c1e74"
+        assertEquals("omp --allow-home", ProotRuntime.ompStartupCommand())
+        assertEquals("omp --allow-home -r $sessionId", ProotRuntime.ompStartupCommand(sessionId))
+    }
+
 
     @Test
     fun ompSessionIdComesFromMatchingTerminalBreadcrumb() {
@@ -121,4 +128,50 @@ class StorageAndPackagingTest {
         assertEquals("pts-7", ProotRuntime.ompTerminalIdFromTtyPath("/dev/pts/7"))
         assertEquals(null, ProotRuntime.ompTerminalIdFromTtyPath("/proc/self/fd/0"))
     }
+    @Test
+    fun freshOmpBreadcrumbResolvesBeforeTranscriptExists() {
+        val rootfs = Files.createTempDirectory("love2droid-omp-rootfs").toFile()
+        try {
+            val cwd = "/root"
+            val sessionId = "01a05bf3-0bc9-7147-af78-4c97af3c1e74"
+            val breadcrumb = File(rootfs, "root/.omp/agent/terminal-sessions/pts-7")
+            breadcrumb.parentFile.mkdirs()
+            breadcrumb.writeText(
+                "$cwd\n/root/.omp/agent/sessions/-/2026-09-01T07-50-50-057Z_$sessionId.jsonl\nfresh\n",
+            )
+
+            assertEquals(
+                sessionId,
+                ProotRuntime.findOmpSessionIdFromTerminalBreadcrumb(rootfs, "pts-7", cwd),
+            )
+            breadcrumb.writeText(
+                "$cwd\n/root/.omp/agent/sessions/-/2026-09-01T07-50-50-057Z_$sessionId.jsonl\n",
+            )
+            assertEquals(
+                null,
+                ProotRuntime.findOmpSessionIdFromTerminalBreadcrumb(rootfs, "pts-7", cwd),
+            )
+        } finally {
+            rootfs.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun guestGroupRepairOnlyAddsUnmappedIds() {
+        val groupContent = "root:x:0:\ninet:x:3003:\n"
+        assertEquals(
+            setOf(1079, 9997),
+            ProotRuntime.missingHostGroupIds(groupContent, setOf(0, 1079, 3003, 9997)),
+        )
+    }
+    @Test
+    fun hostSupplementaryGroupsComeFromProcStatus() {
+        val procStatus = "Name:\tlove2droid\nGroups:\t1079 3002 3003 9997 20644 50644 \n"
+        assertEquals(
+            setOf(1079, 3002, 3003, 9997, 20644, 50644),
+            ProotRuntime.hostSupplementaryGroupIds(procStatus),
+        )
+    }
+
+
 }

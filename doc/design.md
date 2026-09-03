@@ -100,6 +100,7 @@ Drawer 使用 `RecyclerView` 展示当前目录的直接子项，不渲染可展
 - 终端使用 Termux `TerminalView`，底部提供两行快捷键，包括 `ESC`、`TAB`、`CTRL`、`ALT`、方向键、`HOME`、`END`、`PGUP` 和 `PGDN`。
 - 首次安装页使用 Toolbar、线性进度和持续追加的日志展示 Ubuntu Base 与工具安装状态；失败后可重试。
 - bash-prompt 使用 `PROMPT_DIRTRIM=1`，避免展示完整 `Android/data` 长路径。
+- 从 guest `/root` 启动 OMP 时固定传入 `--allow-home`，保持会话工作目录为 `/root`；会话恢复继续使用同一工作目录。
 - 游戏窗口遵循 LÖVE/SDL Android 方向规则：`t.window.resizable = false` 且未设置 `SDL_ORIENTATIONS` 时，`width > height` 启动为横屏，`height >= width` 启动为竖屏；`resizable = true` 时允许随设备和系统旋转锁定切换。游戏调试悬浮球在横竖屏双向旋转后停靠到右侧，并按旋转前的纵向比例保持位置，避免落到底部或移出屏幕。
 - 游戏调试悬浮球使用黑色半透明背景和白色扳手 Material Symbols，支持拖动。轻触后显示黑色半透明 scrim；横屏面板从左侧滑出，竖屏面板从底部以 Bottom Sheet 形态滑出。调试 Activity 使用 `Window` 的 `adjustPan` 让系统在输入法出现时仅平移到当前输入框可见，不手动计算输入法高度。
 - 调试面板标题固定为“调试”，使用 Material 3 游戏主题、纯白背景、少量圆角、大号触控热区和带 Ripple 的 Material 控件。竖屏使用纯图标 `TabLayout`，横屏切换为左侧纯图标 `NavigationRailView`；断点入口使用 `bug_report` 小虫图标，两种导航共享当前页面。控制台日志从内容区顶部开始显示，搜索与等级筛选默认收起；REPL 底部使用单一描边矩形容器，左下角依次提供搜索、筛选、清空和滚动锁定操作，发送位于右下角，右上角可展开多行输入区。监视页使用 `push_pin` 图钉固定安全求值表达式到游戏画面 HUD。REPL 快捷代码和符号栏当前不显示。

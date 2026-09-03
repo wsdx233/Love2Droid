@@ -64,11 +64,54 @@ object ProotRuntime {
             readyMarker(context).isFile &&
             luaLanguageServer(context).isFile &&
             isOmpReady(context) &&
-            isBashPromptReady(context)
+            isBashPromptReady(context) &&
+            areHostGroupsConfigured(context)
     }
+    internal fun hostSupplementaryGroupIds(): Set<Int> {
+        val procStatus = runCatching { File("/proc/self/status").readText(Charsets.UTF_8) }
+            .getOrNull()
+            ?: return emptySet()
+        return hostSupplementaryGroupIds(procStatus)
+    }
+
+    internal fun hostSupplementaryGroupIds(procStatus: String): Set<Int> {
+        val groups = procStatus.lineSequence()
+            .firstOrNull { line -> line.startsWith("Groups:") }
+            ?.substringAfter(':')
+            ?: return emptySet()
+        return groups.splitToSequence(' ', '\t')
+            .mapNotNull(String::toIntOrNull)
+            .filter { it >= 0 }
+            .toSortedSet()
+    }
+
+    internal fun missingHostGroupIds(groupContent: String, requiredGroupIds: Set<Int>): Set<Int> {
+        val configuredGroupIds = groupContent.lineSequence()
+            .mapNotNull { line -> line.split(':', limit = 4).getOrNull(2)?.toIntOrNull() }
+            .toSet()
+        return requiredGroupIds.filterTo(sortedSetOf()) { it !in configuredGroupIds }
+    }
+
+    private fun areHostGroupsConfigured(context: Context): Boolean {
+        val requiredGroupIds = hostSupplementaryGroupIds()
+        if (requiredGroupIds.isEmpty()) return true
+        val groupContent = runCatching {
+            File(rootfsDir(context), "etc/group").readText(Charsets.UTF_8)
+        }.getOrNull() ?: return false
+        return missingHostGroupIds(groupContent, requiredGroupIds).isEmpty()
+    }
+
 
     fun ompBinary(context: Context): File =
         File(rootfsDir(context), OMP_GUEST_PATH.removePrefix("/"))
+    internal fun ompStartupCommand(sessionId: String? = null): String {
+        if (sessionId == null) return "omp --allow-home"
+        require(ompSessionIdFromFileName("session_$sessionId.jsonl") == sessionId) {
+            "Unsafe OMP session ID"
+        }
+        return "omp --allow-home -r $sessionId"
+    }
+
     fun ompModelsFile(context: Context): File {
         val directory = File(rootfsDir(context), "root/.omp/agent")
         return listOf("models.yml", "models.yaml")
@@ -163,7 +206,15 @@ object ProotRuntime {
         if (terminalPid <= 0) return null
         val ttyPath = runCatching { Os.readlink("/proc/$terminalPid/fd/0") }.getOrNull() ?: return null
         val terminalId = ompTerminalIdFromTtyPath(ttyPath) ?: return null
-        val breadcrumb = File(rootfsDir(context), "$OMP_TERMINAL_SESSIONS_HOST_PATH/$terminalId")
+        return findOmpSessionIdFromTerminalBreadcrumb(rootfsDir(context), terminalId, expectedDirectory)
+    }
+
+    internal fun findOmpSessionIdFromTerminalBreadcrumb(
+        rootfs: File,
+        terminalId: String,
+        expectedDirectory: String,
+    ): String? {
+        val breadcrumb = File(rootfs, "$OMP_TERMINAL_SESSIONS_HOST_PATH/$terminalId")
         if (!breadcrumb.isFile || breadcrumb.length() !in 1..OMP_TERMINAL_BREADCRUMB_MAX_BYTES) return null
         val content = runCatching { breadcrumb.readText(Charsets.UTF_8) }.getOrNull() ?: return null
         val guestSessionPath = content.lineSequence().drop(1).firstOrNull()?.removeSuffix("\r") ?: return null
@@ -171,9 +222,9 @@ object ProotRuntime {
         if (relativeSessionPath == guestSessionPath) return null
         val pathParts = relativeSessionPath.split('/')
         if (pathParts.size != 2 || pathParts.any { it.isEmpty() || it == "." || it == ".." }) return null
-        if (!File(rootfsDir(context), "root/.omp/agent/sessions/$relativeSessionPath").isFile) return null
+        val isFresh = content.lineSequence().drop(2).firstOrNull()?.removeSuffix("\r") == "fresh"
+        if (!File(rootfs, "root/.omp/agent/sessions/$relativeSessionPath").isFile && !isFresh) return null
         return ompSessionIdFromTerminalBreadcrumb(content, expectedDirectory)
-
     }
     private fun readOmpSessionCwd(file: File): String? {
         return runCatching {

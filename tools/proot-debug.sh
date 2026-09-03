@@ -325,6 +325,35 @@ download_checked() {
     mv -f "$partial" "$destination"
 }
 
+guest_group_exists() {
+    local expected_gid=$1
+    local name password gid members
+    while IFS=: read -r name password gid members; do
+        [[ "$gid" == "$expected_gid" ]] && return 0
+    done <"$ROOTFS_DIR/etc/group"
+    return 1
+}
+
+configure_guest_groups() {
+    local -a group_ids
+    local gid
+    read -r -a group_ids <<<"$(id -G)"
+    for gid in "${group_ids[@]}"; do
+        if ! guest_group_exists "$gid"; then
+            printf 'host_gid_%s:x:%s:\n' "$gid" "$gid" >>"$ROOTFS_DIR/etc/group"
+        fi
+    done
+}
+
+check_guest_groups() {
+    local -a group_ids
+    local gid
+    read -r -a group_ids <<<"$(id -G)"
+    for gid in "${group_ids[@]}"; do
+        guest_group_exists "$gid" || fail "guest /etc/group is missing host group ID $gid"
+    done
+}
+
 configure_rootfs() {
     mkdir -p \
         "$ROOTFS_DIR/etc/apt/apt.conf.d" \
@@ -337,6 +366,7 @@ configure_rootfs() {
         "$ROOTFS_DIR/root/.local/share"
     printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' >"$ROOTFS_DIR/etc/resolv.conf"
     printf '127.0.0.1 localhost\n::1 localhost\n' >"$ROOTFS_DIR/etc/hosts"
+    configure_guest_groups
     printf 'APT::Sandbox::User "root";\n' >"$ROOTFS_DIR/etc/apt/apt.conf.d/99proot-nosandbox"
     printf 'force-unsafe-io\n' >"$ROOTFS_DIR/etc/dpkg/dpkg.cfg.d/force-unsafe-io"
     printf '0\n' >"$ROOTFS_DIR/proc/sys/crypto/fips_enabled"
@@ -499,6 +529,7 @@ check_ready_files() {
     grep -Fqx "$PROMPT_BASHRC_SOURCE" "$ROOTFS_DIR/root/.bashrc" || fail "bash-prompt source entry is missing"
     grep -Fqx "$PROMPT_DIRTRIM_ENTRY" "$ROOTFS_DIR/root/.bashrc" || fail "PROMPT_DIRTRIM entry is missing"
     grep -Fqx "$PROMPT_PS1_ENTRY" "$ROOTFS_DIR/root/.bashrc" || fail "PS1 entry is missing"
+    check_guest_groups
 }
 
 smoke_guest() {

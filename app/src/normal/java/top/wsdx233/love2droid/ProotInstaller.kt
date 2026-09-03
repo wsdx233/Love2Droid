@@ -123,6 +123,7 @@ object ProotInstaller {
                     } else {
                         appendLog(appContext.getString(R.string.proot_log_rootfs_reused))
                     }
+                    configureHostGroups(appContext)
                     repairRootfsPermissions(appContext)
                     if (ProotRuntime.luaLanguageServer(appContext).isFile) {
                         appendLog(appContext.getString(R.string.proot_log_lsp_reused))
@@ -415,6 +416,24 @@ object ProotInstaller {
         runCatching { Os.chmod(File(rootfs, "var/tmp").absolutePath, 511) }
         appendLog(context.getString(R.string.proot_log_configured))
     }
+    private fun configureHostGroups(context: Context) {
+        val groupFile = File(ProotRuntime.rootfsDir(context), "etc/group")
+        val existingContent = runCatching { groupFile.readText(Charsets.UTF_8) }.getOrDefault("")
+        val missingGroupIds = ProotRuntime.missingHostGroupIds(
+            existingContent,
+            ProotRuntime.hostSupplementaryGroupIds(),
+        )
+        if (missingGroupIds.isEmpty()) return
+        val updatedContent = buildString {
+            append(existingContent)
+            if (isNotEmpty() && last() != '\n') append('\n')
+            missingGroupIds.forEach { groupId ->
+                append("host_gid_$groupId:x:$groupId:\n")
+            }
+        }
+        replaceTextFile(groupFile, updatedContent)
+    }
+
 
     private fun installLuaLanguageServer(context: Context) {
         update(
