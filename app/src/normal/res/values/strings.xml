@@ -90,6 +90,11 @@
     <string name="android_install_permission_required">请允许 Love2Droid 安装未知来源应用，然后再次点“安装 APK”。</string>
     <string name="discard_changes">放弃修改</string>
     <string name="close_file">关闭文件</string>
+    <string name="close_tab">关闭</string>
+    <string name="close_other_tabs">关闭其他</string>
+    <string name="close_all_tabs">关闭全部</string>
+    <string name="close_left_tabs">关闭左边</string>
+    <string name="close_right_tabs">关闭右边</string>
     <string name="new_action">新建</string>
 
     <string name="save_as">另存为…</string>
