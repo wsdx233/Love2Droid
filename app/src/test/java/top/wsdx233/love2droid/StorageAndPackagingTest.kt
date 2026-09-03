@@ -172,6 +172,50 @@ class StorageAndPackagingTest {
             ProotRuntime.hostSupplementaryGroupIds(procStatus),
         )
     }
+    @Test
+    fun ompXdgBreadcrumbUsesTheSameSessionIdParser() {
+        val cwd = "/root"
+        val sessionId = "01a05bf3-0bc9-7147-af78-4c97af3c1e74"
+        val breadcrumb = "$cwd\n/root/.local/share/omp/sessions/-/2026-09-01T07-50-50-057Z_$sessionId.jsonl\nfresh\n"
+        assertEquals(sessionId, ProotRuntime.ompSessionIdFromTerminalBreadcrumb(breadcrumb, cwd))
+    }
+    @Test
+    fun recentOmpBreadcrumbIsFoundWithoutTerminalPid() {
+        val rootfs = Files.createTempDirectory("love2droid-omp-breadcrumbs").toFile()
+        try {
+            val directory = File(rootfs, "root/.omp/agent/terminal-sessions")
+            directory.mkdirs()
+            val now = System.currentTimeMillis()
+            val oldId = "01a05bf3-0bc9-7147-af78-4c97af3c1e70"
+            val currentId = "01a05bf3-0bc9-7147-af78-4c97af3c1e74"
+            File(directory, "pts-1").apply {
+                writeText("/root\n/root/.omp/agent/sessions/-/old_$oldId.jsonl\nfresh\n")
+                setLastModified(now - 10_000L)
+            }
+            File(directory, "pts-2").apply {
+                writeText("/root\n/root/.omp/agent/sessions/-/current_$currentId.jsonl\nfresh\n")
+                setLastModified(now)
+            }
+
+            assertEquals(
+                currentId,
+                ProotRuntime.findOmpSessionIdFromRecentBreadcrumbs(rootfs, "/root", now),
+            )
+            assertEquals(
+                null,
+                ProotRuntime.findOmpSessionIdFromRecentBreadcrumbs(
+                    rootfs,
+                    "/root",
+                    now,
+                    setOf(currentId),
+                ),
+            )
+        } finally {
+            rootfs.deleteRecursively()
+        }
+    }
+
+
 
 
 }

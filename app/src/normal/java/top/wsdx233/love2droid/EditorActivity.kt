@@ -1157,6 +1157,12 @@ class EditorActivity : AppCompatActivity() {
                 tab.ompSessionDiscoveryInFlight = false
                 if (tab.ompSessionDiscoveryScheduled) {
                     terminalView.post { observeOmpSession(session) }
+                } else if (tab.ompSessionId == null && session.isRunning) {
+                    tab.ompSessionDiscoveryScheduled = true
+                    terminalView.postDelayed({
+                        tab.ompSessionDiscoveryScheduled = false
+                        observeOmpSession(session)
+                    }, OMP_SESSION_DISCOVERY_INTERVAL_MS)
                 }
             }
         }

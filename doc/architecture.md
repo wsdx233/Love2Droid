@@ -108,6 +108,7 @@ Android 发布与 Play 分离；发布结果是可安装、可分享的独立 AP
 - PRoot 当前产品支持范围为 `arm64-v8a`。`libproot.so` 从 APK 解压后的 `applicationInfo.nativeLibraryDir` 定位并执行，不复制到普通 data 目录。
 - 首次安装校验并解压固定版本和 SHA-256 的 Ubuntu Base 24.04.4 arm64，再安装固定版本的 LuaLS、omp 和 bash-prompt；全部阶段成功后才写入完成标记。
 - Ubuntu guest 的 `/etc/group` 补齐 Android 应用进程继承的 supplementary GID，避免登录 shell 查询组名时输出未知 group ID。
+- OMP 会话识别遵循 OMP 自身的 terminal breadcrumb 机制；无法读取 shell PID 对应 PTY 时遍历其 state/data breadcrumb 与 session 目录，避免依赖单一 `/proc` 视图。
 - 产品启动的 Git 进程注入 `core.createObject=rename`，绕过 Android 共享存储上不可靠的硬链接对象落盘；终端 Git 继承同一设置。
 - 安装失败保留可复用阶段并允许重试，不提前写入完成状态。
 
