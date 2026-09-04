@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <item
+        android:id="@+id/action_batch_move"
+        android:icon="@drawable/drive_file_move_rounded"
+        android:title="@string/move_to_group"
+        app:showAsAction="always" />
+    <item
+        android:id="@+id/action_batch_export"
+        android:icon="@drawable/drive_folder_upload_rounded"
+        android:title="@string/batch_export"
+        app:showAsAction="always" />
+    <item
+        android:id="@+id/action_batch_delete"
+        android:icon="@drawable/delete_rounded"
+        android:title="@string/batch_delete"
+        app:showAsAction="always" />
+    <item
+        android:id="@+id/action_select_all"
+        android:icon="@drawable/select_all_rounded"
+        android:title="@string/select_all"
+        app:showAsAction="ifRoom" />
+</menu>

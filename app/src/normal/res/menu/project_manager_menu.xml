@@ -2,8 +2,13 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
     <item
+        android:id="@+id/action_new_project"
+        android:icon="@drawable/add_rounded"
+        android:title="@string/new_project"
+        app:showAsAction="always" />
+    <item
         android:id="@+id/action_import_love"
-        android:icon="@drawable/folder_rounded"
+        android:icon="@drawable/file_download_rounded"
         android:title="@string/import_love_project"
         app:showAsAction="always" />
 </menu>

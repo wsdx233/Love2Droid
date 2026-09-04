@@ -42,6 +42,7 @@ data class Project(
     val lastOpened: Long,
     val androidProperties: AndroidProjectProperties = AndroidProjectProperties.defaults(id, displayName),
     val breakpoints: List<ProjectBreakpoint> = emptyList(),
+    val group: String = "",
 )
 
 class ProjectRepository(context: Context) {
@@ -98,6 +99,62 @@ class ProjectRepository(context: Context) {
     }
 
 
+    fun updateProjectGroup(project: Project, groupName: String): Project {
+        require(StorageUtils.isWithin(projectsRoot, project.root)) { "Project is outside storage root" }
+        val updated = project.copy(group = groupName.trim())
+        writeMetadata(updated)
+        return updated
+    }
+
+    fun listGroups(): List<String> {
+        val groups = linkedSetOf<String>()
+        val saved = preferences.getStringSet("custom_groups", null)
+        if (saved != null) {
+            groups.addAll(saved.filter { it.isNotBlank() })
+        }
+        listProjects().forEach { project ->
+            if (project.group.isNotBlank()) {
+                groups.add(project.group)
+            }
+        }
+        return groups.sortedWith(String.CASE_INSENSITIVE_ORDER)
+    }
+
+    fun addGroup(groupName: String): Boolean {
+        val trimmed = groupName.trim()
+        if (trimmed.isBlank()) return false
+        val current = preferences.getStringSet("custom_groups", emptySet())?.toMutableSet() ?: mutableSetOf()
+        current.add(trimmed)
+        preferences.edit().putStringSet("custom_groups", current).apply()
+        return true
+    }
+
+    fun deleteGroup(groupName: String) {
+        val trimmed = groupName.trim()
+        if (trimmed.isBlank()) return
+        val current = preferences.getStringSet("custom_groups", emptySet())?.toMutableSet() ?: mutableSetOf()
+        if (current.remove(trimmed)) {
+            preferences.edit().putStringSet("custom_groups", current).apply()
+        }
+        listProjects().filter { it.group == trimmed }.forEach { project ->
+            updateProjectGroup(project, "")
+        }
+    }
+
+    fun renameGroup(oldName: String, newName: String) {
+        val oldTrimmed = oldName.trim()
+        val newTrimmed = newName.trim()
+        if (oldTrimmed.isBlank() || newTrimmed.isBlank() || oldTrimmed == newTrimmed) return
+        val current = preferences.getStringSet("custom_groups", emptySet())?.toMutableSet() ?: mutableSetOf()
+        if (current.remove(oldTrimmed)) {
+            current.add(newTrimmed)
+            preferences.edit().putStringSet("custom_groups", current).apply()
+        }
+        listProjects().filter { it.group == oldTrimmed }.forEach { project ->
+            updateProjectGroup(project, newTrimmed)
+        }
+    }
+
     fun projectIcon(project: Project): File? = iconStore.iconFile(project.id)
 
     fun importProjectIcon(project: Project, uri: Uri): File {
@@ -105,7 +162,7 @@ class ProjectRepository(context: Context) {
         return iconStore.importIcon(project.id, uri)
     }
 
-    fun createProject(displayName: String, requestedId: String, description: String): Project {
+    fun createProject(displayName: String, requestedId: String, description: String, group: String = ""): Project {
         val cleanName = displayName.trim()
         require(cleanName.isNotEmpty()) { "Project name is required" }
         val id = requestedId.trim().ifEmpty { slugify(cleanName) }
@@ -127,7 +184,7 @@ class ProjectRepository(context: Context) {
                 File(root, LuaLanguageServerProjectConfig.FILE_NAME),
                 LuaLanguageServerProjectConfig.content(),
             )
-            val project = Project(id, cleanName, description.trim(), root, 0L)
+            val project = Project(id, cleanName, description.trim(), root, 0L, group = group.trim())
             writeMetadata(project)
             return project
         } catch (error: Throwable) {
@@ -136,14 +193,14 @@ class ProjectRepository(context: Context) {
         }
     }
 
-    fun importLoveArchive(input: java.io.InputStream, archiveName: String): Project {
+    fun importLoveArchive(input: java.io.InputStream, archiveName: String, group: String = ""): Project {
         val cleanName = archiveName.substringAfterLast('/').substringBeforeLast('.')
             .trim().ifBlank { "Imported Project" }
         val id = uniqueProjectId(slugify(cleanName))
         val root = File(projectsRoot, id)
         try {
             LoveArchiveTransfer.import(input, root)
-            val project = Project(id, cleanName, "", root, 0L)
+            val project = Project(id, cleanName, "", root, 0L, group = group.trim())
             writeMetadata(project)
             return project
         } catch (error: Throwable) {
@@ -192,6 +249,7 @@ class ProjectRepository(context: Context) {
         val displayName = metadata?.optString("displayName").orEmpty().ifBlank { root.name }
         val description = metadata?.optString("description").orEmpty()
         val lastOpened = metadata?.optLong("lastOpened", 0L) ?: 0L
+        val group = metadata?.optString("group").orEmpty()
         val androidProperties = AndroidProjectProperties.fromJson(
             metadata?.optJSONObject("android"),
             root.name,
@@ -212,6 +270,7 @@ class ProjectRepository(context: Context) {
             lastOpened,
             androidProperties,
             normalizeProjectBreakpoints(root, breakpoints),
+            group,
         )
     }
     private fun uniqueProjectId(base: String): String {
@@ -238,6 +297,7 @@ class ProjectRepository(context: Context) {
             .put("displayName", project.displayName)
             .put("description", project.description)
             .put("lastOpened", project.lastOpened)
+            .put("group", project.group)
             .put("android", project.androidProperties.toJson())
             .put("breakpoints", breakpoints)
         StorageUtils.writeTextAtomic(File(project.root, StorageUtils.METADATA_FILE), metadata.toString(2))
