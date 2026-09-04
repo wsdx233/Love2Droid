@@ -85,13 +85,13 @@ object ProotInstaller {
     val state = _state.asStateFlow()
 
     @Synchronized
-    fun start(context: Context) {
+    fun start(context: Context, targetComponentIds: Set<String>? = null) {
         if (installJob?.isActive == true || _state.value.isWorking) return
         val appContext = context.applicationContext
-        installJob = installScope.launch { install(appContext) }
+        installJob = installScope.launch { install(appContext, targetComponentIds) }
     }
 
-    suspend fun install(context: Context): Result<Unit> {
+    suspend fun install(context: Context, targetComponentIds: Set<String>? = null): Result<Unit> {
         val appContext = context.applicationContext
         return installMutex.withLock {
             withContext(Dispatchers.IO) {
@@ -103,46 +103,64 @@ object ProotInstaller {
                     check(ProotRuntime.prootBinary(appContext).isFile) {
                         appContext.getString(R.string.proot_library_missing)
                     }
-                    if (ProotRuntime.isEnvironmentReady(appContext)) {
-                        update(
-                            ProotInstallState.Status.DONE,
-                            100,
-                            appContext.getString(R.string.proot_install_done),
-                        )
-                        return@runCatching
+
+                    val targets = if (targetComponentIds.isNullOrEmpty()) {
+                        InstallRegistry.availableComponents.map { it.id }.toSet()
+                    } else {
+                        // If any component is requested, rootfs is always required
+                        targetComponentIds + InstallRegistry.ID_ROOTFS
                     }
+
+                    val installRootfs = targets.contains(InstallRegistry.ID_ROOTFS)
+                    val installLsp = targets.contains(InstallRegistry.ID_LSP)
+                    val installOmp = targets.contains(InstallRegistry.ID_OMP)
 
                     prepareRuntime(appContext)
-                    val rootfsMarker = File(ProotRuntime.runtimeDir(appContext), ROOTFS_MARKER)
-                    if (!rootfsMarker.isFile || !File(ProotRuntime.rootfsDir(appContext), "bin").isDirectory) {
-                        rootfsMarker.delete()
-                        val archive = downloadUbuntuBase(appContext)
-                        extractUbuntuBase(appContext, archive)
-                        configureRootfs(appContext)
-                        rootfsMarker.writeText("ubuntu=24.04.4\nsha256=$UBUNTU_BASE_SHA256\n")
-                    } else {
-                        appendLog(appContext.getString(R.string.proot_log_rootfs_reused))
-                    }
-                    configureResolver(appContext)
-                    configureHostGroups(appContext)
-                    repairRootfsPermissions(appContext)
-                    if (ProotRuntime.luaLanguageServer(appContext).isFile) {
-                        appendLog(appContext.getString(R.string.proot_log_lsp_reused))
-                    } else {
-                        installLuaLanguageServer(appContext)
-                    }
-                    if (ProotRuntime.isOmpReady(appContext)) {
-                        appendLog(appContext.getString(R.string.proot_log_omp_reused))
-                    } else {
-                        installOmp(appContext)
-                    }
-                    if (ProotRuntime.isBashPromptReady(appContext)) {
-                        appendLog(appContext.getString(R.string.proot_log_bash_prompt_reused))
-                    } else {
-                        installBashPrompt(appContext)
+                    if (installRootfs) {
+                        val rootfsMarker = File(ProotRuntime.runtimeDir(appContext), ROOTFS_MARKER)
+                        if (!rootfsMarker.isFile || !File(ProotRuntime.rootfsDir(appContext), "bin").isDirectory) {
+                            rootfsMarker.delete()
+                            val archive = downloadUbuntuBase(appContext)
+                            extractUbuntuBase(appContext, archive)
+                            configureRootfs(appContext)
+                            rootfsMarker.writeText("ubuntu=24.04.4\nsha256=$UBUNTU_BASE_SHA256\n")
+                        } else {
+                            appendLog(appContext.getString(R.string.proot_log_rootfs_reused))
+                        }
+                        configureResolver(appContext)
+                        configureHostGroups(appContext)
+                        repairRootfsPermissions(appContext)
+                        ProotRuntime.rootfsReadyMarker(appContext).writeText("ready=true\n")
                     }
 
-                    writeReadyMarker(appContext)
+                    if (installLsp) {
+                        if (ProotRuntime.luaLanguageServer(appContext).isFile) {
+                            appendLog(appContext.getString(R.string.proot_log_lsp_reused))
+                        } else {
+                            installLuaLanguageServer(appContext)
+                        }
+                        ProotRuntime.lspReadyMarker(appContext).writeText("ready=true\n")
+                    }
+
+                    if (installOmp) {
+                        if (ProotRuntime.isOmpReady(appContext)) {
+                            appendLog(appContext.getString(R.string.proot_log_omp_reused))
+                        } else {
+                            installOmp(appContext)
+                        }
+                        if (ProotRuntime.isBashPromptReady(appContext)) {
+                            appendLog(appContext.getString(R.string.proot_log_bash_prompt_reused))
+                        } else {
+                            installBashPrompt(appContext)
+                        }
+                        ProotRuntime.ompReadyMarker(appContext).writeText("ready=true\n")
+                    }
+
+                    // If all components are ready, write legacy ready marker too
+                    if (ProotRuntime.isEnvironmentReady(appContext)) {
+                        writeReadyMarker(appContext)
+                    }
+
                     File(appContext.cacheDir, "proot/$UBUNTU_BASE_FILE").delete()
                     update(
                         ProotInstallState.Status.DONE,

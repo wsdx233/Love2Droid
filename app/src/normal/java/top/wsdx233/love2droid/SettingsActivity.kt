@@ -1,5 +1,6 @@
 package top.wsdx233.love2droid
 
+import android.graphics.Color
 import android.os.Bundle
 import android.util.TypedValue
 import android.view.Gravity
@@ -28,7 +29,10 @@ class SettingsActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         settings = SettingsStore(this)
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.WHITE)
+        }
         val topInset = View(this).apply { setBackgroundColor(getColor(R.color.action_bar_background)) }
         root.addView(topInset, LinearLayout.LayoutParams.MATCH_PARENT, 0)
         val toolbar = MaterialToolbar(this).apply {
@@ -136,6 +140,15 @@ class SettingsActivity : AppCompatActivity() {
             setOnClickListener { startActivity(android.content.Intent(this@SettingsActivity, ModelSettingsActivity::class.java)) }
         }
         content.addView(modelButton, LinearLayout.LayoutParams.MATCH_PARENT, dp(52))
+
+        addSection(R.string.settings_components)
+        addInfoPreference(R.string.settings_components, getString(R.string.settings_components_summary))
+        val componentsButton = MaterialButton(this).apply {
+            text = getString(R.string.components_title)
+            setIconResource(R.drawable.extension_rounded)
+            setOnClickListener { SetupActivity.start(this@SettingsActivity, fromSettings = true) }
+        }
+        content.addView(componentsButton, LinearLayout.LayoutParams.MATCH_PARENT, dp(52))
     }
 
     private fun addSection(title: Int) {

@@ -75,8 +75,13 @@ internal class SettingsStore(context: Context) {
         set(value) = preferences.edit().putBoolean(KEY_OMP_USE_PROJECT_DIRECTORY, value).apply()
 
 
+    var hasShownInitialSetup: Boolean
+        get() = preferences.getBoolean(KEY_HAS_SHOWN_INITIAL_SETUP, false)
+        set(value) = preferences.edit().putBoolean(KEY_HAS_SHOWN_INITIAL_SETUP, value).apply()
+
     companion object {
         private const val NAME = "workspace-settings"
+        private const val KEY_HAS_SHOWN_INITIAL_SETUP = "has_shown_initial_setup"
         private const val KEY_APP_THEME_MODE = "app_theme_mode"
         private const val KEY_EDITOR_THEME_MODE = "editor_theme_mode"
         private const val KEY_EDITOR_FONT_SIZE = "editor_font_size"

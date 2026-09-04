@@ -41,7 +41,7 @@ class LuaLspController(
 
     suspend fun attach(projectRoot: File, file: File, wrapperLanguage: Language) {
         mutex.withLock {
-            if (!ProotRuntime.isEnvironmentReady(appContext) || file.extension.lowercase() != "lua") {
+            if (!ProotRuntime.isLspReady(appContext) || file.extension.lowercase() != "lua") {
                 disposeActive()
                 return
             }

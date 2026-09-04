@@ -1054,9 +1054,16 @@ class EditorActivity : AppCompatActivity() {
         startupCommand: String? = null,
         isOmp: Boolean = false,
     ) {
-        if (!ProotRuntime.isEnvironmentReady(this)) {
-            startActivity(Intent(this, SetupActivity::class.java))
-            return
+        if (isOmp) {
+            if (!ProotRuntime.isOmpReady(this)) {
+                SetupActivity.start(this, targetComponent = InstallRegistry.ID_OMP)
+                return
+            }
+        } else {
+            if (!ProotRuntime.isRootfsReady(this)) {
+                SetupActivity.start(this, targetComponent = InstallRegistry.ID_ROOTFS)
+                return
+            }
         }
         val projectRoot = currentProject?.root?.takeIf { settings.ompUseProjectDirectory }
         createTerminalTab(
@@ -2366,7 +2373,9 @@ class EditorActivity : AppCompatActivity() {
                         })
                     }
                     WorkspaceTabType.TERMINAL -> {
-                        if (!ProotRuntime.isEnvironmentReady(this@EditorActivity)) return@forEach
+                        val isOmp = restored.state.isOmp
+                        if (isOmp && !ProotRuntime.isOmpReady(this@EditorActivity)) return@forEach
+                        if (!isOmp && !ProotRuntime.isRootfsReady(this@EditorActivity)) return@forEach
                         val relativeDirectory = restored.state.workingDirectory
                         val terminalDirectory = when (relativeDirectory) {
                             null -> null
@@ -2375,7 +2384,6 @@ class EditorActivity : AppCompatActivity() {
                             }.getOrNull()?.takeIf { it.isDirectory }
                                 ?: project.root
                         }
-                        val isOmp = restored.state.isOmp
                         val startup = if (isOmp) ProotRuntime.ompStartupCommand() else null
                         runCatching {
                             createTerminalTab(
@@ -2420,6 +2428,8 @@ class EditorActivity : AppCompatActivity() {
     private fun refreshTabs() {
         tabLabels.clear()
         tabContainer.removeAllViews()
+        tabContainer.setBackgroundColor(Color.WHITE)
+        tabScroll.setBackgroundColor(Color.WHITE)
         val tabRipple = obtainStyledAttributes(
             intArrayOf(android.R.attr.selectableItemBackground),
         ).let { attributes ->

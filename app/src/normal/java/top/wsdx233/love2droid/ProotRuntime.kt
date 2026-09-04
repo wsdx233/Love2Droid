@@ -16,7 +16,10 @@ object ProotRuntime {
     internal const val BASH_PROMPT_BASHRC_SOURCE = ". /root/.local/share/bash-prompt/prompt.sh"
     internal const val BASH_PROMPT_DIRTRIM_ENTRY = "PROMPT_DIRTRIM=1"
     internal const val BASH_PROMPT_PS1_ENTRY = "PS1=\"\$(prompt_get_ps1)\""
-    private const val READY_MARKER_NAME = ".setup-complete"
+    const val READY_MARKER_NAME = ".setup-complete"
+    const val ROOTFS_READY_MARKER_NAME = ".rootfs-complete"
+    const val LSP_READY_MARKER_NAME = ".lsp-complete"
+    const val OMP_READY_MARKER_NAME = ".omp-complete"
     private const val RESOLV_CONF_PATH = "etc/resolv.conf"
 
     data class LaunchSpec(
@@ -44,6 +47,12 @@ object ProotRuntime {
 
     fun readyMarker(context: Context): File = File(runtimeDir(context), READY_MARKER_NAME)
 
+    fun rootfsReadyMarker(context: Context): File = File(runtimeDir(context), ROOTFS_READY_MARKER_NAME)
+
+    fun lspReadyMarker(context: Context): File = File(runtimeDir(context), LSP_READY_MARKER_NAME)
+
+    fun ompReadyMarker(context: Context): File = File(runtimeDir(context), OMP_READY_MARKER_NAME)
+
     fun luaLanguageServer(context: Context): File =
         File(rootfsDir(context), LUA_LANGUAGE_SERVER_GUEST_PATH.removePrefix("/"))
 
@@ -52,16 +61,36 @@ object ProotRuntime {
     fun prootBinary(context: Context): File =
         File(context.applicationInfo.nativeLibraryDir, PROOT_LIBRARY_NAME)
 
-    fun isEnvironmentReady(context: Context): Boolean {
+    /**
+     * Checks if the base PRoot Linux container (Ubuntu rootfs, groups, resolver) is ready.
+     * This is sufficient to launch a guest bash terminal or run CLI tools.
+     */
+    fun isRootfsReady(context: Context): Boolean {
         return isSupportedDevice() &&
             prootBinary(context).isFile &&
             rootfsDir(context).isDirectory &&
-            readyMarker(context).isFile &&
-            luaLanguageServer(context).isFile &&
-            isOmpReady(context) &&
-            isBashPromptReady(context) &&
+            (rootfsReadyMarker(context).isFile || readyMarker(context).isFile) &&
             areHostGroupsConfigured(context) &&
             isResolverConfigured(context)
+    }
+
+    /**
+     * Checks if Lua Language Server is ready.
+     */
+    fun isLspReady(context: Context): Boolean {
+        return isRootfsReady(context) &&
+            luaLanguageServer(context).isFile &&
+            (lspReadyMarker(context).isFile || readyMarker(context).isFile)
+    }
+
+    /**
+     * Legacy/full environment check: whether PRoot rootfs, LSP, OMP, and prompt styling are all ready.
+     */
+    fun isEnvironmentReady(context: Context): Boolean {
+        return isRootfsReady(context) &&
+            luaLanguageServer(context).isFile &&
+            isOmpReady(context) &&
+            isBashPromptReady(context)
     }
     internal fun hostSupplementaryGroupIds(): Set<Int> {
         val procStatus = runCatching { File("/proc/self/status").readText(Charsets.UTF_8) }
@@ -114,10 +143,16 @@ object ProotRuntime {
 
     fun isOmpReady(context: Context): Boolean {
         val bashrc = rootBashrc(context)
-        return ompBinary(context).isFile &&
+        return isRootfsReady(context) &&
+            ompBinary(context).isFile &&
             bashrc.isFile &&
+            (ompReadyMarker(context).isFile || readyMarker(context).isFile) &&
             bashrc.useLines { lines -> lines.any { it.trim() == OMP_BASHRC_ENTRY } }
     }
+
+    fun isGitReady(context: Context): Boolean =
+        isRootfsReady(context) && gitBinary(context).isFile
+
     fun bashPromptScript(context: Context): File =
         File(rootfsDir(context), BASH_PROMPT_GUEST_PATH.removePrefix("/"))
 

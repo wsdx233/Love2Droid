@@ -40,8 +40,9 @@ class ModelSettingsActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        if (!ProotRuntime.isEnvironmentReady(this)) {
+        if (!ProotRuntime.isOmpReady(this)) {
             Toast.makeText(this, R.string.settings_omp_unavailable, Toast.LENGTH_LONG).show()
+            SetupActivity.start(this, targetComponent = InstallRegistry.ID_OMP)
             finish()
             return
         }
@@ -58,7 +59,10 @@ class ModelSettingsActivity : AppCompatActivity() {
     }
 
     private fun createContent() {
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.WHITE)
+        }
         val topInset = View(this).apply { setBackgroundColor(getColor(R.color.action_bar_background)) }
         root.addView(topInset, LinearLayout.LayoutParams.MATCH_PARENT, 0)
         toolbar = MaterialToolbar(this).apply {

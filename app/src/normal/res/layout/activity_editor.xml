@@ -4,7 +4,7 @@
     android:id="@+id/drawer_layout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="?android:attr/colorBackground">
+    android:background="@color/pure_white">
 
     <LinearLayout
         android:id="@+id/editor_content"
@@ -31,7 +31,7 @@
             android:id="@+id/tab_scroll"
             android:layout_width="match_parent"
             android:layout_height="24dp"
-            android:background="@android:color/transparent"
+            android:background="@color/pure_white"
             android:fillViewport="false"
             android:scrollbars="none">
 
@@ -156,7 +156,7 @@
         android:layout_width="320dp"
         android:layout_height="match_parent"
         android:layout_gravity="start"
-        android:background="?android:attr/colorBackground"
+        android:background="@color/pure_white"
         android:elevation="12dp"
         android:orientation="vertical">
 
@@ -270,7 +270,7 @@
             android:id="@+id/selection_action_bar"
             android:layout_width="match_parent"
             android:layout_height="56dp"
-            android:background="?attr/colorSurface"
+            android:background="@color/pure_white"
             android:elevation="8dp"
             android:gravity="center"
             android:orientation="horizontal"
