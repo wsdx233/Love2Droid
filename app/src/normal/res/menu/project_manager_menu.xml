@@ -3,7 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
     <item
         android:id="@+id/action_import_love"
-        android:icon="@drawable/ic_folder"
+        android:icon="@drawable/folder_rounded"
         android:title="@string/import_love_project"
         app:showAsAction="always" />
 </menu>

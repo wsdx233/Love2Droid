@@ -3,29 +3,12 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
     <item
         android:id="@+id/action_play"
-        android:icon="@drawable/ic_play"
+        android:icon="@drawable/play_arrow_rounded"
         android:title="@string/play"
         app:showAsAction="always" />
     <item
-        android:id="@+id/action_new"
-        android:icon="@drawable/ic_add"
-        android:title="@string/new_action"
-        app:showAsAction="always">
-        <menu>
-            <item
-                android:id="@+id/action_new_document"
-                android:title="@string/new_file" />
-            <item
-                android:id="@+id/action_new_terminal"
-                android:title="@string/new_terminal" />
-            <item
-                android:id="@+id/action_new_omp"
-                android:title="@string/new_omp" />
-        </menu>
-    </item>
-    <item
         android:id="@+id/action_save"
-        android:icon="@drawable/ic_save"
+        android:icon="@drawable/save_rounded"
         android:title="@string/save"
         app:showAsAction="always" />
     <item
@@ -34,44 +17,72 @@
         android:title="@string/undo"
         app:showAsAction="always" />
     <item
+        android:id="@+id/action_new"
+        android:icon="@drawable/add_rounded"
+        android:title="@string/new_action"
+        app:showAsAction="never">
+        <menu>
+            <item
+                android:id="@+id/action_new_document"
+                android:icon="@drawable/note_add_rounded"
+                android:title="@string/new_file" />
+            <item
+                android:id="@+id/action_new_terminal"
+                android:icon="@drawable/terminal_rounded"
+                android:title="@string/new_terminal" />
+            <item
+                android:id="@+id/action_new_omp"
+                android:icon="@drawable/auto_awesome_rounded"
+                android:title="@string/new_omp" />
+        </menu>
+    </item>
+    <item
         android:id="@+id/action_save_as"
         android:icon="@drawable/save_as_rounded"
         android:title="@string/save_as"
         app:showAsAction="never" />
     <item
         android:id="@+id/action_find_replace"
+        android:icon="@drawable/search_rounded"
         android:title="@string/find_replace"
         app:showAsAction="never" />
     <item
         android:id="@+id/action_package_android"
+        android:icon="@drawable/android_rounded"
         android:title="@string/android_package_title"
         app:showAsAction="never" />
     <item
         android:id="@+id/action_word_wrap"
         android:checkable="true"
+        android:icon="@drawable/wrap_text_rounded"
         android:title="@string/word_wrap"
         app:showAsAction="never" />
     <item
         android:id="@+id/action_symbol_bar"
         android:checkable="true"
+        android:icon="@drawable/code_blocks_rounded"
         android:title="@string/symbol_bar"
         app:showAsAction="never" />
     <item
         android:id="@+id/action_read_only"
         android:checkable="true"
+        android:icon="@drawable/edit_note_rounded"
         android:title="@string/read_only"
         app:showAsAction="never" />
     <item
         android:id="@+id/action_lsp_hover"
         android:checkable="true"
+        android:icon="@drawable/info_rounded"
         android:title="@string/lsp_hover_info"
         app:showAsAction="never" />
     <item
         android:id="@+id/action_settings"
+        android:icon="@drawable/settings_rounded"
         android:title="@string/settings"
         app:showAsAction="never" />
     <item
         android:id="@+id/action_projects"
+        android:icon="@drawable/folder_rounded"
         android:title="@string/project_manager"
         app:showAsAction="never" />
 </menu>

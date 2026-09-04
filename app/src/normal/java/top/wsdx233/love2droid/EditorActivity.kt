@@ -1,5 +1,6 @@
 package top.wsdx233.love2droid
 
+import android.annotation.SuppressLint
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -36,6 +37,7 @@ import android.graphics.Rect
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.view.menu.MenuBuilder
 import androidx.core.graphics.drawable.DrawableCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
@@ -349,7 +351,7 @@ class EditorActivity : AppCompatActivity() {
         toolbar.navigationContentDescription = getString(R.string.file_browser)
         toolbar.setNavigationOnClickListener { drawer.openDrawer(GravityCompat.START) }
         toolbar.inflateMenu(R.menu.editor_menu)
-        tintToolbarMenuIcons()
+        enableMenuIcons(toolbar.menu)
         updateEditorMenuState()
         toolbar.setOnMenuItemClickListener(::onToolbarItemSelected)
 
@@ -414,16 +416,14 @@ class EditorActivity : AppCompatActivity() {
             window.decorView.post { openProjectManagerIfNeeded() }
         }
     }
-    private fun tintToolbarMenuIcons(menu: Menu = toolbar.menu) {
-        val iconColor = ContextCompat.getColor(this, R.color.action_bar_foreground)
+    @SuppressLint("RestrictedApi")
+    private fun enableMenuIcons(menu: Menu = toolbar.menu) {
+        if (menu is MenuBuilder) {
+            menu.setOptionalIconsVisible(true)
+        }
         for (index in 0 until menu.size()) {
             val item = menu.getItem(index)
-            item.icon?.let { icon ->
-                val tinted = DrawableCompat.wrap(icon.mutate())
-                DrawableCompat.setTint(tinted, iconColor)
-                item.icon = tinted
-            }
-            item.subMenu?.let(::tintToolbarMenuIcons)
+            item.subMenu?.let(::enableMenuIcons)
         }
     }
 
