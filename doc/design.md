@@ -105,9 +105,9 @@ Drawer 使用 `RecyclerView` 展示当前目录的直接子项，不渲染可展
 - guest 主目录提供 `~/projects` 软链接，指向应用的项目根目录；DSH 工作目录选择器可从 Home → projects → 项目进入。升级后首次启动 PRoot 自动补建，不迁移或复制项目；已有同名真实文件或文件夹不会被覆盖。
 - DSH Web 标签由应用内后台 PRoot 会话启动；命令使用 `--no-open`，避免调起外部浏览器。应用等待完整启动行中的 loopback 认证 URL 后再加载，不先访问无 token 地址；切换标签不重复提交已经使用的认证 URL，URL token 不写入工作区。
 - WebView 访问 DSH 的 `127.0.0.1:3080` HTTP 服务；API 24+ 明确按该 IP 放行本地 cleartext，API 23 使用 Manifest 兼容开关。服务启动准备失败、WebView 主页面加载失败均显示错误提示。
-- DSH profile 自动启用 pnpm `ignore-workspace-root-check=true`；用户可直接执行 `dsh plugin --profile web add <插件>`，不必额外追加 `-w`。旧环境在下一次 PRoot 启动准备时补写配置。
+- DSH profile 自动启用 pnpm `ignore-workspace-root-check=true`；用户可直接执行 `dsh plugin --profile web add <插件>`，不必额外追加 `-w`。预装移动端适配插件为 `dsh-web-mobile`，旧环境在下一次 PRoot 启动准备时补写配置。
+- 应用内 WebView 已由 Activity 消费系统状态栏 inset；页面完成后仅清除移动端插件对 `[data-mobile-ux="frame"]` 及其抽屉的重复顶部安全区 padding，不改变网页滚动、输入框或其他布局。
 - DSH 标签在等待服务认证地址和 WebView 页面加载时显示顶部不定进度条；完成或失败后隐藏，切换到其他标签时不显示。进度条覆盖在内容区顶部，不改变 WebView 可用高度。
-- WebView 继续填满 Tab 下方的加权内容容器，不按手机屏幕高度设置固定尺寸；本次不修改页面 CSS、滚动条或窗口 Insets，避免未确认根因时裁切内容。
 - 游戏窗口遵循 LÖVE/SDL Android 方向规则：`t.window.resizable = false` 且未设置 `SDL_ORIENTATIONS` 时，`width > height` 启动为横屏，`height >= width` 启动为竖屏；`resizable = true` 时允许随设备和系统旋转锁定切换。游戏调试悬浮球在横竖屏双向旋转后停靠到右侧，并按旋转前的纵向比例保持位置，避免落到底部或移出屏幕。
 - 游戏调试悬浮球使用黑色半透明背景和白色扳手 Material Symbols，支持拖动。轻触后显示黑色半透明 scrim；横屏面板从左侧滑出，竖屏面板从底部以 Bottom Sheet 形态滑出。调试 Activity 使用 `Window` 的 `adjustPan` 让系统在输入法出现时仅平移到当前输入框可见，不手动计算输入法高度。
 - 调试面板标题固定为“调试”，使用 Material 3 游戏主题、纯白背景、少量圆角、大号触控热区和带 Ripple 的 Material 控件。竖屏使用纯图标 `TabLayout`，横屏切换为左侧纯图标 `NavigationRailView`；断点入口使用 `bug_report` 小虫图标，两种导航共享当前页面。控制台日志从内容区顶部开始显示，搜索与等级筛选默认收起；REPL 底部使用单一描边矩形容器，左下角依次提供搜索、筛选、清空和滚动锁定操作，发送位于右下角，右上角可展开多行输入区。监视页使用 `push_pin` 图钉固定安全求值表达式到游戏画面 HUD。REPL 快捷代码和符号栏当前不显示。

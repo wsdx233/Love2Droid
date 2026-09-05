@@ -2323,6 +2323,7 @@ class EditorActivity : AppCompatActivity() {
             }
 
             override fun onPageFinished(view: WebView, url: String) {
+                normalizeDshWebViewInsets(view)
                 dshWebLoadState.finish(url, view.url)
                 updateDshLoadingIndicator()
             }
@@ -2341,6 +2342,15 @@ class EditorActivity : AppCompatActivity() {
             }
         }
         dshWebView.webChromeClient = WebChromeClient()
+    }
+
+    /**
+     * The activity already consumes the system-bar inset above the WebView.
+     * dsh-mobile-ux also applies that inset to its frame when viewport-fit=cover
+     * is enabled, which produces a second blank band only inside the app.
+     */
+    private fun normalizeDshWebViewInsets(view: WebView) {
+        view.evaluateJavascript(DSH_WEBVIEW_SAFE_AREA_COMPAT_SCRIPT, null)
     }
 
     private fun updateDshLoadingIndicator() {
@@ -3176,5 +3186,26 @@ class EditorActivity : AppCompatActivity() {
         private const val MAX_TAB_NAME_CHARS = 15
         private const val TERMINAL_KEY_COLOR = 0xFF424242.toInt()
         private const val TERMINAL_MODIFIER_COLOR = 0xFF5C6BC0.toInt()
+        private val DSH_WEBVIEW_SAFE_AREA_COMPAT_SCRIPT = """
+            (() => {
+                const id = 'love2droid-dsh-webview-safe-area';
+                let style = document.getElementById(id);
+                if (style === null) {
+                    style = document.createElement('style');
+                    style.id = id;
+                    document.head.appendChild(style);
+                }
+                style.textContent = `
+                    @media (max-width: 1023px) {
+                        [data-mobile-ux="frame"],
+                        [data-mobile-ux="frame"] > :first-child,
+                        [data-mobile-nav="frame"],
+                        [data-mobile-nav="frame"] > :first-child {
+                            padding-top: 0 !important;
+                        }
+                    }
+                `;
+            })();
+        """.trimIndent()
     }
 }

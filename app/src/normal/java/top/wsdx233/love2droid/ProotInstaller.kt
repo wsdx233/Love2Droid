@@ -643,11 +643,14 @@ object ProotInstaller {
                 printf 'export NVM_DIR="/root/.nvm"\n[ -s "${'$'}NVM_DIR/nvm.sh" ] && \\. "${'$'}NVM_DIR/nvm.sh"\n' >> /root/.bashrc
             fi
 
-            # 安装 dsh 插件
-            dsh plugin --profile web add dsh-plugin -w || true
-            dsh plugin --profile web add "github:wangyuanchuan2022/dsh-mobile-ux" -w || true
             # profile 本身是 pnpm workspace root；允许用户和插件市场直接执行 `dsh plugin ... add`。
-            printf '%s\n' 'ignore-workspace-root-check=true' >> /root/.dsh/profiles/web/.npmrc
+            mkdir -p /root/.dsh/profiles/web
+            if ! grep -Fqx 'ignore-workspace-root-check=true' /root/.dsh/profiles/web/.npmrc 2>/dev/null; then
+                printf '%s\n' 'ignore-workspace-root-check=true' >> /root/.dsh/profiles/web/.npmrc
+            fi
+            # 安装 DSH 核心插件与官方移动端适配插件
+            dsh plugin --profile web add dsh-plugin || true
+            dsh plugin --profile web add dsh-web-mobile || true
 
             # 标记安装完成
             touch "${ProotRuntime.dshReadyMarker(context).absolutePath.removePrefix(ProotRuntime.rootfsDir(context).absolutePath)}"
