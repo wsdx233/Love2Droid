@@ -53,6 +53,7 @@ app/build/outputs/apk/normalNoRecord/debug/app-normal-noRecord-debug.apk
 - 打开 DSH Web 标签，确认不会调起外部浏览器，等待服务启动后不显示 `ERR_CLEARTEXT_NOT_PERMITTED` 或未认证错误；切换到文件再返回 DSH，不重新加载或丢失页面状态。停止后台服务并重新打开时使用新的完整认证 URL；加载失败时应看到错误提示。主机 Chromium 的认证 Cookie/页面验证不能替代此 Android WebView 回归。
 - DSH 冷启动等待服务和加载文档时，Tab 内容区顶部应显示进度条；认证跳转完成、主页面错误或服务启动准备失败后消失。加载期间切换到文件/终端不显示进度条，切回仍加载的 DSH 时恢复显示，已完成页面不闪现加载条。
 - 新安装及旧环境升级后启动 PRoot，确认 `readlink ~/projects` 指向应用项目根目录，`cd ~/projects/<项目>` 可读取 `main.lua`；在 DSH 的工作目录选择器中从 Home → projects 进入项目。同名真实文件/文件夹必须保持原样，不自动覆盖。
+- 在终端执行 `dsh plugin --profile web add <可用插件>`，确认不再出现 `ERR_PNPM_ADDING_TO_ROOT`；从插件市场安装插件执行同一 profile 安装路径并成功进入队列。确认 profile 原有 `.npmrc` 其他设置保留，重复启动不会重复追加该配置。
 - 真机滚动问题尚未定位：分别记录键盘关闭/打开、竖屏/横屏时的内容区和 WebView 实测高度，并区分文档根滚动、DSH 内部列表滚动与移动插件布局；不要仅凭滚动条存在就隐藏滚动条或强制屏幕高度。
 - 新建项目 → 编辑 `main.lua` → Play → LÖVE 渲染 → 返回编辑器。
 - 在游戏窗口中分别执行竖屏 → 横屏和横屏 → 竖屏旋转；调试悬浮球均停靠在右侧，纵向位置不跳到底部且仍可拖动和点击。

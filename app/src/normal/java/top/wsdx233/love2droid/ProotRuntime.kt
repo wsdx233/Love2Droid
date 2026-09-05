@@ -24,6 +24,7 @@ object ProotRuntime {
     const val LSP_READY_MARKER_NAME = ".lsp-complete"
     const val OMP_READY_MARKER_NAME = ".omp-complete"
     const val DSH_READY_MARKER_NAME = ".dsh-complete"
+    private const val DSH_PNPM_WORKSPACE_ROOT_ENTRY = "ignore-workspace-root-check=true"
     private const val RESOLV_CONF_PATH = "etc/resolv.conf"
 
     data class LaunchSpec(
@@ -256,6 +257,7 @@ object ProotRuntime {
     ): LaunchSpec {
         check(isSupportedDevice()) { "Only arm64-v8a supports the bundled proot runtime" }
         val rootfs = rootfsDir(context)
+        ensureDshPnpmWorkspaceRoot(rootfs)
         val externalFilesDir = context.getExternalFilesDir(null)
         prepareProjectsLink(rootfs, externalFilesDir ?: context.filesDir)
         return buildLaunch(
@@ -270,6 +272,27 @@ object ProotRuntime {
             guestCommand = guestCommand,
         )
     }
+
+    private fun ensureDshPnpmWorkspaceRoot(rootfs: File) {
+        val profileDir = File(rootfs, "root/.dsh/profiles/web")
+        if (!profileDir.isDirectory) return
+        val npmrc = File(profileDir, ".npmrc")
+        val existing = if (npmrc.isFile) npmrc.readText() else ""
+        val lines = existing.lines().toMutableList()
+        val settingIndex = lines.indexOfFirst { line ->
+            line.substringBefore('#').substringBefore('=').trim() == "ignore-workspace-root-check"
+        }
+        if (settingIndex >= 0) {
+            if (lines[settingIndex].substringBefore('#').trim() == DSH_PNPM_WORKSPACE_ROOT_ENTRY) return
+            lines[settingIndex] = DSH_PNPM_WORKSPACE_ROOT_ENTRY
+        } else {
+            if (existing.isNotEmpty() && !existing.endsWith("\n")) lines += ""
+            lines += DSH_PNPM_WORKSPACE_ROOT_ENTRY
+        }
+        npmrc.writeText(lines.joinToString("\n").trimEnd() + "\n")
+    }
+
+    internal fun ensureDshPnpmWorkspaceRootForTest(rootfs: File) = ensureDshPnpmWorkspaceRoot(rootfs)
 
     internal fun buildLaunch(
         proot: File,
@@ -354,7 +377,7 @@ object ProotRuntime {
 
         return LaunchSpec(
             command = command,
-            workingDirectory = rootfs.parentFile,
+            workingDirectory = requireNotNull(rootfs.parentFile),
             environment = mapOf(
                 "TMPDIR" to hostTmp.absolutePath,
                 "PROOT_TMP_DIR" to hostTmp.absolutePath,

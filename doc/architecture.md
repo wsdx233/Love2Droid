@@ -118,6 +118,7 @@ Android 发布与 Play 分离；发布结果是可安装、可分享的独立 AP
 - 产品启动的 Git 进程注入 `core.createObject=rename`，绕过 Android 共享存储上不可靠的硬链接对象落盘；终端 Git 继承同一设置。
 - DSH 后台服务使用独立 `TerminalSession` 并显式初始化终端模拟器；通过 `exec dsh --profile web --no-open --port 3080` 启动，让服务退出结束后台会话。后台和应用内普通终端仅从完整、已换行的 `dsh web:` 输出捕获 `127.0.0.1:3080` 认证 URL，不能使用分批输出中的 token 前缀。token 仅在当前进程内存使用，工作区只持久化无 token 的 loopback 基地址。
 - WebView 等待认证 URL，不抢先加载无 token 基地址；同一认证 URL 只提交一次，避免服务重定向到 `/` 后切换标签又触发认证。API 24+ 通过 `network_security_config.xml` 仅允许 `127.0.0.1` 的 HTTP；API 23 使用 Manifest 的 `usesCleartextTraffic` 兼容开关。
+- DSH profile 是 pnpm workspace root。安装脚本和每次 PRoot 启动准备都会在 `/root/.dsh/profiles/web/.npmrc` 确保 `ignore-workspace-root-check=true`，兼容终端、插件市场和 DSH CLI 的直接 `plugin add`；已有其他 npm 配置保留。
 - DSH 加载状态独立于标签可见性：等待认证地址、主文档加载显示不定进度，`about:blank` 清屏不能提前结束等待；认证重定向按 WebView 当前 URL 判断完成，主文档错误或服务启动准备失败结束加载。顶部 Material 进度条是 WebView 的覆盖层，不占额外布局高度。
 - 安装失败保留可复用阶段并允许重试，不提前写入完成状态。
 

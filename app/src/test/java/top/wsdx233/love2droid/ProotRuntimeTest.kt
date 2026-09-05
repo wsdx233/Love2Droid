@@ -133,6 +133,40 @@ class ProotRuntimeTest {
         }
     }
 
+    @Test
+    fun dshProfileAllowsPnpmRootDependenciesAndPreservesOtherConfig() {
+        val directory = Files.createTempDirectory("proot-dsh-pnpm").toFile()
+        try {
+            val profile = File(directory, "root/.dsh/profiles/web").apply { mkdirs() }
+            val npmrc = File(profile, ".npmrc").apply { writeText("registry=https://registry.npmjs.org\nignore-workspace-root-check=false\n") }
+
+            ProotRuntime.ensureDshPnpmWorkspaceRootForTest(directory)
+            assertEquals(
+                "registry=https://registry.npmjs.org\nignore-workspace-root-check=true\n",
+                npmrc.readText(),
+            )
+
+            ProotRuntime.ensureDshPnpmWorkspaceRootForTest(directory)
+            assertEquals(
+                "registry=https://registry.npmjs.org\nignore-workspace-root-check=true\n",
+                npmrc.readText(),
+            )
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun dshProfileConfigIsNotCreatedBeforeProfileInitialization() {
+        val directory = Files.createTempDirectory("proot-dsh-no-profile").toFile()
+        try {
+            ProotRuntime.ensureDshPnpmWorkspaceRootForTest(directory)
+            assertFalse(File(directory, "root/.dsh/profiles/web/.npmrc").exists())
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
     private fun prepareProjectsLink(rootfs: File, external: File) {
         ProotRuntime.prepareProjectsLink(
             rootfs, external,

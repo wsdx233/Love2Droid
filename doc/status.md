@@ -13,6 +13,7 @@
 - 支持 DeepSeek Harness (DSH) 智能助手：包含 nvm、node、dsh CLI 及指定 Web 插件的安装管理；支持设置后台自启服务并在编辑器中以专用 Web Tab (WebView) 嵌入访问 `http://127.0.0.1:3080`，当服务未启动时提供交互式提示与一键启用。
 - DSH 后台会话显式初始化 Terminal emulator，以 `exec dsh --profile web --no-open --port 3080` 启动；等待完整启动行中的认证 URL 后加载 WebView，避免无 token 请求和半截 token。APK 显式配置 loopback HTTP 许可，认证 token 不写入工作区。
 - DSH Web 标签提供等待服务及页面加载的顶部进度条；PRoot 启动自动维护 `~/projects` 项目入口，支持从 WebUI 的 Home 浏览项目，不覆盖同名真实文件或文件夹。
+- DSH profile 已自动配置 pnpm workspace root 依赖安装；终端命令和插件市场不再因缺少 `-w` 触发 `ERR_PNPM_ADDING_TO_ROOT`。升级旧环境时由下一次 PRoot 启动自动迁移。
 - WebView 高度调查未确认手机屏幕高度误用：布局使用 Tab 下方剩余内容区；同版 DSH 原生 WebUI 在主机 Chromium 的 400/640/780/915px 视口下，文档滚动高度均等于视口高度。用户真机滚动条来源尚未定位，本次不改高度、Insets 或滚动样式；主机结果不涵盖真机 WebView 和移动插件组合。
 - LuaLS 使用项目真实路径工作；新建项目生成 `.luarc.json` 并加载 LuaJIT 与 LuaLS 内置 LÖVE 11.5 API library。
 - Lua 文件支持长按选择符号后，在文本选区操作浮动菜单中转到定义和查找用法；结果在 Bottom Sheet 中显示并在项目内安全跳转，LuaLS 悬浮 `file:` 链接不再交给外部 Intent，点击窗口外区域会关闭悬浮窗口。
