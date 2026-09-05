@@ -9,7 +9,11 @@
 - 文件新建、重命名、复制/剪切、粘贴、删除和详情；文件浏览器支持滑动进入多选、再次滑动选择同目录区间，以及底部全选、反选和取消选择操作栏；文件夹和顶部目录菜单支持通过指定 DocumentsUI 的 SAF 导入文件或文件夹并导出，文件支持 SAF 导出；项目管理支持 `.love`/`.zip` 导入和 `.love` 导出。
 - Sora Editor、TextMate 语法注册、文件/终端混合多标签、未命名文档和原子保存；打开文件使用后台受限 UTF-8 加载，拒绝二进制、非 UTF-8 和超过 5 MB 的文件，并保留 LF/CRLF/CR 换行风格。AppBar 支持符号栏、当前标签只读和 LuaLS 悬浮信息开关，其中符号栏与悬浮信息状态跨重启保存。
 - `.love` 快照构建、FileProvider Content URI 和 Play 启动闭环。
-- arm64 PRoot 支持模块化按需安装（Ubuntu Base、LuaLS、OMP、Git），安装向导仅在应用首次启动时展示一次并支持跳过，设置中提供“环境与扩展组件”管理入口；设置、侧栏和 Tab 栏背景统一采用纯白色。
+- arm64 PRoot 支持模块化按需安装（Ubuntu Base、LuaLS、OMP、Git、DSH），安装向导仅在应用首次启动时展示一次并支持跳过，设置中提供“环境与扩展组件”管理入口；设置、侧栏和 Tab 栏背景统一采用纯白色。
+- 支持 DeepSeek Harness (DSH) 智能助手：包含 nvm、node、dsh CLI 及指定 Web 插件的安装管理；支持设置后台自启服务并在编辑器中以专用 Web Tab (WebView) 嵌入访问 `http://127.0.0.1:3080`，当服务未启动时提供交互式提示与一键启用。
+- DSH 后台会话显式初始化 Terminal emulator，以 `exec dsh --profile web --no-open --port 3080` 启动；等待完整启动行中的认证 URL 后加载 WebView，避免无 token 请求和半截 token。APK 显式配置 loopback HTTP 许可，认证 token 不写入工作区。
+- DSH Web 标签提供等待服务及页面加载的顶部进度条；PRoot 启动自动维护 `~/projects` 项目入口，支持从 WebUI 的 Home 浏览项目，不覆盖同名真实文件或文件夹。
+- WebView 高度调查未确认手机屏幕高度误用：布局使用 Tab 下方剩余内容区；同版 DSH 原生 WebUI 在主机 Chromium 的 400/640/780/915px 视口下，文档滚动高度均等于视口高度。用户真机滚动条来源尚未定位，本次不改高度、Insets 或滚动样式；主机结果不涵盖真机 WebView 和移动插件组合。
 - LuaLS 使用项目真实路径工作；新建项目生成 `.luarc.json` 并加载 LuaJIT 与 LuaLS 内置 LÖVE 11.5 API library。
 - Lua 文件支持长按选择符号后，在文本选区操作浮动菜单中转到定义和查找用法；结果在 Bottom Sheet 中显示并在项目内安全跳转，LuaLS 悬浮 `file:` 链接不再交给外部 Intent，点击窗口外区域会关闭悬浮窗口。
 - 应用和编辑器主题均支持亮色、暗色和跟随系统；应用顶栏与状态栏固定为亮色纯白/暗色纯黑，并使用对应的黑/白标题、导航及 action 图标，编辑器主题使用 `quietlight` 或 `darcula` 并独立于应用主题解析。
@@ -51,6 +55,8 @@
 - 横竖屏切换不再重建编辑器 Activity；游戏窗口恢复 LÖVE/SDL 原生方向语义，不再强制视为可调整大小；调试悬浮球在横竖屏双向旋转后停靠在右侧，并保持旋转前的纵向比例。
 - 终端 PRoot 注入 Git `core.createObject=rename`，避免 Android 共享存储上的硬链接对象写入失败；打包流程在开始构建时重新读取项目属性，避免使用旧快照。
 - PRoot guest 使用静态公共 DNS，并通过 glibc `use-vc` 强制走真机已验证可用的 TCP DNS，避开失败的 UDP 53 路径；旧安装会在配置阶段自动修复 `/etc/resolv.conf`。
+- PRoot 启动不再向 rootfs 内的挂载占位目录递归 `mkdirs()`，避免占位目录权限为 `000` 时触发 `Guest working directory cannot be prepared` 闪退；改为绑定应用可访问目录并由 PRoot 准备临时 glue。终端保留 `execvp()` 所需的 `argv[0]`，普通终端与 DSH 不依赖可选 OMP/LuaLS；启动准备失败显示错误而不退出编辑器。
+- DSH WebView 等待完整认证 URL 后再发起 HTTP 请求，标签切换不重复认证。主机同版 DSH 已验证 token → Cookie → 主界面流程；Android WebView 网络策略和真机共享存储行为仍按验证文档回归。
 - LuaLS 悬浮窗口点击 `file://` 链接不再因 `FileUriExposedException` 崩溃。
 
 ## 待实现计划

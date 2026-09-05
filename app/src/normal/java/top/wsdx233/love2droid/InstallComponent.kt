@@ -57,6 +57,7 @@ object InstallRegistry {
     const val ID_ROOTFS = "rootfs"
     const val ID_LSP = "lua_lsp"
     const val ID_OMP = "omp"
+    const val ID_DSH = "dsh"
     const val ID_GIT = "git"
 
     val availableComponents: List<InstallComponent> by lazy {
@@ -64,6 +65,7 @@ object InstallRegistry {
             RootfsComponent,
             LuaLspComponent,
             OmpComponent,
+            DshComponent,
             GitComponent,
         )
     }
@@ -122,6 +124,25 @@ object OmpComponent : InstallComponent {
     override fun isInstalled(context: Context): Boolean = ProotRuntime.isOmpReady(context)
 
     override fun readyMarker(context: Context): File = ProotRuntime.ompReadyMarker(context)
+
+    override suspend fun install(context: Context, onProgress: (progress: Int, message: String) -> Unit) {
+        ProotInstaller.install(context, setOf(id))
+    }
+}
+
+object DshComponent : InstallComponent {
+    override val id: String = InstallRegistry.ID_DSH
+    override val displayNameRes: Int = R.string.components_dsh_name
+    override val descriptionRes: Int = R.string.components_dsh_desc
+    override val iconRes: Int = R.drawable.auto_awesome_rounded
+    override val downloadSizeEstimateMb: Int = 45
+    override val diskSizeEstimateMb: Int = 180
+    override val dependencies: Set<String> = setOf(InstallRegistry.ID_ROOTFS)
+    override val isRequired: Boolean = false
+
+    override fun isInstalled(context: Context): Boolean = ProotRuntime.isDshReady(context)
+
+    override fun readyMarker(context: Context): File = ProotRuntime.dshReadyMarker(context)
 
     override suspend fun install(context: Context, onProgress: (progress: Int, message: String) -> Unit) {
         ProotInstaller.install(context, setOf(id))

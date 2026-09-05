@@ -107,12 +107,18 @@ Android 发布与 Play 分离；发布结果是可安装、可分享的独立 AP
 - 文件标签和终端标签共用标签栏；每个终端标签持有独立 `TerminalSession`。
 - 终端 PTY 输出通知在主线程按消息合并并以约 16ms 节奏处理，避免持续输出占满主线程导致标签和其他输入事件失去响应。
 - PRoot 当前产品支持范围为 `arm64-v8a`。`libproot.so` 从 APK 解压后的 `applicationInfo.nativeLibraryDir` 定位并执行，不复制到普通 data 目录。
+- `TerminalSession` 的参数数组直接交给 `execvp()`，必须保留可执行文件作为 `argv[0]`；PRoot 开关从 `argv[1]` 开始。普通终端与 DSH 仅要求 rootfs 就绪，不依赖可选 OMP、LuaLS 或 bash-prompt。
+- 共享存储只绑定可访问的应用目录和项目真实路径，不绑定 Android 的 `/storage`、`/sdcard`、`/mnt` 父目录。绑定目标使用 `host:guest!` 保留路径，设置 `PROOT_DONT_POLLUTE_ROOTFS=1` 让 PRoot 在临时 glue 目录准备缺失路径；应用不再向 PRoot 创建的 `000` 权限占位目录递归写入，也不绑定宿主 `/root`。
+- PRoot 启动准备统一维护 guest `/root/projects` 软链接，目标沿用项目仓库的应用文件目录下 `projects` 规范路径，借助已有应用目录绑定访问真实项目。使用 API 23 可用的 `Os.readlink` / `Os.symlink`，正确链接不重建，失效链接更新，同名真实文件/目录保留；不向共享存储创建软链接。
 - 首次启动支持模块化安装选择或跳过，按用户选择校验并解压固定版本和 SHA-256 的 Ubuntu Base 24.04.4 arm64，以及可选的 LuaLS、omp、Git 和 bash-prompt；各组件独立维护安装标记，支持按需断点补充安装。
 - 安装向导仅在应用首次启动时展示一次，后续启动直接进入编辑器；用户可通过设置“环境与扩展组件”随时进入管理或补充安装。
 - Ubuntu guest 的 `/etc/resolv.conf` 固定使用 `8.8.8.8`、`8.8.4.4`，并通过 `options use-vc` 强制 glibc 使用 TCP DNS；真机已确认同一网络下 IP 连接和 TCP DNS 正常而默认 UDP DNS 失败。应用不启动 DNS 代理，也不把特定 Wi-Fi 或 VPN 的临时 resolver 持久化到 guest；环境完整性检查会让旧安装重新进入配置阶段并修复该文件。
 - Ubuntu guest 的 `/etc/group` 补齐 Android 应用进程继承的 supplementary GID，避免登录 shell 查询组名时输出未知 group ID。
 - OMP 标签不持有或持久化 session ID；启动时统一使用 `omp --allow-home --continue`，由 OMP 自己选择当前工作目录下的第一个可恢复 session。
 - 产品启动的 Git 进程注入 `core.createObject=rename`，绕过 Android 共享存储上不可靠的硬链接对象落盘；终端 Git 继承同一设置。
+- DSH 后台服务使用独立 `TerminalSession` 并显式初始化终端模拟器；通过 `exec dsh --profile web --no-open --port 3080` 启动，让服务退出结束后台会话。后台和应用内普通终端仅从完整、已换行的 `dsh web:` 输出捕获 `127.0.0.1:3080` 认证 URL，不能使用分批输出中的 token 前缀。token 仅在当前进程内存使用，工作区只持久化无 token 的 loopback 基地址。
+- WebView 等待认证 URL，不抢先加载无 token 基地址；同一认证 URL 只提交一次，避免服务重定向到 `/` 后切换标签又触发认证。API 24+ 通过 `network_security_config.xml` 仅允许 `127.0.0.1` 的 HTTP；API 23 使用 Manifest 的 `usesCleartextTraffic` 兼容开关。
+- DSH 加载状态独立于标签可见性：等待认证地址、主文档加载显示不定进度，`about:blank` 清屏不能提前结束等待；认证重定向按 WebView 当前 URL 判断完成，主文档错误或服务启动准备失败结束加载。顶部 Material 进度条是 WebView 的覆盖层，不占额外布局高度。
 - 安装失败保留可复用阶段并允许重试，不提前写入完成状态。
 
 ## 主要模块职责

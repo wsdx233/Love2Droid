@@ -7,6 +7,7 @@ import java.io.File
 internal enum class WorkspaceTabType {
     EDITOR,
     TERMINAL,
+    DSH,
 }
 
 internal data class WorkspaceTabSnapshot(
@@ -24,6 +25,7 @@ internal data class WorkspaceTabSnapshot(
     val lineEnding: String? = null,
     val diskLength: Long? = null,
     val diskLastModified: Long? = null,
+    val url: String? = null,
 )
 
 internal data class WorkspaceSnapshot(
@@ -75,6 +77,13 @@ internal object WorkspaceStore {
                                 isOmp = tab.optBoolean("isOmp", false),
                             ),
                         )
+                        "dsh" -> add(
+                            WorkspaceTabSnapshot(
+                                type = WorkspaceTabType.DSH,
+                                title = tab.optionalString("title"),
+                                url = tab.optionalString("url"),
+                            ),
+                        )
                     }
                 }
             }
@@ -96,6 +105,7 @@ internal object WorkspaceStore {
                 when (state.type) {
                     WorkspaceTabType.EDITOR -> "editor"
                     WorkspaceTabType.TERMINAL -> "terminal"
+                    WorkspaceTabType.DSH -> "dsh"
                 },
             )
             when (state.type) {
@@ -115,6 +125,10 @@ internal object WorkspaceStore {
                     state.title?.let { tab.put("title", it) }
                     state.workingDirectory?.let { tab.put("workingDirectory", it) }
                     tab.put("isOmp", state.isOmp)
+                }
+                WorkspaceTabType.DSH -> {
+                    state.title?.let { tab.put("title", it) }
+                    state.url?.let { tab.put("url", it) }
                 }
             }
             tabs.put(tab)

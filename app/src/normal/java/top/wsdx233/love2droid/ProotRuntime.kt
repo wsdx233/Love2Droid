@@ -4,6 +4,9 @@ import android.content.Context
 import android.os.Build
 import android.os.Process
 import java.io.File
+import android.system.ErrnoException
+import android.system.Os
+import android.system.OsConstants
 object ProotRuntime {
     const val SUPPORTED_ABI = "arm64-v8a"
     private const val PROOT_LIBRARY_NAME = "libproot.so"
@@ -20,6 +23,7 @@ object ProotRuntime {
     const val ROOTFS_READY_MARKER_NAME = ".rootfs-complete"
     const val LSP_READY_MARKER_NAME = ".lsp-complete"
     const val OMP_READY_MARKER_NAME = ".omp-complete"
+    const val DSH_READY_MARKER_NAME = ".dsh-complete"
     private const val RESOLV_CONF_PATH = "etc/resolv.conf"
 
     data class LaunchSpec(
@@ -52,6 +56,7 @@ object ProotRuntime {
     fun lspReadyMarker(context: Context): File = File(runtimeDir(context), LSP_READY_MARKER_NAME)
 
     fun ompReadyMarker(context: Context): File = File(runtimeDir(context), OMP_READY_MARKER_NAME)
+    fun dshReadyMarker(context: Context): File = File(runtimeDir(context), DSH_READY_MARKER_NAME)
 
     fun luaLanguageServer(context: Context): File =
         File(rootfsDir(context), LUA_LANGUAGE_SERVER_GUEST_PATH.removePrefix("/"))
@@ -153,6 +158,16 @@ object ProotRuntime {
     fun isGitReady(context: Context): Boolean =
         isRootfsReady(context) && gitBinary(context).isFile
 
+    fun dshBinary(context: Context): File =
+        File(rootfsDir(context), "root/.local/bin/dsh")
+
+    internal fun dshStartupCommand(): String = "exec dsh --profile web --no-open --port 3080"
+
+    fun isDshReady(context: Context): Boolean {
+        return isRootfsReady(context) &&
+            (dshReadyMarker(context).isFile || dshBinary(context).isFile)
+    }
+
     fun bashPromptScript(context: Context): File =
         File(rootfsDir(context), BASH_PROMPT_GUEST_PATH.removePrefix("/"))
 
@@ -177,24 +192,28 @@ object ProotRuntime {
 
 
     fun terminalLaunch(context: Context, projectRoot: File?): TerminalLaunchSpec {
-        check(isEnvironmentReady(context)) { "Proot environment is not ready" }
-        val guestWorkingDirectory = projectRoot
-            ?.takeIf { it.isDirectory }
-            ?.absolutePath
-            ?: "/root"
+        check(isRootfsReady(context)) { "Proot rootfs is not ready" }
+        val guestWorkingDirectory = projectRoot?.let { root ->
+            val canonicalRoot = root.canonicalFile
+            require(canonicalRoot.isDirectory) { "Project directory is missing" }
+            canonicalRoot.absolutePath
+        } ?: "/root"
         val spec = buildLaunch(
             context = context,
             guestWorkingDirectory = guestWorkingDirectory,
             terminalType = "xterm-256color",
             guestCommand = listOf(resolveGuestShell(context), "-l"),
         )
-        return TerminalLaunchSpec(
-            executable = spec.command.first(),
-            workingDirectory = spec.workingDirectory.absolutePath,
-            arguments = spec.command.drop(1).toTypedArray(),
-            environment = spec.environment.map { (key, value) -> "$key=$value" }.toTypedArray(),
-        )
+        return terminalSpec(spec)
     }
+
+    internal fun terminalSpec(spec: LaunchSpec): TerminalLaunchSpec = TerminalLaunchSpec(
+        executable = spec.command.first(),
+        workingDirectory = spec.workingDirectory.absolutePath,
+        // TerminalSession passes this array directly to execvp(), including argv[0].
+        arguments = spec.command.toTypedArray(),
+        environment = spec.environment.map { (key, value) -> "$key=$value" }.toTypedArray(),
+    )
 
     fun shellLaunch(context: Context, script: String): LaunchSpec {
         return buildLaunch(
@@ -206,7 +225,7 @@ object ProotRuntime {
     }
 
     fun projectCommandLaunch(context: Context, projectRoot: File, guestCommand: List<String>): LaunchSpec {
-        check(isEnvironmentReady(context)) { "Proot environment is not ready" }
+        check(isRootfsReady(context)) { "Proot rootfs is not ready" }
         require(guestCommand.isNotEmpty()) { "Guest command is required" }
         val canonicalRoot = projectRoot.canonicalFile
         require(canonicalRoot.isDirectory) { "Project directory is missing" }
@@ -219,15 +238,16 @@ object ProotRuntime {
     }
 
     fun languageServerLaunch(context: Context, projectRoot: File): LaunchSpec {
-        check(isEnvironmentReady(context)) { "Proot environment is not ready" }
+        check(isLspReady(context)) { "Lua language server is not ready" }
+        val canonicalRoot = projectRoot.canonicalFile
+        require(canonicalRoot.isDirectory) { "Project directory is missing" }
         return buildLaunch(
             context = context,
-            guestWorkingDirectory = projectRoot.absolutePath,
+            guestWorkingDirectory = canonicalRoot.absolutePath,
             terminalType = "dumb",
             guestCommand = listOf(LUA_LANGUAGE_SERVER_GUEST_PATH),
         )
     }
-
     private fun buildLaunch(
         context: Context,
         guestWorkingDirectory: String,
@@ -235,15 +255,42 @@ object ProotRuntime {
         guestCommand: List<String>,
     ): LaunchSpec {
         check(isSupportedDevice()) { "Only arm64-v8a supports the bundled proot runtime" }
-        val proot = prootBinary(context)
-        check(proot.isFile) { "Bundled proot library is missing: ${proot.absolutePath}" }
         val rootfs = rootfsDir(context)
+        val externalFilesDir = context.getExternalFilesDir(null)
+        prepareProjectsLink(rootfs, externalFilesDir ?: context.filesDir)
+        return buildLaunch(
+            proot = prootBinary(context),
+            rootfs = rootfs,
+            hostTmp = hostTmpDir(context),
+            filesDir = context.filesDir,
+            cacheDir = context.cacheDir,
+            externalFilesDir = externalFilesDir,
+            guestWorkingDirectory = guestWorkingDirectory,
+            terminalType = terminalType,
+            guestCommand = guestCommand,
+        )
+    }
+
+    internal fun buildLaunch(
+        proot: File,
+        rootfs: File,
+        hostTmp: File,
+        filesDir: File,
+        cacheDir: File,
+        externalFilesDir: File?,
+        guestWorkingDirectory: String,
+        terminalType: String,
+        guestCommand: List<String>,
+    ): LaunchSpec {
+        check(proot.isFile) { "Bundled proot library is missing: ${proot.absolutePath}" }
+        require(guestWorkingDirectory.startsWith('/') && guestWorkingDirectory.split('/').none { it == ".." }) {
+            "Invalid guest working directory"
+        }
         check(rootfs.isDirectory) { "Ubuntu rootfs is missing: ${rootfs.absolutePath}" }
 
-        val hostTmp = hostTmpDir(context).apply { mkdirs() }
+        check(hostTmp.isDirectory || hostTmp.mkdirs()) { "PRoot temporary directory is unavailable" }
         val command = mutableListOf(
             proot.absolutePath,
-            "-L",
             "--link2symlink",
             "--kill-on-exit",
             "--root-id",
@@ -251,26 +298,17 @@ object ProotRuntime {
             rootfs.absolutePath,
         )
 
-        val bindPaths = linkedSetOf<String>()
-        listOf(
-            "/dev",
-            "/proc",
-            "/sys",
-            context.filesDir.absolutePath,
-            context.filesDir.parentFile?.absolutePath,
-            context.cacheDir.absolutePath,
-            context.cacheDir.parentFile?.absolutePath,
-            "/data/data/${context.packageName}/files",
-            "/data/data/${context.packageName}/cache",
-            "/storage",
-            "/sdcard",
-            "/mnt",
-            guestWorkingDirectory.takeIf { it.startsWith("/") },
-        ).forEach { path ->
-            if (!path.isNullOrBlank()) bindPaths += path
+        // PRoot creates its own mount placeholders, which can have mode 000.
+        // Never mkdir through them on the host. Bind accessible app directories,
+        // not Android's /storage or /mnt parents whose children may be hidden.
+        val bindPaths = linkedSetOf("/dev", "/proc", "/sys")
+        listOfNotNull(filesDir, cacheDir, externalFilesDir).forEach { directory ->
+            bindPaths += directory.absolutePath
+            bindPaths += directory.canonicalPath
         }
+        if (guestWorkingDirectory != "/root") bindPaths += guestWorkingDirectory
         bindPaths.forEach { path ->
-            if (File(path).exists()) command += listOf("-b", path)
+            if (File(path).exists()) command += listOf("-b", "$path:$path!")
         }
         listOf(
             "/dev/urandom" to "/dev/random",
@@ -316,13 +354,47 @@ object ProotRuntime {
 
         return LaunchSpec(
             command = command,
-            workingDirectory = runtimeDir(context).apply { mkdirs() },
+            workingDirectory = rootfs.parentFile,
             environment = mapOf(
                 "TMPDIR" to hostTmp.absolutePath,
                 "PROOT_TMP_DIR" to hostTmp.absolutePath,
+                "PROOT_DONT_POLLUTE_ROOTFS" to "1",
             ),
         )
+    }
 
+    @Synchronized
+    internal fun prepareProjectsLink(
+        rootfs: File,
+        appFilesDir: File,
+        readLink: (String) -> String? = ::readLinkIfPresent,
+        createLink: (String, String) -> Unit = Os::symlink,
+    ) {
+        check(rootfs.isDirectory) { "Ubuntu rootfs is missing" }
+        val home = File(rootfs, "root")
+        require(StorageUtils.isWithin(rootfs, home)) { "Guest home escapes rootfs" }
+        val projects = File(appFilesDir, "projects").canonicalFile
+        require(StorageUtils.isWithin(appFilesDir, projects)) { "Projects directory escapes app storage" }
+        check(projects.isDirectory || projects.mkdirs()) { "Projects directory is unavailable" }
+        check(home.isDirectory || home.mkdirs()) { "Guest home is unavailable" }
+        val link = File(home, "projects")
+        val target = projects.absolutePath
+        val currentTarget = readLink(link.absolutePath)
+        if (currentTarget != null) {
+            if (currentTarget == target) return
+            check(link.delete()) { "Cannot update projects shortcut" }
+        } else if (link.exists()) {
+            // Never replace a user's real file or directory with the shortcut.
+            return
+        }
+        createLink(target, link.absolutePath)
+    }
+
+    private fun readLinkIfPresent(path: String): String? = try {
+        Os.readlink(path)
+    } catch (error: ErrnoException) {
+        if (error.errno != OsConstants.ENOENT && error.errno != OsConstants.EINVAL) throw error
+        null
     }
 
     internal fun resolverConfig(): String =

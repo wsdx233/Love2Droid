@@ -141,6 +141,13 @@ class SettingsActivity : AppCompatActivity() {
         }
         content.addView(modelButton, LinearLayout.LayoutParams.MATCH_PARENT, dp(52))
 
+        addSection(R.string.settings_dsh)
+        addSwitchPreference(
+            R.string.settings_dsh_background,
+            R.string.settings_dsh_background_summary,
+            settings.dshBackgroundEnabled,
+        ) { settings.dshBackgroundEnabled = it }
+
         addSection(R.string.settings_components)
         addInfoPreference(R.string.settings_components, getString(R.string.settings_components_summary))
         val componentsButton = MaterialButton(this).apply {

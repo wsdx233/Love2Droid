@@ -74,6 +74,9 @@ internal class SettingsStore(context: Context) {
         get() = preferences.getBoolean(KEY_OMP_USE_PROJECT_DIRECTORY, true)
         set(value) = preferences.edit().putBoolean(KEY_OMP_USE_PROJECT_DIRECTORY, value).apply()
 
+    var dshBackgroundEnabled: Boolean
+        get() = preferences.getBoolean(KEY_DSH_BACKGROUND_ENABLED, false)
+        set(value) = preferences.edit().putBoolean(KEY_DSH_BACKGROUND_ENABLED, value).apply()
 
     var hasShownInitialSetup: Boolean
         get() = preferences.getBoolean(KEY_HAS_SHOWN_INITIAL_SETUP, false)
@@ -93,6 +96,7 @@ internal class SettingsStore(context: Context) {
         private const val KEY_TERMINAL_KEEP_SCREEN_ON = "terminal_keep_screen_on"
         private const val KEY_TERMINAL_TRANSCRIPT_ROWS = "terminal_transcript_rows"
         private const val KEY_OMP_USE_PROJECT_DIRECTORY = "omp_use_project_directory"
+        private const val KEY_DSH_BACKGROUND_ENABLED = "dsh_background_enabled"
         private const val DEFAULT_EDITOR_FONT_SIZE = 12f
         private const val DEFAULT_TERMINAL_FONT_SIZE = 12f
         private const val DEFAULT_TERMINAL_TRANSCRIPT_ROWS = 2000

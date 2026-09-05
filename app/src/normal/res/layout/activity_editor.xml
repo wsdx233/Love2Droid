@@ -72,6 +72,21 @@
                 android:focusableInTouchMode="true"
                 android:visibility="gone" />
 
+            <WebView
+                android:id="@+id/dsh_web_view"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:visibility="gone" />
+
+            <com.google.android.material.progressindicator.LinearProgressIndicator
+                android:id="@+id/dsh_loading_indicator"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="top"
+                android:contentDescription="@string/dsh_page_loading"
+                android:indeterminate="true"
+                android:visibility="gone" />
+
             <LinearLayout
                 android:id="@+id/welcome_page"
                 android:layout_width="match_parent"

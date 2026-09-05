@@ -34,6 +34,10 @@
                 android:id="@+id/action_new_omp"
                 android:icon="@drawable/auto_awesome_rounded"
                 android:title="@string/new_omp" />
+            <item
+                android:id="@+id/action_new_dsh"
+                android:icon="@drawable/smart_toy_rounded"
+                android:title="@string/new_dsh" />
         </menu>
     </item>
     <item

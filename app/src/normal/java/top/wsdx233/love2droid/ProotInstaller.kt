@@ -114,6 +114,7 @@ object ProotInstaller {
                     val installRootfs = targets.contains(InstallRegistry.ID_ROOTFS)
                     val installLsp = targets.contains(InstallRegistry.ID_LSP)
                     val installOmp = targets.contains(InstallRegistry.ID_OMP)
+                    val installDsh = targets.contains(InstallRegistry.ID_DSH)
 
                     prepareRuntime(appContext)
                     if (installRootfs) {
@@ -154,6 +155,15 @@ object ProotInstaller {
                             installBashPrompt(appContext)
                         }
                         ProotRuntime.ompReadyMarker(appContext).writeText("ready=true\n")
+                    }
+
+                    if (installDsh) {
+                        if (ProotRuntime.isDshReady(appContext)) {
+                            appendLog(appContext.getString(R.string.proot_log_dsh_reused))
+                        } else {
+                            installDsh(appContext)
+                        }
+                        ProotRuntime.dshReadyMarker(appContext).writeText("ready=true\n")
                     }
 
                     // If all components are ready, write legacy ready marker too
@@ -575,6 +585,74 @@ object ProotInstaller {
             context.getString(R.string.proot_install_verifying),
         )
         appendLog(context.getString(R.string.proot_log_bash_prompt_installed))
+    }
+
+    internal fun installDsh(context: Context) {
+        if (ProotRuntime.isDshReady(context)) {
+            appendLog(context.getString(R.string.proot_log_dsh_reused))
+            return
+        }
+        update(
+            ProotInstallState.Status.INSTALLING,
+            90,
+            context.getString(R.string.proot_install_dsh),
+        )
+        val script = """
+            set -e
+            export HOME=/root
+            export DEBIAN_FRONTEND=noninteractive
+
+            # 确保基础依赖和 git 运行库
+            apt-get update || true
+            apt-get install -y --no-install-recommends ca-certificates curl libcurl4-gnutls-dev git || true
+
+            # 安装 nvm
+            export NVM_DIR="/root/.nvm"
+            if [ ! -s "${'$'}NVM_DIR/nvm.sh" ]; then
+                curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.7/install.sh | bash
+            fi
+            [ -s "${'$'}NVM_DIR/nvm.sh" ] && . "${'$'}NVM_DIR/nvm.sh"
+
+            # 使用 nvm 安装 Node.js LTS
+            nvm install --lts || nvm install 22
+            nvm use --lts || nvm use 22
+            nvm alias default 'lts/*' 2>/dev/null || true
+
+            # 设置 NODE_OPTIONS=--jitless 兼容各种环境
+            export NODE_OPTIONS=--jitless
+
+            # 安装 pnpm 和 @deepseek-ai/dsh
+            npm install -g pnpm@9 @deepseek-ai/dsh
+
+            # 将 node, npm, pnpm, dsh 软链接到 /root/.local/bin
+            NODE_BIN_DIR="${'$'}(dirname "${'$'}(nvm which current)")"
+            mkdir -p /root/.local/bin
+            for bin in node npm npx pnpm pnpx dsh; do
+                if [ -e "${'$'}NODE_BIN_DIR/${'$'}bin" ]; then
+                    ln -sf "${'$'}NODE_BIN_DIR/${'$'}bin" "/root/.local/bin/${'$'}bin"
+                fi
+            done
+
+            export PATH="/root/.local/bin:${'$'}PATH"
+            mkdir -p /root
+            touch /root/.bashrc
+            if ! grep -Fqx 'export PATH="/root/.local/bin:${'$'}PATH"' /root/.bashrc; then
+                printf '\nexport PATH="/root/.local/bin:${'$'}PATH"\n' >> /root/.bashrc
+            fi
+            if ! grep -Fqx 'export NVM_DIR="/root/.nvm"' /root/.bashrc; then
+                printf 'export NVM_DIR="/root/.nvm"\n[ -s "${'$'}NVM_DIR/nvm.sh" ] && \\. "${'$'}NVM_DIR/nvm.sh"\n' >> /root/.bashrc
+            fi
+
+            # 安装 dsh 插件
+            dsh plugin --profile web add dsh-plugin -w || true
+            dsh plugin --profile web add "github:wangyuanchuan2022/dsh-mobile-ux" -w || true
+
+            # 标记安装完成
+            touch "${ProotRuntime.dshReadyMarker(context).absolutePath.removePrefix(ProotRuntime.rootfsDir(context).absolutePath)}"
+        """.trimIndent()
+        runProotCommand(context, script)
+        ProotRuntime.dshReadyMarker(context).createNewFile()
+        appendLog(context.getString(R.string.proot_log_dsh_installed))
     }
 
     private fun runProotCommand(context: Context, script: String) {

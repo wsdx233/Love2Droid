@@ -25,6 +25,9 @@ import android.view.MenuItem
 import android.view.animation.PathInterpolator
 import android.view.View
 import android.view.ViewGroup
+import android.webkit.WebChromeClient
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
@@ -52,6 +55,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.color.MaterialColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.progressindicator.LinearProgressIndicator
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TerminalSessionClient
 import com.termux.view.TerminalView
@@ -108,7 +112,12 @@ class EditorActivity : AppCompatActivity() {
     private lateinit var browserAdapter: FileBrowserAdapter
     private lateinit var terminalView: TerminalView
     private lateinit var terminalKeyBar: LinearLayout
+    private lateinit var dshWebView: WebView
+    private lateinit var dshLoadingIndicator: LinearProgressIndicator
+    private val dshWebLoadState = DshWebLoadState()
     private var lspController: LuaLspController? = null
+    private var dshWebUrlObserver: (() -> Unit)? = null
+    private var loadedDshWebUrl: String? = null
 
     private val projectRepository by lazy { ProjectRepository(this) }
     private val settings by lazy { SettingsStore(this) }
@@ -173,6 +182,7 @@ class EditorActivity : AppCompatActivity() {
 
     private val terminalSessionClient = object : TerminalSessionClient {
         override fun onTextChanged(changedSession: TerminalSession) {
+            DshDaemon.captureAuthenticatedUrl(changedSession)
             if (::terminalView.isInitialized && terminalView.mTermSession === changedSession && !terminalScreenUpdateScheduled) {
                 terminalScreenUpdateScheduled = true
                 terminalView.postOnAnimation {
@@ -195,6 +205,7 @@ class EditorActivity : AppCompatActivity() {
         }
 
         override fun onSessionFinished(finishedSession: TerminalSession) {
+            DshDaemon.onSessionFinished(finishedSession)
             editorSession.tabs.filterIsInstance<TerminalTab>()
                 .firstOrNull { it.session === finishedSession }
                 ?.let { tab ->
@@ -320,6 +331,12 @@ class EditorActivity : AppCompatActivity() {
         editor = findViewById(R.id.code_editor)
         terminalView = findViewById(R.id.terminal_view)
         terminalKeyBar = findViewById(R.id.terminal_key_bar)
+        dshWebView = findViewById(R.id.dsh_web_view)
+        dshLoadingIndicator = findViewById(R.id.dsh_loading_indicator)
+        setupDshWebView()
+        dshWebUrlObserver = DshDaemon.observeWebUrl { url ->
+            runOnUiThread { applyDshWebUrl(url) }
+        }
         welcomePage = findViewById(R.id.welcome_page)
         drawerProjectTitle = findViewById(R.id.drawer_project_title)
         drawerProjectPath = findViewById(R.id.drawer_project_path)
@@ -1050,6 +1067,51 @@ class EditorActivity : AppCompatActivity() {
         newTerminal(startupCommand = ProotRuntime.ompStartupCommand(), isOmp = true)
     }
 
+    private fun newDsh() {
+        if (!ProotRuntime.isDshReady(this)) {
+            MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.components_dsh_name)
+                .setMessage(R.string.dsh_not_installed_message)
+                .setPositiveButton(R.string.install) { _, _ ->
+                    SetupActivity.start(this, targetComponent = InstallRegistry.ID_DSH)
+                }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
+            return
+        }
+
+        if (!settings.dshBackgroundEnabled && !DshDaemon.isRunning()) {
+            MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.dsh_service_not_enabled_title)
+                .setMessage(R.string.dsh_service_not_enabled_message)
+                .setPositiveButton(R.string.dsh_service_enable_and_start) { _, _ ->
+                    settings.dshBackgroundEnabled = true
+                    if (DshDaemon.ensureStarted(this)) openDshTab()
+                    else toast(getString(R.string.dsh_start_failed))
+                }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
+            return
+        }
+
+        if (!DshDaemon.ensureStarted(this)) {
+            toast(getString(R.string.dsh_start_failed))
+            return
+        }
+        openDshTab()
+    }
+
+    private fun openDshTab() {
+        val existingIndex = editorSession.tabs.indexOfFirst { it is DshWebTab }
+        if (existingIndex >= 0) {
+            selectTab(existingIndex)
+        } else {
+            val tab = DshWebTab(title = getString(R.string.dsh_tab_title))
+            val index = editorSession.add(tab)
+            selectTab(index)
+        }
+    }
+
     private fun newTerminal(
         startupCommand: String? = null,
         isOmp: Boolean = false,
@@ -1080,8 +1142,14 @@ class EditorActivity : AppCompatActivity() {
         projectRoot: File?,
         title: String? = null,
         selectAfterCreate: Boolean,
-    ): Int {
-        val launch = ProotRuntime.terminalLaunch(this, projectRoot)
+    ): Int? {
+        val launch = try {
+            ProotRuntime.terminalLaunch(this, projectRoot)
+        } catch (error: Exception) {
+            android.util.Log.e("EditorActivity", "Failed to prepare terminal", error)
+            toast(getString(R.string.terminal_start_failed, error.localizedMessage.orEmpty()))
+            return null
+        }
         val session = TerminalSession(
             launch.executable,
             launch.workingDirectory,
@@ -1137,6 +1205,10 @@ class EditorActivity : AppCompatActivity() {
             }
             R.id.action_new_omp -> {
                 newOmp()
+                true
+            }
+            R.id.action_new_dsh -> {
+                newDsh()
                 true
             }
             R.id.action_save -> {
@@ -1395,6 +1467,10 @@ class EditorActivity : AppCompatActivity() {
         terminalView.clearFocus()
         editor.visibility = View.GONE
         terminalView.visibility = View.GONE
+        if (::dshWebView.isInitialized) {
+            dshWebView.visibility = View.GONE
+            updateDshLoadingIndicator()
+        }
         updateSymbolBarVisibility()
         terminalKeyBar.visibility = View.GONE
         editorSearchController.setEditorAvailable(false)
@@ -2166,6 +2242,7 @@ class EditorActivity : AppCompatActivity() {
         when (val tab = editorSession.activeTab) {
             is EditorTab -> showEditorTab(tab)
             is TerminalTab -> showTerminalTab(tab)
+            is DshWebTab -> showDshTab(tab)
             null -> showEmptyEditor()
         }
         refreshTabs()
@@ -2196,6 +2273,10 @@ class EditorActivity : AppCompatActivity() {
         updateEditorBreakpointHighlights()
         terminalView.visibility = View.GONE
         terminalKeyBar.visibility = View.GONE
+        if (::dshWebView.isInitialized) {
+            dshWebView.visibility = View.GONE
+            updateDshLoadingIndicator()
+        }
         editor.visibility = View.VISIBLE
         editorSearchController.setEditorAvailable(true)
         updateSymbolBarVisibility()
@@ -2208,6 +2289,10 @@ class EditorActivity : AppCompatActivity() {
     private fun showTerminalTab(tab: TerminalTab) {
         editor.clearFocus()
         editor.visibility = View.GONE
+        if (::dshWebView.isInitialized) {
+            dshWebView.visibility = View.GONE
+            updateDshLoadingIndicator()
+        }
         editorSearchController.setEditorAvailable(false)
         updateSymbolBarVisibility()
         welcomePage.visibility = View.GONE
@@ -2220,6 +2305,89 @@ class EditorActivity : AppCompatActivity() {
         terminalView.attachSession(tab.session)
         terminalView.onScreenUpdated()
         terminalView.requestFocus()
+        scheduleLsp(null)
+        updateSymbolNavigationButtons()
+        updateEditorMenuState()
+    }
+
+    private fun setupDshWebView() {
+        dshWebView.settings.javaScriptEnabled = true
+        dshWebView.settings.domStorageEnabled = true
+        dshWebView.settings.databaseEnabled = true
+        dshWebView.settings.useWideViewPort = true
+        dshWebView.settings.loadWithOverviewMode = true
+        dshWebView.webViewClient = object : WebViewClient() {
+            override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
+                dshWebLoadState.start(url)
+                updateDshLoadingIndicator()
+            }
+
+            override fun onPageFinished(view: WebView, url: String) {
+                dshWebLoadState.finish(url, view.url)
+                updateDshLoadingIndicator()
+            }
+
+            override fun onReceivedError(
+                view: WebView,
+                request: android.webkit.WebResourceRequest,
+                error: android.webkit.WebResourceError,
+            ) {
+                if (request.isForMainFrame) {
+                    loadedDshWebUrl = null
+                    dshWebLoadState.stop()
+                    updateDshLoadingIndicator()
+                    toast(getString(R.string.dsh_page_failed, error.description))
+                }
+            }
+        }
+        dshWebView.webChromeClient = WebChromeClient()
+    }
+
+    private fun updateDshLoadingIndicator() {
+        dshLoadingIndicator.visibility = if (dshWebView.visibility == View.VISIBLE && dshWebLoadState.isLoading) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
+    }
+
+    private fun applyDshWebUrl(url: String) {
+        editorSession.tabs.filterIsInstance<DshWebTab>().forEach { it.url = url }
+        val activeTab = editorSession.activeTab
+        if (activeTab is DshWebTab && dshWebView.visibility == View.VISIBLE && loadedDshWebUrl != url) {
+            loadedDshWebUrl = url
+            dshWebLoadState.start(url)
+            updateDshLoadingIndicator()
+            dshWebView.loadUrl(url)
+        }
+    }
+
+    private fun showDshTab(tab: DshWebTab) {
+        editor.clearFocus()
+        terminalView.clearFocus()
+        editor.visibility = View.GONE
+        terminalView.visibility = View.GONE
+        terminalKeyBar.visibility = View.GONE
+        editorSearchController.setEditorAvailable(false)
+        updateSymbolBarVisibility()
+        welcomePage.visibility = View.GONE
+
+        dshWebView.visibility = View.VISIBLE
+        dshWebView.requestFocus()
+        val url = DshDaemon.currentWebUrl()
+        if (url != null) {
+            applyDshWebUrl(url)
+        } else {
+            tab.url = DshDaemon.DEFAULT_URL
+            loadedDshWebUrl = null
+            dshWebLoadState.waitForService()
+            dshWebView.loadUrl("about:blank")
+            if (!DshDaemon.ensureStarted(this)) {
+                dshWebLoadState.stop()
+                toast(getString(R.string.dsh_start_failed))
+            }
+        }
+        updateDshLoadingIndicator()
         scheduleLsp(null)
         updateSymbolNavigationButtons()
         updateEditorMenuState()
@@ -2295,6 +2463,11 @@ class EditorActivity : AppCompatActivity() {
                     workingDirectory = tab.workingDirectory,
                     isOmp = tab.isOmp,
                 )
+                is DshWebTab -> WorkspaceTabSnapshot(
+                    type = WorkspaceTabType.DSH,
+                    title = tab.title,
+                    url = DshDaemon.DEFAULT_URL,
+                )
             }
         }
         val snapshot = WorkspaceSnapshot(
@@ -2313,7 +2486,7 @@ class EditorActivity : AppCompatActivity() {
             val snapshot = withContext(Dispatchers.IO) { WorkspaceStore.read(project.root) } ?: return@launch
             val loaded = withContext(Dispatchers.IO) {
                 snapshot.tabs.mapIndexedNotNull { index, state ->
-                    if (state.type == WorkspaceTabType.TERMINAL) {
+                    if (state.type == WorkspaceTabType.TERMINAL || state.type == WorkspaceTabType.DSH) {
                         RestoredWorkspaceTab(index, state, null, null)
                     } else {
                         val file = state.path
@@ -2385,18 +2558,25 @@ class EditorActivity : AppCompatActivity() {
                                 ?: project.root
                         }
                         val startup = if (isOmp) ProotRuntime.ompStartupCommand() else null
-                        runCatching {
-                            createTerminalTab(
-                                startupCommand = startup,
-                                isOmp = isOmp,
-                                projectRoot = terminalDirectory,
-                                title = restored.state.title,
-                                selectAfterCreate = false,
-                            )
-                        }.getOrNull() ?: return@forEach
+                        createTerminalTab(
+                            startupCommand = startup,
+                            isOmp = isOmp,
+                            projectRoot = terminalDirectory,
+                            title = restored.state.title,
+                            selectAfterCreate = false,
+                        ) ?: return@forEach
+                    }
+                    WorkspaceTabType.DSH -> {
+                        if (!ProotRuntime.isDshReady(this@EditorActivity)) return@forEach
+                        val title = restored.state.title ?: getString(R.string.dsh_tab_title)
+                        val url = DshDaemon.currentWebUrl() ?: DshDaemon.DEFAULT_URL
+                        val tab = DshWebTab(title = title, url = url)
+                        editorSession.add(tab)
                     }
                 }
-                restoredIndices[restored.originalIndex] = newIndex
+                if (newIndex != null) {
+                    restoredIndices[restored.originalIndex] = newIndex
+                }
             }
             val active = restoredIndices[snapshot.activeTab] ?: restoredIndices.values.firstOrNull()
             if (active != null) selectTab(active) else showEmptyEditor()
@@ -2408,6 +2588,7 @@ class EditorActivity : AppCompatActivity() {
         val name = when (tab) {
             is EditorTab -> tab.file?.name ?: getString(R.string.unnamed_file)
             is TerminalTab -> tab.title
+            is DshWebTab -> tab.title
         }
         val shortenedName = if (name.length > MAX_TAB_NAME_CHARS) {
             name.take(MAX_TAB_NAME_CHARS) + "..."
@@ -2496,7 +2677,11 @@ class EditorActivity : AppCompatActivity() {
                 minimumWidth = 0
                 minimumHeight = 0
                 contentDescription = getString(
-                    if (tab is TerminalTab) R.string.close_terminal else R.string.close_file,
+                    when (tab) {
+                        is TerminalTab -> R.string.close_terminal
+                        is DshWebTab -> R.string.close_terminal
+                        else -> R.string.close_file
+                    },
                 )
                 setOnClickListener { closeTab(tab) }
             }
@@ -2591,6 +2776,9 @@ class EditorActivity : AppCompatActivity() {
         when (tab) {
             is TerminalTab -> {
                 tab.session.finishIfRunning()
+                removeTabFor(tab, onClosed)
+            }
+            is DshWebTab -> {
                 removeTabFor(tab, onClosed)
             }
             is EditorTab -> {
@@ -2918,7 +3106,13 @@ class EditorActivity : AppCompatActivity() {
         symbolNavigationJob?.cancel()
         editorSearchController.dispose()
         lspController?.close()
+        dshWebUrlObserver?.invoke()
+        dshWebUrlObserver = null
         finishTerminalTabs()
+        try {
+            dshWebView.destroy()
+        } catch (_: Throwable) {
+        }
         super.onDestroy()
     }
 
@@ -2936,6 +3130,9 @@ class EditorActivity : AppCompatActivity() {
             applyEditorTheme()
             refreshOpenEditorFiles()
             refreshFileList()
+            if (settings.dshBackgroundEnabled) {
+                DshDaemon.ensureStarted(this)
+            }
         }
     }
 

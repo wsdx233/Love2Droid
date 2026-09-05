@@ -31,6 +31,12 @@ class TerminalTab(
 ) : WorkspaceTab {
 }
 
+class DshWebTab(
+    var title: String = "DSH",
+    var url: String = DshDaemon.DEFAULT_URL,
+) : WorkspaceTab {
+}
+
 class EditorSession {
     val tabs: MutableList<WorkspaceTab> = mutableListOf()
     var activeIndex: Int = -1
