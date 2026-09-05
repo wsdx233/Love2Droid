@@ -1,13 +1,14 @@
 <resources>
+    <bool name="light_system_bars">true</bool>
+
     <style name="Theme.Love2Droid" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="android:fontFamily">@font/maple_mono_nf_cn_regular</item>
-        <item name="android:windowBackground">@color/pure_white</item>
-        <item name="android:colorBackground">@color/pure_white</item>
-        <item name="colorSurface">@color/pure_white</item>
+        <item name="android:windowBackground">@color/app_background</item>
+        <item name="android:colorBackground">@color/app_background</item>
+        <item name="colorSurface">@color/app_background</item>
         <item name="android:statusBarColor">@color/action_bar_background</item>
-        <item name="android:navigationBarColor">@color/pure_white</item>
-        <item name="android:windowLightStatusBar">true</item>
-        <item name="android:windowLightNavigationBar">true</item>
-        <item name="colorPrimary">#6750A4</item>
+        <item name="android:navigationBarColor">@color/app_background</item>
+        <item name="android:windowLightStatusBar">@bool/light_system_bars</item>
+        <item name="android:windowLightNavigationBar">@bool/light_system_bars</item>
     </style>
 </resources>

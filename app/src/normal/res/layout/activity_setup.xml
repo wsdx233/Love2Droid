@@ -5,16 +5,18 @@
     android:id="@+id/setup_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/pure_white"
+    android:background="?android:attr/colorBackground"
     android:orientation="vertical">
 
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/setup_toolbar"
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
-        android:background="@color/pure_white"
+        android:background="@color/action_bar_background"
         app:navigationIcon="@drawable/arrow_back_rounded"
+        app:navigationIconTint="@color/action_bar_foreground"
         app:title="@string/components_title"
+        app:titleTextColor="@color/action_bar_foreground"
         app:titleTextAppearance="?attr/textAppearanceTitleLarge" />
 
     <FrameLayout

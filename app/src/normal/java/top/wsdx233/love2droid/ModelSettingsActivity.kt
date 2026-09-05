@@ -23,6 +23,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.appbar.MaterialToolbar
+import com.google.android.material.color.MaterialColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.materialswitch.MaterialSwitch
 import kotlinx.coroutines.Dispatchers
@@ -61,7 +62,7 @@ class ModelSettingsActivity : AppCompatActivity() {
     private fun createContent() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.WHITE)
+            setBackgroundColor(MaterialColors.getColor(this, android.R.attr.colorBackground))
         }
         val topInset = View(this).apply { setBackgroundColor(getColor(R.color.action_bar_background)) }
         root.addView(topInset, LinearLayout.LayoutParams.MATCH_PARENT, 0)

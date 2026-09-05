@@ -2,7 +2,6 @@ package top.wsdx233.love2droid
 
 import android.content.Intent
 import android.content.res.ColorStateList
-import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
@@ -23,6 +22,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
+import com.google.android.material.color.MaterialColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -285,10 +285,15 @@ class ProjectManagerActivity : AppCompatActivity() {
         val addGroupChip = Chip(this).apply {
             text = getString(R.string.new_group)
             chipIcon = ContextCompat.getDrawable(this@ProjectManagerActivity, R.drawable.create_new_folder_rounded)
-            chipIconTint = ColorStateList.valueOf(Color.parseColor("#4F46E5"))
-            setTextColor(Color.parseColor("#4F46E5"))
-            chipBackgroundColor = ColorStateList.valueOf(Color.parseColor("#EEF2FF"))
-            chipStrokeColor = ColorStateList.valueOf(Color.parseColor("#C7D2FE"))
+            val foreground = MaterialColors.getColor(this, com.google.android.material.R.attr.colorOnSecondaryContainer)
+            chipIconTint = ColorStateList.valueOf(foreground)
+            setTextColor(foreground)
+            chipBackgroundColor = ColorStateList.valueOf(
+                MaterialColors.getColor(this, com.google.android.material.R.attr.colorSecondaryContainer),
+            )
+            chipStrokeColor = ColorStateList.valueOf(
+                MaterialColors.getColor(this, com.google.android.material.R.attr.colorOutlineVariant),
+            )
             chipStrokeWidth = 2f
             isCheckable = false
             setOnClickListener { showCreateGroupDialog() }
@@ -302,32 +307,25 @@ class ProjectManagerActivity : AppCompatActivity() {
             isCheckable = true
             this.isChecked = isChecked
             chipStrokeWidth = 1f
-            if (isChecked) {
-                chipBackgroundColor = ColorStateList.valueOf(Color.parseColor("#4F46E5"))
-                setTextColor(Color.WHITE)
-                chipStrokeColor = ColorStateList.valueOf(Color.TRANSPARENT)
-            } else {
-                chipBackgroundColor = ColorStateList.valueOf(Color.parseColor("#F8FAFC"))
-                setTextColor(Color.parseColor("#334155"))
-                chipStrokeColor = ColorStateList.valueOf(Color.parseColor("#E2E8F0"))
-            }
+            val states = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
+            chipBackgroundColor = ColorStateList(states, intArrayOf(
+                MaterialColors.getColor(this, com.google.android.material.R.attr.colorSecondaryContainer),
+                MaterialColors.getColor(this, com.google.android.material.R.attr.colorSurfaceContainerLow),
+            ))
+            setTextColor(ColorStateList(states, intArrayOf(
+                MaterialColors.getColor(this, com.google.android.material.R.attr.colorOnSecondaryContainer),
+                MaterialColors.getColor(this, com.google.android.material.R.attr.colorOnSurfaceVariant),
+            )))
+            chipStrokeColor = ColorStateList.valueOf(
+                MaterialColors.getColor(this, com.google.android.material.R.attr.colorOutlineVariant),
+            )
             setOnClickListener {
                 onClick()
-                // 刷新全组 Chip 选中样式
+                // 保持当前分组被选中，颜色由 checked 状态自动更新。
                 for (i in 0 until chipGroup.childCount) {
                     val child = chipGroup.getChildAt(i) as? Chip ?: continue
                     if (child.isCheckable) {
-                        val selected = child == this
-                        child.isChecked = selected
-                        if (selected) {
-                            child.chipBackgroundColor = ColorStateList.valueOf(Color.parseColor("#4F46E5"))
-                            child.setTextColor(Color.WHITE)
-                            child.chipStrokeColor = ColorStateList.valueOf(Color.TRANSPARENT)
-                        } else {
-                            child.chipBackgroundColor = ColorStateList.valueOf(Color.parseColor("#F8FAFC"))
-                            child.setTextColor(Color.parseColor("#334155"))
-                            child.chipStrokeColor = ColorStateList.valueOf(Color.parseColor("#E2E8F0"))
-                        }
+                        child.isChecked = child == this
                     }
                 }
             }

@@ -1,7 +1,6 @@
 package top.wsdx233.love2droid
 
 import android.graphics.BitmapFactory
-import android.graphics.Color
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -10,6 +9,7 @@ import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.checkbox.MaterialCheckBox
+import com.google.android.material.color.MaterialColors
 import java.io.File
 import java.text.DateFormat
 import java.util.Date
@@ -87,6 +87,10 @@ class ProjectAdapter(
         private val summary: TextView = view.findViewById(R.id.project_summary)
         private val groupBadge: TextView = view.findViewById(R.id.project_group_badge)
         private val checkBox: MaterialCheckBox = view.findViewById(R.id.project_checkbox)
+        private val surfaceColor = MaterialColors.getColor(view, com.google.android.material.R.attr.colorSurface)
+        private val selectedColor = MaterialColors.getColor(view, com.google.android.material.R.attr.colorSecondaryContainer)
+        private val outlineColor = MaterialColors.getColor(view, com.google.android.material.R.attr.colorOutlineVariant)
+        private val selectedOutlineColor = MaterialColors.getColor(view, androidx.appcompat.R.attr.colorPrimary)
 
         fun bind(project: Project) {
             name.text = project.displayName
@@ -127,22 +131,11 @@ class ProjectAdapter(
             }
 
             // 多选状态
-            if (isSelectionMode) {
-                checkBox.visibility = View.VISIBLE
-                val isSelected = selectedIds.contains(project.id)
-                checkBox.isChecked = isSelected
-                if (isSelected) {
-                    card.strokeColor = Color.parseColor("#4F46E5")
-                    card.setCardBackgroundColor(Color.parseColor("#F5F3FF"))
-                } else {
-                    card.strokeColor = Color.parseColor("#1F000000")
-                    card.setCardBackgroundColor(Color.WHITE)
-                }
-            } else {
-                checkBox.visibility = View.GONE
-                card.strokeColor = Color.parseColor("#1F000000")
-                card.setCardBackgroundColor(Color.WHITE)
-            }
+            val isSelected = isSelectionMode && selectedIds.contains(project.id)
+            checkBox.visibility = if (isSelectionMode) View.VISIBLE else View.GONE
+            checkBox.isChecked = isSelected
+            card.strokeColor = if (isSelected) selectedOutlineColor else outlineColor
+            card.setCardBackgroundColor(if (isSelected) selectedColor else surfaceColor)
 
             itemView.setOnClickListener {
                 if (isSelectionMode) {

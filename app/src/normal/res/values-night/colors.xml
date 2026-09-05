@@ -1,4 +1,5 @@
 <resources>
     <color name="action_bar_background">#FF000000</color>
     <color name="action_bar_foreground">#FFFFFFFF</color>
+    <color name="app_background">#FF121212</color>
 </resources>

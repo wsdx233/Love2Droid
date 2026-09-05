@@ -878,7 +878,6 @@ class EditorActivity : AppCompatActivity() {
         val background = colors.getColor(EditorColorScheme.WHOLE_BACKGROUND)
         editorContainer.setBackgroundColor(background)
         editor.setBackgroundColor(background)
-        tabScroll.setBackgroundColor(background)
         symbolScroll.setBackgroundColor(background)
         symbolBarButtons.forEach { it.setTextColor(colors.getColor(EditorColorScheme.TEXT_NORMAL)) }
         updateSymbolNavigationButtonColors()
@@ -2619,8 +2618,10 @@ class EditorActivity : AppCompatActivity() {
     private fun refreshTabs() {
         tabLabels.clear()
         tabContainer.removeAllViews()
-        tabContainer.setBackgroundColor(Color.WHITE)
-        tabScroll.setBackgroundColor(Color.WHITE)
+        val colors = editor.colorScheme
+        val tabBackground = colors.getColor(EditorColorScheme.WHOLE_BACKGROUND)
+        tabContainer.setBackgroundColor(tabBackground)
+        tabScroll.setBackgroundColor(tabBackground)
         val tabRipple = obtainStyledAttributes(
             intArrayOf(android.R.attr.selectableItemBackground),
         ).let { attributes ->
@@ -2635,11 +2636,9 @@ class EditorActivity : AppCompatActivity() {
             attributes.recycle()
             drawable
         }
-        val tabTextColor = ContextCompat.getColor(this, R.color.action_bar_foreground)
-        val tabDividerColor = MaterialColors.getColor(
-            tabContainer,
-            com.google.android.material.R.attr.colorOutline,
-        )
+        val tabTextColor = colors.getColor(EditorColorScheme.TEXT_NORMAL)
+        val tabIconTint = android.content.res.ColorStateList.valueOf(tabTextColor)
+        val tabDividerColor = colors.getColor(EditorColorScheme.LINE_DIVIDER)
         val activeIndicatorColor = MaterialColors.getColor(
             tabContainer,
             androidx.appcompat.R.attr.colorPrimary,
@@ -2680,6 +2679,7 @@ class EditorActivity : AppCompatActivity() {
             tabLabels[tab] = label
             val close = ImageButton(this).apply {
                 setImageResource(R.drawable.ic_close)
+                imageTintList = tabIconTint
                 background = iconRipple?.constantState?.newDrawable()?.mutate()
                 adjustViewBounds = true
                 scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
@@ -2720,6 +2720,7 @@ class EditorActivity : AppCompatActivity() {
         }
         val add = ImageButton(this).apply {
             setImageResource(R.drawable.ic_add)
+            imageTintList = tabIconTint
             background = iconRipple?.constantState?.newDrawable()?.mutate()
             adjustViewBounds = true
             scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE

@@ -2,5 +2,5 @@
     <color name="browser_selected">#332196F3</color>
     <color name="action_bar_background">#FFFFFFFF</color>
     <color name="action_bar_foreground">#FF000000</color>
-    <color name="pure_white">#FFFFFFFF</color>
+    <color name="app_background">#FFFFFFFF</color>
 </resources>

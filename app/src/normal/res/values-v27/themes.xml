@@ -1,8 +1,0 @@
-<resources>
-    <style name="Theme.Love2Droid" parent="Theme.Material3.DayNight.NoActionBar">
-        <item name="android:statusBarColor">@color/action_bar_background</item>
-        <item name="android:navigationBarColor">@color/pure_white</item>
-        <item name="android:windowLightStatusBar">true</item>
-        <item name="android:windowLightNavigationBar">true</item>
-    </style>
-</resources>

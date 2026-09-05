@@ -1,6 +1,5 @@
 package top.wsdx233.love2droid
 
-import android.graphics.Color
 import android.os.Bundle
 import android.util.TypedValue
 import android.view.Gravity
@@ -31,7 +30,7 @@ class SettingsActivity : AppCompatActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.WHITE)
+            setBackgroundColor(MaterialColors.getColor(this, android.R.attr.colorBackground))
         }
         val topInset = View(this).apply { setBackgroundColor(getColor(R.color.action_bar_background)) }
         root.addView(topInset, LinearLayout.LayoutParams.MATCH_PARENT, 0)
