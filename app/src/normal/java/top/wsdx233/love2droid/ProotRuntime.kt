@@ -271,6 +271,9 @@ object ProotRuntime {
         ensureDshWebPlugin(rootfs, DSH_PLUGIN_FILES.associateWith { name ->
             context.assets.open("proot/dsh-love2droid/$name").bufferedReader().use { it.readText() }
         })
+        LoveCheckRuntime.deploy(rootfs, LoveCheckRuntime.assetNames.associateWith { name ->
+            context.assets.open("proot/love-check/$name").bufferedReader().use { it.readText() }
+        })
         val externalFilesDir = context.getExternalFilesDir(null)
         prepareProjectsLink(rootfs, externalFilesDir ?: context.filesDir)
         return buildLaunch(

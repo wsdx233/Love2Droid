@@ -7,10 +7,11 @@
 - LÖVE Android runtime 与编辑器集成在同一 APK；游戏使用独立 `LoveGameActivity` 和 `:game` 进程。
 - 应用专属项目目录、项目元数据、项目管理和 Drawer 单目录文件浏览器。项目管理界面采用适配亮暗主题的现代 MD3 设计，支持项目自定义图标加载显示、元数据驱动的分组与分组筛选 ChipGroup、新建/移动/管理分组、右上角“新建”及“导入”快捷操作，并支持长按进入多选状态机进行批量移动分组、批量删除与批量导出为 .love。
 - 新项目离线携带固定版本的 Fusion Pixel 12px 等宽 `zh_hans` OTF 和完整随包许可证，模板自动以 24px、`nearest` 过滤启用；创建及字体复制在后台执行，字体随 `.love` 和游戏 APK 分发。已有及导入项目不自动注入字体，来源见 [reference.md](reference.md#fusion-pixel-font)。
+- 新项目自动生成中文 `AGENTS.md`，说明 LuaJIT 语法检查、`love-check` 使用流程及 Linux LÖVE 11.5 / Android 12.0 验证边界；只在创建时写入，已有及导入项目保持不变。
 - 文件新建、重命名、复制/剪切、粘贴、删除和详情；文件浏览器支持滑动进入多选、再次滑动选择同目录区间，以及底部全选、反选和取消选择操作栏；文件夹和顶部目录菜单支持通过指定 DocumentsUI 的 SAF 导入文件或文件夹并导出，文件支持 SAF 导出；项目管理支持 `.love`/`.zip` 导入和 `.love` 导出。
 - Sora Editor、TextMate 语法注册、文件/终端混合多标签、未命名文档和原子保存；打开文件使用后台受限 UTF-8 加载，拒绝二进制、非 UTF-8 和超过 5 MB 的文件，并保留 LF/CRLF/CR 换行风格。AppBar 支持符号栏、当前标签只读和 LuaLS 悬浮信息开关，其中符号栏与悬浮信息状态跨重启保存。
 - `.love` 快照构建、FileProvider Content URI 和 Play 启动闭环。
-- arm64 PRoot 支持模块化按需安装（Ubuntu Base、LuaLS、OMP、Git、DSH），安装向导仅在应用首次启动时展示一次并支持跳过，设置中提供“环境与扩展组件”管理入口。
+- arm64 PRoot 支持模块化按需安装（Ubuntu Base、LuaLS、OMP、Git、DSH、LÖVE 无界面检查），安装向导仅在应用首次启动时展示一次并支持跳过，设置中提供“环境与扩展组件”管理入口。
 - 支持 DeepSeek Harness (DSH) 智能助手：包含 nvm、node、dsh CLI 及指定 Web 插件的安装管理；支持设置后台自启服务并在编辑器中以专用 Web Tab (WebView) 嵌入访问 `http://127.0.0.1:3080`，当服务未启动时提供交互式提示与一键启用。
 - DSH 后台会话显式初始化 Terminal emulator，先离线激活应用内置插件，再以 `exec dsh --profile web --no-open --port 3080` 启动；等待完整启动行中的认证 URL 后加载 WebView，避免无 token 请求和半截 token。APK 显式配置 loopback HTTP 许可，认证 token 不写入工作区。
 - DSH Web 标签提供等待服务及页面加载的顶部进度条；PRoot 启动自动维护 `~/projects` 项目入口，支持从 WebUI 的 Home 浏览项目，不覆盖同名真实文件或文件夹。
@@ -19,6 +20,9 @@
 - 应用内 DSH Web 通过本地 `dsh-love2droid` 插件将文件打开请求交给编辑器。当前项目外的可访问文本文件也在当前工作区复用/新建标签，不切换项目；外部路径、dirty 内容和选区可恢复，文件保存回原位置，不进入当前项目的运行或打包快照。普通浏览器、终端 `xdg-open` 和目录打开未被替换。已完成真实 DSH + Chromium 的桥接路由验证（原生端使用替身）和主机逻辑测试，Android WebView 到原生标签的交互仍需真机回归。
 - WebView 高度调查未确认手机屏幕高度误用：布局使用 Tab 下方剩余内容区；同版 DSH 原生 WebUI 在主机 Chromium 的 400/640/780/915px 视口下，文档滚动高度均等于视口高度。用户真机滚动条来源尚未定位，本次不改高度、Insets 或滚动样式；主机结果不涵盖真机 WebView 和移动插件组合。
 - LuaLS 使用项目真实路径工作；新建项目生成 `.luarc.json` 并加载 LuaJIT 与 LuaLS 内置 LÖVE 11.5 API library。
+- 已提供 `love-check doctor`、`love-check check <项目目录>` 和 `--syntax-only`：固定 Linux LÖVE 11.5，真实 Xvfb/Mesa llvmpipe 渲染，有限呈现帧、原文件名错误堆栈、提前退出/超时/取消区分，源码与测试存档隔离。主机真实 LÖVE 和 PRoot `--root-id --link2symlink` 已完成图形/音频自检；不修改 App 内置的 12.0 runtime，手机安装与渲染仍需真机回归。
+- 已修复 Ubuntu Base 裁剪 LÖVE man 手册导致组件安装报 `alternative path ... doesn't exist`：新安装保留必要目录与手册，旧半配置安装重试时自动下载并重新解包固定版本 `love`。主机隔离 Ubuntu Base 的完整安装及半配置恢复均已完成真实 `doctor`；Android 上更新 APK 后直接重试组件安装，无需清空 Ubuntu 或项目，真机结果仍需确认。
+- ARM64 检查自动使用 LLVM 通用 CPU 目标，修复已确认的 llvmpipe `SIGILL` 兼容问题。用户真机对照：原配置返回 `exit_code=-4`，手动设置 `LLVM_CPUINFO=/dev/null` 后三帧 `doctor` 返回 `passed`，renderer 为 Mesa 25.2.8 / LLVM 20.1.2 / llvmpipe（128 bits）。此结果验证了该设备上的规避方式；更新 APK 后的自动安装流程和实际项目仍需真机回归。
 - Lua 文件支持长按选择符号后，在文本选区操作浮动菜单中转到定义和查找用法；结果在 Bottom Sheet 中显示并在项目内安全跳转，LuaLS 悬浮 `file:` 链接不再交给外部 Intent，点击窗口外区域会关闭悬浮窗口。
 - 应用和编辑器主题均支持亮色、暗色和跟随系统；应用顶栏与状态栏固定为亮色纯白/暗色纯黑，并使用对应的黑/白标题、导航及 action 图标，编辑器主题使用 `quietlight` 或 `darcula` 并独立于应用主题解析。
 - 欢迎页、侧栏及多选操作栏、项目管理、设置、模型设置和组件安装页的背景随应用主题切换；项目卡片与分组控件的普通/选中状态同步适配。标签栏背景、文字、分隔线和关闭/新建图标跟随编辑器颜色方案，不再在刷新标签时覆盖为白底；应用主题按夜间资源选择背景和系统栏图标，统一保留字体及基础主题配置。
@@ -78,6 +82,7 @@
 - 标签暂不支持拖拽排序。
 - 新项目像素字体不保证覆盖全部生僻字；24px 与高 DPI 下的实际显示效果仍需真机确认。模板只设置当前绘制字体，不改变引擎内置字体或提供自动系统字体兜底。
 - 调试控制台的真实 LÖVE/SDL 交互、输入法表现和断点语义仍需在 arm64 真机确认；完整 VS Code 级 IDE 能力不在当前计划范围。
+- 无界面检查仅覆盖 Linux LÖVE 11.5 实际执行到的路径；不判断画面是否符合设计、完整游戏逻辑、真实听感、手机 GPU 性能或 Android 生命周期。它不提供安全沙箱，也不自动读取未保存编辑器内容或控制游戏输入。
 
 ## 验证边界
 

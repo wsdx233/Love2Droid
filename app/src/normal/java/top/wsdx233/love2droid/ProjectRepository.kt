@@ -11,6 +11,7 @@ import java.io.InputStream
 import java.util.Locale
 
 internal object ProjectTemplate {
+    private val textFiles = listOf("main.lua", "AGENTS.md")
     private val fontFiles = listOf(
         "fusion-pixel-12px-monospaced-zh_hans.otf",
         "OFL.txt",
@@ -20,8 +21,10 @@ internal object ProjectTemplate {
     )
 
     fun write(root: File, openAsset: (String) -> InputStream) {
-        val mainLua = openAsset("main.lua").bufferedReader(Charsets.UTF_8).use { it.readText() }
-        StorageUtils.writeTextAtomic(StorageUtils.resolveChild(root, "main.lua"), mainLua)
+        for (name in textFiles) {
+            val content = openAsset(name).bufferedReader(Charsets.UTF_8).use { it.readText() }
+            StorageUtils.writeTextAtomic(StorageUtils.resolveChild(root, name), content)
+        }
         for (name in fontFiles) {
             val path = "assets/fonts/$name"
             val target = StorageUtils.resolveChild(root, path)

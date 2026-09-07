@@ -226,7 +226,7 @@
     <string name="proot_install_omp">正在安装 omp…</string>
     <string name="proot_install_bash_prompt">正在安装 bash-prompt 美化插件并缩短目录提示…</string>
     <string name="proot_install_verifying">正在验证 Lua Language Server、omp 与 bash-prompt…</string>
-    <string name="proot_install_done">Ubuntu proot、Lua Language Server、omp 与 bash-prompt 已安装完成</string>
+    <string name="proot_install_done">所选运行环境与扩展组件已安装完成</string>
     <string name="proot_install_failed">安装失败：%1$s</string>
     <string name="proot_log_library_path">使用 APK native 库：%1$s</string>
     <string name="proot_log_rootfs_reused">复用已解压的 Ubuntu Base。</string>
@@ -356,6 +356,10 @@
     <string name="components_base_rootfs_desc">提供基础 PRoot 容器与 Linux Bash 终端环境（终端与所有扩展插件的基础）。</string>
     <string name="components_lua_lsp_name">Lua 语言智能服务 (LuaLS)</string>
     <string name="components_lua_lsp_desc">为 Lua 代码提供语义补全、定义跳转、引用查找和错误诊断。</string>
+    <string name="components_love_check_name">LÖVE 11.5 无界面检查</string>
+    <string name="components_love_check_desc">安装 LuaJIT、Linux LÖVE 11.5、Xvfb 和 Mesa，通过 love-check 命令检查语法及有限帧运行。仅验证 Linux 11.5，不替代 App 内置 12.0 的真机验证。</string>
+    <string name="proot_install_love_check">正在安装 LÖVE 11.5、Xvfb 和 Mesa，并验证软件渲染…</string>
+    <string name="proot_log_love_check_reused">复用已通过软件渲染自检的 LÖVE 11.5 检查环境。</string>
     <string name="components_omp_name">OMP 智能终端助手</string>
     <string name="components_omp_desc">基于大语言模型的智能命令行辅助工具，支持多模型会话与执行辅助。</string>
     <string name="components_git_name">Git 源码版本控制</string>

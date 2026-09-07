@@ -234,6 +234,65 @@ class ProotRuntimeTest {
         }
     }
 
+    @Test
+    fun loveCheckerDeploymentUpdatesAtomicallyAndPreservesUnchangedFiles() {
+        val rootfs = Files.createTempDirectory("proot-love-check").toFile()
+        val assets = LoveCheckRuntime.assetNames.associateWith { "old $it" }
+        try {
+            LoveCheckRuntime.deploy(rootfs, assets)
+            val script = File(rootfs, "${LoveCheckRuntime.GUEST_DIRECTORY.removePrefix("/")}/love-check.py")
+            val identity = Files.getAttribute(script.toPath(), "unix:ino")
+            LoveCheckRuntime.deploy(rootfs, assets)
+            assertEquals(identity, Files.getAttribute(script.toPath(), "unix:ino"))
+            LoveCheckRuntime.deploy(rootfs, assets + ("love-check.py" to "updated checker"))
+            assertEquals("updated checker", script.readText())
+            assertTrue(File(rootfs, LoveCheckRuntime.GUEST_COMMAND.removePrefix("/")).canExecute())
+        } finally {
+            rootfs.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun loveCheckerRejectsEscapingLauncherBeforeWritingAssets() {
+        val directory = Files.createTempDirectory("proot-love-check-escape").toFile()
+        try {
+            val rootfs = File(directory, "ubuntu").apply { mkdirs() }
+            val outside = File(directory, "outside").apply { mkdirs() }
+            val link = File(rootfs, "usr").toPath()
+            Files.createSymbolicLink(link, outside.toPath())
+            org.junit.Assert.assertThrows(IllegalArgumentException::class.java) {
+                LoveCheckRuntime.deploy(rootfs, LoveCheckRuntime.assetNames.associateWith { "asset $it" })
+            }
+            assertTrue(outside.listFiles()!!.isEmpty())
+            assertFalse(File(rootfs, "root").exists())
+            Files.delete(link)
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun loveCheckerReadinessRequiresVerifiedMarkerAndCompleteInstallation() {
+        val directory = Files.createTempDirectory("proot-love-check-ready").toFile()
+        try {
+            val rootfs = File(directory, "ubuntu").apply { mkdirs() }
+            val marker = File(directory, ".love-check-complete")
+            LoveCheckRuntime.deploy(rootfs, LoveCheckRuntime.assetNames.associateWith { "asset $it" })
+            listOf("love-11.5", "luajit", "python3", "Xvfb").forEach { name ->
+                File(rootfs, "usr/bin/$name").apply { parentFile!!.mkdirs(); writeText("binary") }
+            }
+            assertFalse(LoveCheckRuntime.hasInstalledFiles(rootfs, marker))
+            marker.writeText("unverified")
+            assertFalse(LoveCheckRuntime.hasInstalledFiles(rootfs, marker))
+            marker.writeText(LoveCheckRuntime.READY_CONTENT)
+            assertTrue(LoveCheckRuntime.hasInstalledFiles(rootfs, marker))
+            File(rootfs, "usr/bin/Xvfb").delete()
+            assertFalse(LoveCheckRuntime.hasInstalledFiles(rootfs, marker))
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
     private fun prepareProjectsLink(rootfs: File, external: File) {
         ProotRuntime.prepareProjectsLink(
             rootfs, external,
@@ -266,5 +325,10 @@ class ProotRuntimeTest {
         val git = InstallRegistry.find(InstallRegistry.ID_GIT)
         assertNotNull(git)
         assertTrue(git!!.dependencies.contains(InstallRegistry.ID_ROOTFS))
+
+        val loveCheck = InstallRegistry.find(InstallRegistry.ID_LOVE_CHECK)
+        assertNotNull(loveCheck)
+        assertFalse(loveCheck!!.isRequired)
+        assertEquals(setOf(InstallRegistry.ID_ROOTFS), loveCheck.dependencies)
     }
 }

@@ -85,6 +85,14 @@ npx --yes --package=@expo/material-symbols add-material-symbols -o app/src/main/
 - 字体采用 OFL-1.1；发布包中的 `OFL.txt` 及 `LICENSES/ark-pixel/OFL.txt`、`LICENSES/cubic-11/OFL.txt`、`LICENSES/galmuri/LICENSE.txt` 原样保留在模板 `assets/fonts/`，并随新项目和导出游戏分发。字体可以随游戏商用，不得单独出售字体；修改字体时须继续遵守许可证要求。
 - 使用边界：作为新项目可替换的默认绘制字体，不替换 LÖVE 引擎内置字体。该版本覆盖常用简繁中文，但并不覆盖全部汉字；行为与验证分别见 [design.md](design.md#项目管理) 和 [verification.md](verification.md#新项目默认字体)。
 
+## Linux LÖVE 无界面检查依赖
+
+- LÖVE 固定官方 [11.5 release](https://github.com/love2d/love/releases/tag/11.5) 对应的 Ubuntu 24.04 [ARM64 包 `11.5-1build1`](https://packages.ubuntu.com/noble/arm64/love)，使用发行版 LuaJIT 库，不下载 x86 AppImage 或跟随浮动 latest。
+- 虚拟显示使用 Ubuntu [Xvfb](https://packages.ubuntu.com/noble/arm64/xvfb)，软件渲染使用 Mesa llvmpipe；这些依赖跟随 Ubuntu 24.04 软件源维护，结果报告真实 Mesa/LLVM renderer 信息，不宣称跨版本或跨平台逐位一致。
+- ARM64 CPU 兼容依据：[LLVM 20.1.2 `Host.cpp`](https://github.com/llvm/llvm-project/blob/llvmorg-20.1.2/llvm/lib/TargetParser/Host.cpp) 的 `LLVM_CPUINFO` 读取与通用目标回退，以及 [Mesa 25.2.8 `lp_bld_misc.cpp`](https://github.com/chaotic-cx/mesa-mirror/blob/mesa-25.2.8/src/gallium/auxiliary/gallivm/lp_bld_misc.cpp) 对 `getHostCPUName()` 的使用。仅设置检查子进程环境，不复制或修改上游 LLVM/Mesa，不把主机测试等同于 Android 真机结果。
+- Xauthority 文件按 X11 `Xauth` 记录格式写入；服务端只加载协议与 cookie，客户端同时匹配显示编号，依据 [Xserver 授权读取实现](https://github.com/mirror/xserver/blob/master/os/auth.c)。不复制上游显示服务器实现，不关闭认证以规避 PRoot 文件锁问题。
+- 依赖通过 APT 的已签名仓库安装到 guest，保留包自带的许可证与 copyright 文件；APK 只携带应用自有安装/检查脚本，不打包下载的 Linux 二进制或研究 rootfs。使用与验证见 [verification.md](verification.md#löve-无界面检查)。
+
 ## 许可证要求
 
 - LÖVE、SDL、Termux 组件、参考项目和第三方 TextMate grammar 的上游许可证必须保留。

@@ -39,11 +39,12 @@ projects/
     ├── .lovedroid         # 编辑器和终端会话
     ├── main.lua           # LÖVE 入口
     ├── conf.lua
+    ├── AGENTS.md          # 新项目的运行与代理验证约束
     └── assets/
         └── fonts/         # 新项目默认字体及许可证
 ```
 
-新项目的静态入口和字体来自 `app/src/normal/assets/project-template/`。`ProjectTemplate` 负责复制入口、OTF 和许可证，`ProjectRepository` 继续生成配置与元数据，并在创建失败时删除未完成的项目目录。创建操作在 `Dispatchers.IO` 执行；字体是项目普通资产，随 Play 快照、`.love` 导出和游戏 APK 分发，不依赖编辑器私有路径，也不修改上游 runtime 的内置字体。
+新项目的静态入口、`AGENTS.md` 和字体来自 `app/src/normal/assets/project-template/`。`ProjectTemplate` 负责原子写入入口与代理说明、复制 OTF 和许可证，`ProjectRepository` 继续生成配置与元数据，并在创建失败时删除未完成的项目目录。创建操作在 `Dispatchers.IO` 执行；字体是项目普通资产，随 Play 快照、`.love` 导出和游戏 APK 分发，不依赖编辑器私有路径，也不修改上游 runtime 的内置字体。`AGENTS.md` 只在新建项目时写入，不为已有或导入项目自动补写。
 
 存储不变量：
 
@@ -113,7 +114,7 @@ Android 发布与 Play 分离；发布结果是可安装、可分享的独立 AP
 - `TerminalSession` 的参数数组直接交给 `execvp()`，必须保留可执行文件作为 `argv[0]`；PRoot 开关从 `argv[1]` 开始。普通终端与 DSH 仅要求 rootfs 就绪，不依赖可选 OMP、LuaLS 或 bash-prompt。
 - 共享存储只绑定可访问的应用目录和项目真实路径，不绑定 Android 的 `/storage`、`/sdcard`、`/mnt` 父目录。绑定目标使用 `host:guest!` 保留路径，设置 `PROOT_DONT_POLLUTE_ROOTFS=1` 让 PRoot 在临时 glue 目录准备缺失路径；应用不再向 PRoot 创建的 `000` 权限占位目录递归写入，也不绑定宿主 `/root`。
 - PRoot 启动准备统一维护 guest `/root/projects` 软链接，目标沿用项目仓库的应用文件目录下 `projects` 规范路径，借助已有应用目录绑定访问真实项目。使用 API 23 可用的 `Os.readlink` / `Os.symlink`，正确链接不重建，失效链接更新，同名真实文件/目录保留；不向共享存储创建软链接。
-- 首次启动支持模块化安装选择或跳过，按用户选择校验并解压固定版本和 SHA-256 的 Ubuntu Base 24.04.4 arm64，以及可选的 LuaLS、omp、Git 和 bash-prompt；各组件独立维护安装标记，支持按需断点补充安装。
+- 首次启动支持模块化安装选择或跳过，按用户选择校验并解压固定版本和 SHA-256 的 Ubuntu Base 24.04.4 arm64，以及可选的 LuaLS、omp、Git、DSH、bash-prompt 和 LÖVE 无界面检查；各组件独立维护安装标记，支持按需断点补充安装。
 - 安装向导仅在应用首次启动时展示一次，后续启动直接进入编辑器；用户可通过设置“环境与扩展组件”随时进入管理或补充安装。
 - Ubuntu guest 的 `/etc/resolv.conf` 固定使用 `8.8.8.8`、`8.8.4.4`，并通过 `options use-vc` 强制 glibc 使用 TCP DNS；真机已确认同一网络下 IP 连接和 TCP DNS 正常而默认 UDP DNS 失败。应用不启动 DNS 代理，也不把特定 Wi-Fi 或 VPN 的临时 resolver 持久化到 guest；环境完整性检查会让旧安装重新进入配置阶段并修复该文件。
 - Ubuntu guest 的 `/etc/group` 补齐 Android 应用进程继承的 supplementary GID，避免登录 shell 查询组名时输出未知 group ID。
@@ -131,6 +132,20 @@ Android 发布与 Play 分离；发布结果是可安装、可分享的独立 AP
 - 外部文件复用 `EditorActivity.openFile` 的受限后台加载和 canonical 标签身份：同一文件不重复开标签，dirty 内容不因重开被覆盖，不切换当前项目。保存仍使用原子写入并复核应用存储边界；`.lovedroid` 使用 `externalPath` 保存外部绝对路径，恢复时重新校验，未保存文本仍保留。外部文件和 `.lovedroid` 不进入当前游戏快照。
 - WebView 已经位于应用自行消费系统状态栏 inset 后的内容区；移动端插件的 `viewport-fit=cover` 安全区规则若再次作用于 `[data-mobile-ux="frame"]`，应用在页面完成后清除这两个 frame padding，避免顶部重复空白。
 - 安装失败保留可复用阶段并允许重试，不提前写入完成状态。
+
+## LÖVE 无界面检查
+
+- 检查环境独立于 Android 游戏进程：Ubuntu guest 使用发行版包 `love=11.5-1build1`、LuaJIT、Python 3、Xvfb 和 Mesa；不修改 App 内置的 LÖVE 12.0/SDL3 runtime，也不把 Linux 结果等同于 Android 验证。
+- `LoveCheckRuntime` 负责组件就绪状态与脚本部署。每次 PRoot 启动准备通过 `StorageUtils.writeTextAtomic` 更新 `assets/proot/love-check/` 到 guest `/root/.local/share/love2droid/love-check/`，命令入口为 `/usr/local/bin/love-check`。路径先按 `StorageUtils.isWithin` 全部校验；就绪检查读取实际 `love-11.5` 文件，避免 Android 主体解析 guest 的绝对 alternatives 链接。
+- 安装仅依赖 rootfs，不要求 OMP、DSH 或 LuaLS。APT 安装成功后必须执行真实 `doctor` 自检，验证图片加载、字体、Shader、音频 API、存档和软件渲染，再写独立完成标记；失败保留真实错误，不能仅凭可执行文件存在标记完成。
+- Ubuntu Base 默认排除 man 手册；安装脚本在独立的 `dpkg.cfg.d/love2droid-love-check` 中只保留 `man6` 目录和 `love*` 手册，供发行版包的 `update-alternatives` 正常注册，不移除其他文档裁剪规则。旧安装已有 `love-11.5` 但缺少手册时，通过 APT 下载固定版本包并执行 `dpkg --unpack` 恢复文件，再由正常安装事务完成配置；不使用可能在半配置状态报 `No file name` 的 `apt --reinstall`，也不改写包维护脚本或忽略 dpkg 错误。
+- 检查器直接启动 Xvfb，使用 `-displayfd` 等待显示服务就绪，关闭 TCP 监听，并为服务端和客户端写入一次性 MIT-MAGIC-COOKIE-1 认证记录。不使用 `xvfb-run`/xauth 的硬链接锁，也不通过 `-ac` 关闭认证。
+- 子进程固定 `LIBGL_ALWAYS_SOFTWARE=1`、`GALLIUM_DRIVER=llvmpipe`、`LP_NUM_THREADS=2`、`SDL_VIDEODRIVER=x11`；真实 renderer 必须包含 llvmpipe。`ALSOFT_DRIVERS=null` 保留 OpenAL/LÖVE 音频 API 和混音，不要求物理音频设备；不验证实际听感。
+- ARM64（`aarch64` / `arm64`）检查子进程固定 `LLVM_CPUINFO=/dev/null`，让 LLVM 使用通用 CPU 目标，避免依 CPU 型号生成的 llvmpipe 指令在 PRoot 中触发 `SIGILL`。安装 `doctor` 与项目检查共用这一环境；覆盖继承的同名设置，但不修改父进程环境、shell 配置或其他架构的 CPU 选择。仍执行真实 llvmpipe、Shader 和音频 API，不降级到伪造渲染或跳过自检。
+- `love-check check` 只读取已保存的项目目录，在临时副本上运行。过滤沿用 `LoveArchiveTransfer.addDirectory` 的非隐藏文件规则；canonical 路径不能逃逸项目根，目录链接不能形成循环。沿用归档的 4096 条目、单文件 64 MiB、总内容 256 MiB 上限。LuaJIT 先对副本中的 Lua 文件做纯解析，再包装副本的 `conf.lua`/`main.lua`，错误堆栈保留原入口文件名；不修改项目源码。
+- 每次检查使用独立 HOME、XDG 数据/配置/缓存和工作目录，测试存档及相对文件写入随临时副本清理。这是运行隔离，不是安全沙箱：游戏仍是应用权限下执行的代码，不能据此承诺阻止恶意 Lua/FFI 的绝对路径或网络访问。
+- 帧预算按成功的 `love.graphics.present()` 计数，顶层 main 和标准 `love.load` 中的加载画面不计入。自定义 `love.run` 的阻塞式绘制循环也受呈现预算约束；没有呈现的循环由外部超时终止。不改写 dt/随机数，不伪造图形 API，不保证未执行的关卡或交互路径正确。
+- 有效检查命令在 stdout 返回一个 JSON 结果；日志保留末尾最多 64 KiB 并标记截断。提前退出、错误、超时和取消均不算通过；超时和信号取消回收受监督的游戏、Xvfb 及其进程组。命令与验收见 [verification.md](verification.md#löve-无界面检查)。
 
 ## 主要模块职责
 

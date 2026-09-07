@@ -59,11 +59,13 @@ object InstallRegistry {
     const val ID_OMP = "omp"
     const val ID_DSH = "dsh"
     const val ID_GIT = "git"
+    const val ID_LOVE_CHECK = "love_check"
 
     val availableComponents: List<InstallComponent> by lazy {
         listOf(
             RootfsComponent,
             LuaLspComponent,
+            LoveCheckComponent,
             OmpComponent,
             DshComponent,
             GitComponent,
@@ -108,6 +110,25 @@ object LuaLspComponent : InstallComponent {
 
     override suspend fun install(context: Context, onProgress: (progress: Int, message: String) -> Unit) {
         ProotInstaller.install(context, setOf(id))
+    }
+}
+
+object LoveCheckComponent : InstallComponent {
+    override val id: String = InstallRegistry.ID_LOVE_CHECK
+    override val displayNameRes: Int = R.string.components_love_check_name
+    override val descriptionRes: Int = R.string.components_love_check_desc
+    override val iconRes: Int = R.drawable.code_rounded
+    override val downloadSizeEstimateMb: Int = 100
+    override val diskSizeEstimateMb: Int = 350
+    override val dependencies: Set<String> = setOf(InstallRegistry.ID_ROOTFS)
+    override val isRequired: Boolean = false
+
+    override fun isInstalled(context: Context): Boolean = LoveCheckRuntime.isReady(context)
+
+    override fun readyMarker(context: Context): File = LoveCheckRuntime.readyMarker(context)
+
+    override suspend fun install(context: Context, onProgress: (progress: Int, message: String) -> Unit) {
+        ProotInstaller.install(context, setOf(id)).getOrThrow()
     }
 }
 

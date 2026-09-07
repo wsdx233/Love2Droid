@@ -115,6 +115,7 @@ object ProotInstaller {
                     val installLsp = targets.contains(InstallRegistry.ID_LSP)
                     val installOmp = targets.contains(InstallRegistry.ID_OMP)
                     val installDsh = targets.contains(InstallRegistry.ID_DSH)
+                    val installLoveCheck = targets.contains(InstallRegistry.ID_LOVE_CHECK)
 
                     prepareRuntime(appContext)
                     if (installRootfs) {
@@ -164,6 +165,21 @@ object ProotInstaller {
                             installDsh(appContext)
                         }
                         ProotRuntime.dshReadyMarker(appContext).writeText("ready=true\n")
+                    }
+
+                    if (installLoveCheck) {
+                        if (LoveCheckRuntime.isReady(appContext)) {
+                            appendLog(appContext.getString(R.string.proot_log_love_check_reused))
+                        } else {
+                            LoveCheckRuntime.readyMarker(appContext).delete()
+                            update(
+                                ProotInstallState.Status.INSTALLING,
+                                94,
+                                appContext.getString(R.string.proot_install_love_check),
+                            )
+                            runProotCommand(appContext, "/bin/sh ${LoveCheckRuntime.GUEST_DIRECTORY}/install.sh")
+                            StorageUtils.writeTextAtomic(LoveCheckRuntime.readyMarker(appContext), LoveCheckRuntime.READY_CONTENT)
+                        }
                     }
 
                     // If all components are ready, write legacy ready marker too

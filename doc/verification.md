@@ -31,9 +31,10 @@
 ./gradlew :app:testNormalNoRecordDebugUnitTest --tests top.wsdx233.love2droid.StorageAndPackagingTest
 ```
 
-- 聚焦测试从真实内置模板生成项目，并逐字节检查 `main.lua`、OTF 和四份许可证在项目目录及 `.love` 快照中保持完整；缺失字体必须传播 I/O 错误，不能静默退回不支持中文的字体。
+- 聚焦测试从真实内置模板生成项目，并逐字节检查 `main.lua`、`AGENTS.md`、OTF 和四份许可证在项目目录及 `.love` 快照中保持完整；缺失字体或代理说明必须传播 I/O 错误，不能静默退回不支持中文的字体或跳过约束文件。
 - 主机已执行 Lua 模板行为检查：`love.load()` 创建一次 24px 字体、设置字体自身的 `nearest` 过滤并启用，重复 `love.draw()` 不重新创建字体。该检查使用图形 API 替身，不等同于 LÖVE 渲染验证；实际 OTF 另经主机 FreeType 加载和中文样例字形栅格化验证。
 - arm64 真机：离线新建项目，确认 `assets/fonts/` 包含字体与许可证；把示例绘制文本改为“你好，世界！开始游戏”，Play 后确认中文可读，并观察高 DPI、横竖屏下的清晰度。导出 `.love` 与游戏 APK 后继续验证中文显示；打开旧项目、导入其他项目时，不应自动添加字体或改写入口。
+- 新项目代理说明：离线新建项目后打开根目录的 `AGENTS.md`，确认包含 Linux 11.5 / Android 12.0 的版本区别及 `love-check` 命令；打开旧项目或导入不含该文件的项目，不应自动补写。文件属于普通项目内容，导出 `.love` 后仍保留。
 
 ## DSH 文件系统兼容性
 
@@ -65,6 +66,67 @@ node --test tools/dsh-web-opener.test.mjs
 - Node 回归覆盖 WebView 文件请求的 guest realpath、Unicode/空格/引号及 file URI、等待原生确认、多请求乱序回复、取消与插件卸载；普通浏览器、目录、网页及其他 RPC 不改道。激活测试运行真实 DSH CLI，验证首次初始化、重复启动不改写 profile、保留用户设置、重建丢失软链接和保留同名真实目录。
 - Kotlin 回归覆盖 guest/app 绑定映射、虚拟设备拒绝、软链接逃逸拒绝、外部标签别名去重且保留 dirty 文本、原路径原子保存、工作区序列化与恢复边界，以及外部文件和编辑器状态不进入 `.love`。
 - 主机已启动真实 DSH Web，并在 Chromium 中验证插件被发现、`session/openWorkspacePath` 经过认证 RPC 解析路径并收到桥接确认；浏览器中的 `Love2DroidFiles` 为原生端替身，不代表 Android WebView 或 Sora 标签交互已验证。
+
+## LÖVE 无界面检查
+
+在设置的“环境与扩展组件”中安装“LÖVE 11.5 无界面检查”。安装会固定 `love=11.5-1build1` 并运行三帧真实自检，只有成功后才显示已安装。普通终端、OMP、DSH 共用命令：
+
+```sh
+# 环境自检：图片、字体、Shader、音频 API、隔离存档和 llvmpipe
+love-check doctor --frames 3 --timeout 60
+
+# 先保存编辑器内容；默认完成 300 次呈现，总超时 30 秒
+love-check check "$HOME/projects/我的游戏"
+love-check check "$HOME/projects/我的游戏" --frames 120 --timeout 30
+
+# 只检查 LuaJIT 语法，不执行 conf.lua、main.lua 或其他模块
+love-check check "$HOME/projects/我的游戏" --syntax-only
+```
+
+- 输入为包含根目录 `main.lua` 的目录；不自动保存编辑器标签，不直接接收 `.love` 文件。隐藏文件与现有 Play 快照一样排除；超出项目边界的软链接、目录循环和归档大小上限明确报错。
+- `--frames` 为 1–100000；`--timeout` 为 1–600 秒，包含快照、语法检查、显示初始化和游戏执行。帧数不是模拟时间；不把加载画面的呈现计作标准 `love.load` 之后的运行帧。
+- 有效命令输出单个 JSON：`status`、`phase`、`frames`、`lua_files`、`elapsed_seconds`、进程日志及截断标记；运行模式还包含 `engine`、`renderer` 或 `error`。JSON 的 `exit_code` 是子进程状态，命令自身退出码见下表。参数错误和 `--help` 使用普通 CLI 文本。
+
+| 命令退出码 | 含义 |
+| --- | --- |
+| 0 | 语法检查通过，或已完成指定呈现帧并确认 LÖVE 11.5/llvmpipe |
+| 1 | 语法、配置、资源、运行、环境或清理错误 |
+| 2 | CLI 参数错误 |
+| 3 | 游戏提前退出，未完成指定呈现帧 |
+| 124 | 超时，不算通过 |
+| 130 / 143 | SIGINT / SIGTERM 取消，不算通过 |
+
+主机行为回归使用真实 Linux LÖVE 11.5、LuaJIT、Xvfb 和 Mesa，不使用 Android runtime 或图形 API 替身。Ubuntu 24.04 安装依赖后运行：
+
+```sh
+sudo apt-get install --no-install-recommends love=11.5-1build1 luajit libluajit-5.1-2 python3 xvfb libgl1-mesa-dri libglx-mesa0
+PYTHONDONTWRITEBYTECODE=1 python3 tools/love-check.test.py
+./gradlew :app:testNormalNoRecordDebugUnitTest --tests top.wsdx233.love2droid.ProotRuntimeTest
+```
+
+- 主机不需要修改系统安装时，可将上述缺失包下载并解压到被忽略的 `.proot-debug/`，通过 PATH/LD_LIBRARY_PATH 使用；发行版包的 `love` alternatives 入口需指向解压后的 `love-11.5`。不要把主机二进制加入 APK。
+- 回归覆盖纯解析不执行代码、未加载 Lua 模块的语法错误、初始化/绘制错误、缺失图片、真实 GLSL 编译错误、配置错误/版本不兼容、提前退出、直接 `os.exit`、加载帧排除、自定义阻塞 run、无限循环、源文件/存档隔离、路径逃逸/循环、日志截断、并发会话、取消后进程回收及显示认证。
+- CPU 目标回归覆盖 ARM64 自动启用通用目标、覆盖继承的 `LLVM_CPUINFO`、父进程环境不变，以及其他架构保留原设置；在主机替换架构检测结果后，继续执行真实 `doctor` 和项目渲染，验证设置确实传入子进程。架构检测替身不等同于 ARM64 指令执行验证。
+- Kotlin 回归覆盖组件只依赖 rootfs、完成标记与文件完整性、幂等原子部署、更新及路径逃逸拒绝。
+- 已在主机 PRoot `--root-id --link2symlink` 下运行真实 `doctor`。Xvfb 直接使用 `-displayfd` 和一次性认证文件，避免 xauth 硬链接锁导致的清理失败；不能通过忽略临时目录清理错误得到成功结果。
+- arm64 真机必须确认：组件首次安装/失败重试、`doctor` 返回 llvmpipe、真实项目完成指定帧数、初始化和绘制错误立即失败、死循环返回 124、取消后没有遗留游戏/Xvfb、再次检查存档仍为空。当前本地验证不涵盖 Android 厂商内核、PRoot guest 图形栈和应用后台存活行为。
+- 用户真机已确认 `LLVM_CPUINFO=/dev/null love-check doctor --frames 3 --timeout 60` 可将同设备的 `SIGILL` 变为三帧 `passed`。更新兼容修复 APK 后，重新进入组件安装或新建 PRoot 终端，在不手动设置该变量的情况下运行 `love-check doctor --frames 3 --timeout 60`，确认自动设置生效；再检查真实项目。无需把变量写入 `.bashrc` 或更换图形驱动。
+- 该检查不替代 App 内置 12.0 的 Play/真机验证，也不承诺未执行路径、画面设计、真实听感或手机 GPU 性能正确。游戏以应用权限运行，临时副本不是恶意 Lua/FFI 的安全沙箱。
+
+### Ubuntu Base 安装与失败恢复回归
+
+`tools/love-check-install.test.py` 在临时 Ubuntu Base 中执行真实 APT、dpkg 和三帧 `doctor`，不修改主机软件包，也不使用包管理器或图形 API 替身。要求 x86_64 Linux、可访问 Ubuntu 软件源，并使用 `tools/proot-debug.sh` 的主机 PRoot 工具；首次运行可能下载该工具的构建依赖。
+
+先下载官方 [Ubuntu Base 24.04.4 amd64 归档](https://cdimage.ubuntu.com/ubuntu-base/releases/24.04.4/release/ubuntu-base-24.04.4-base-amd64.tar.gz) 到被忽略的 `.proot-debug/`。测试自动核对固定 SHA-256，然后运行：
+
+```sh
+LOVE_CHECK_TEST_UBUNTU_BASE="$PWD/.proot-debug/ubuntu-base-24.04.4-base-amd64.tar.gz" \
+    PYTHONDONTWRITEBYTECODE=1 python3 tools/love-check-install.test.py
+```
+
+- 覆盖原始 `path-exclude=/usr/share/man/*` 下全新安装、真实包维护脚本进入 `half-configured` 后的重试、恢复的手册内容完整、dpkg 无遗留异常，以及再次安装不重新解包健康包；原始 `excludes` 文件必须保持不变，其他包的手册仍被裁剪。
+- 主机安装回归使用原生硬链接。本机 x86_64 PRoot 的 `--link2symlink` 在更新 `dpkg/status-old` 时遇到独立的 `Operation not permitted`，因此这项安装回归不代表 Android 的硬链接转换已经验证；不修改 App 的 PRoot 参数，实际 arm64 安装与恢复仍由真机确认。
+- 真机已有此次 man 手册缺失错误时，覆盖安装修复 APK，然后在“环境与扩展组件”重试“LÖVE 11.5 无界面检查”；确认不再出现 `alternative path` / `No file name`，包配置完成后 `doctor` 返回 `passed`。不要删除 Ubuntu 或项目，也不要创建空手册、跳过 postinst 或吞掉 dpkg 错误。
 
 ## APK 构建
 

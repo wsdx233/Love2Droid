@@ -63,6 +63,7 @@ class StorageAndPackagingTest {
             val packageFile = LovePackageBuilder.build(project, cache)
             val paths = listOf(
                 "main.lua",
+                "AGENTS.md",
                 "assets/fonts/fusion-pixel-12px-monospaced-zh_hans.otf",
                 "assets/fonts/OFL.txt",
                 "assets/fonts/LICENSES/ark-pixel/OFL.txt",
@@ -91,6 +92,22 @@ class StorageAndPackagingTest {
             assertThrows(IOException::class.java) {
                 ProjectTemplate.write(root) { path ->
                     if (path.endsWith(".otf")) throw IOException("Missing bundled font: $path")
+                    File(template, path).inputStream()
+                }
+            }
+        } finally {
+            StorageUtils.deleteRecursively(root)
+        }
+    }
+
+    @Test
+    fun projectTemplateRejectsMissingAgentInstructions() {
+        val root = Files.createTempDirectory("love2droid-template-missing-instructions").toFile()
+        val template = File("src/normal/assets/project-template")
+        try {
+            assertThrows(IOException::class.java) {
+                ProjectTemplate.write(root) { path ->
+                    if (path == "AGENTS.md") throw IOException("Missing bundled instructions")
                     File(template, path).inputStream()
                 }
             }
