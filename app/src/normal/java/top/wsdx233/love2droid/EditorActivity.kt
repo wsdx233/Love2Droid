@@ -52,6 +52,8 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.color.MaterialColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -89,6 +91,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import org.json.JSONObject
 import java.io.IOException
 
 class EditorActivity : AppCompatActivity() {
@@ -144,7 +147,7 @@ class EditorActivity : AppCompatActivity() {
     private var workspaceRestoreJob: Job? = null
     private var symbolNavigationJob: Job? = null
     private var breakpointSaveJob: Job? = null
-    private val openingFiles = mutableSetOf<String>()
+    private val openingFiles = mutableMapOf<String, MutableList<(String?) -> Unit>>()
     private var selectedSymbolForNavigation: SelectedSymbol? = null
     private var directoryObserver: FileObserver? = null
     private var directoryRefreshGeneration = 0L
@@ -2056,50 +2059,86 @@ class EditorActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun openFile(file: File, target: EditorNavigationTarget? = null) {
-        val project = currentProject ?: return
-        if (!file.isFile || !StorageUtils.isWithin(project.root, file)) return
-        android.util.Log.d(TAG, "Opening navigation target: ${file.name}:${target?.startLine}")
-        editorSession.find(file)?.let { tab ->
-            val index = editorSession.tabs.indexOf(tab)
-            if (editorSession.activeIndex != index) selectTab(index)
-            target?.let { navigationTarget ->
-                editor.post { moveToNavigationTarget(navigationTarget) }
-            }
-            return
-        }
-        val key = runCatching { file.canonicalPath }.getOrElse { file.absolutePath }
-        if (!openingFiles.add(key)) return
+    private fun editorFileAccess() = EditorFileAccess(
+        ProotRuntime.rootfsDir(this), ProotRuntime.hostTmpDir(this),
+        filesDir, cacheDir, getExternalFilesDir(null),
+    )
+
+    private fun openFile(
+        file: File,
+        target: EditorNavigationTarget? = null,
+        allowExternal: Boolean = false,
+        onOpened: (String?) -> Unit = {},
+    ) {
+        val project = currentProject ?: return onOpened(getString(R.string.no_project))
         lifecycleScope.launch {
+            var key: String? = null
+            var errorMessage: String? = null
             try {
-                when (val loaded = withContext(Dispatchers.IO) { EditorFileLoader.load(file) }) {
+                val canonical = withContext(Dispatchers.IO) {
+                    if (allowExternal) editorFileAccess().hostFile(file.path) else file.canonicalFile.also {
+                        require(StorageUtils.isWithin(project.root, it))
+                    }
+                }
+                if (currentProject?.id != project.id) {
+                    onOpened(getString(R.string.dsh_file_open_project_changed))
+                    return@launch
+                }
+                editorSession.find(canonical)?.let { tab ->
+                    val index = editorSession.tabs.indexOf(tab)
+                    if (editorSession.activeIndex != index) selectTab(index)
+                    target?.let { editor.post { moveToNavigationTarget(it) } }
+                    onOpened(null)
+                    return@launch
+                }
+                openingFiles[canonical.path]?.let { callbacks ->
+                    callbacks.add(onOpened)
+                    return@launch
+                }
+                key = canonical.path
+                openingFiles[canonical.path] = mutableListOf(onOpened)
+                when (val loaded = withContext(Dispatchers.IO) { EditorFileLoader.load(canonical) }) {
                     is EditorFileLoadResult.Text -> {
-                        if (currentProject?.id != project.id || editorSession.find(file) != null) return@launch
+                        if (currentProject?.id != project.id) {
+                            errorMessage = getString(R.string.dsh_file_open_project_changed)
+                            return@launch
+                        }
+                        editorSession.find(canonical)?.let { existing ->
+                            selectTab(editorSession.tabs.indexOf(existing))
+                            target?.let { editor.post { moveToNavigationTarget(it) } }
+                            return@launch
+                        }
                         captureEditorState()
-                        val tab = EditorTab(file, loaded.content, LanguageResolver.scopeFor(file)).apply {
+                        val tab = EditorTab(canonical, loaded.content, LanguageResolver.scopeFor(canonical)).apply {
                             lineEnding = loaded.lineEnding
                             diskSnapshot = loaded.snapshot
                         }
                         val index = editorSession.add(tab)
                         selectTab(index)
-                        target?.let { navigationTarget ->
-                            editor.post { moveToNavigationTarget(navigationTarget) }
-                        }
+                        target?.let { editor.post { moveToNavigationTarget(it) } }
                     }
-                    is EditorFileLoadResult.TooLarge -> toast(
-                        getString(R.string.file_too_large, StorageUtils.formatBytes(loaded.size), EditorFileLoader.MAX_EDITOR_BYTES / (1024 * 1024)),
+                    is EditorFileLoadResult.TooLarge -> errorMessage = getString(
+                        R.string.file_too_large, StorageUtils.formatBytes(loaded.size), EditorFileLoader.MAX_EDITOR_BYTES / (1024 * 1024),
                     )
-                    EditorFileLoadResult.Binary -> toast(getString(R.string.binary_file_not_editable))
-                    EditorFileLoadResult.InvalidUtf8 -> toast(getString(R.string.invalid_utf8_file))
-                    EditorFileLoadResult.ChangedDuringRead -> toast(getString(R.string.file_changed_while_reading))
-                    EditorFileLoadResult.Missing -> toast(getString(R.string.file_missing))
+                    EditorFileLoadResult.Binary -> errorMessage = getString(R.string.binary_file_not_editable)
+                    EditorFileLoadResult.InvalidUtf8 -> errorMessage = getString(R.string.invalid_utf8_file)
+                    EditorFileLoadResult.ChangedDuringRead -> errorMessage = getString(R.string.file_changed_while_reading)
+                    EditorFileLoadResult.Missing -> errorMessage = getString(R.string.file_missing)
                 }
             } catch (error: CancellationException) {
+                errorMessage = getString(R.string.dsh_file_open_cancelled)
                 throw error
+            } catch (_: IllegalArgumentException) {
+                errorMessage = getString(R.string.dsh_file_access_denied)
             } catch (error: Exception) {
-                toast(error.message ?: getString(R.string.open_file_failed))
+                errorMessage = error.message ?: getString(R.string.open_file_failed)
             } finally {
-                openingFiles.remove(key)
+                val callbacks = key?.let { openingFiles.remove(it) }
+                callbacks?.forEach { it(errorMessage) }
+                if (errorMessage != null) {
+                    if (key == null) onOpened(errorMessage)
+                    toast(errorMessage)
+                }
             }
         }
     }
@@ -2315,6 +2354,36 @@ class EditorActivity : AppCompatActivity() {
         dshWebView.settings.databaseEnabled = true
         dshWebView.settings.useWideViewPort = true
         dshWebView.settings.loadWithOverviewMode = true
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
+            WebViewCompat.addWebMessageListener(dshWebView, "Love2DroidFiles", setOf(DshDaemon.DEFAULT_URL)) {
+                    _, message, sourceOrigin, isMainFrame, reply ->
+                if (!isMainFrame || sourceOrigin.toString() != DshDaemon.DEFAULT_URL) return@addWebMessageListener
+                val data = message.data ?: return@addWebMessageListener
+                if (data.length > 65536) return@addWebMessageListener
+                val request = runCatching { JSONObject(data) }.getOrNull() ?: return@addWebMessageListener
+                val id = request.optString("id")
+                if (id.isBlank() || id.length > 64) return@addWebMessageListener
+                val respond: (String?) -> Unit = { error ->
+                    val response = JSONObject().put("id", id)
+                    error?.let { response.put("error", it) }
+                    reply.postMessage(response.toString())
+                }
+                lifecycleScope.launch {
+                    val file = try {
+                        withContext(Dispatchers.IO) { editorFileAccess().guestFile(request.getString("path")) }
+                    } catch (error: CancellationException) {
+                        respond(getString(R.string.dsh_file_open_cancelled))
+                        throw error
+                    } catch (_: Exception) {
+                        respond(getString(R.string.dsh_file_access_denied))
+                        return@launch
+                    }
+                    openFile(file, allowExternal = true, onOpened = respond)
+                }
+            }
+        } else {
+            toast(getString(R.string.dsh_file_bridge_unsupported))
+        }
         dshWebView.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
                 dshWebLoadState.start(url)
@@ -2451,10 +2520,11 @@ class EditorActivity : AppCompatActivity() {
                     val path = tab.file?.let { file ->
                         runCatching { StorageUtils.relativePath(project.root, file) }.getOrNull()
                     }
-                    if (tab.file != null && path == null) return@mapNotNull null
+                    val externalPath = if (path == null) tab.file?.absolutePath else null
                     WorkspaceTabSnapshot(
                         type = WorkspaceTabType.EDITOR,
                         path = path,
+                        externalPath = externalPath,
                         text = tab.text.takeIf { tab.file == null || tab.dirty },
                         dirty = tab.dirty,
                         selectionStart = tab.selectionStart,
@@ -2498,15 +2568,15 @@ class EditorActivity : AppCompatActivity() {
                     if (state.type == WorkspaceTabType.TERMINAL || state.type == WorkspaceTabType.DSH) {
                         RestoredWorkspaceTab(index, state, null, null)
                     } else {
-                        val file = state.path
-                            ?.takeIf { it.isNotBlank() }
-                            ?.let { path -> runCatching { StorageUtils.resolveChild(project.root, path) }.getOrNull() }
+                        val file = runCatching {
+                            editorFileAccess().workspaceFile(project.root, state.path, state.externalPath)
+                        }.getOrNull()
                         val disk = file?.let { runCatching { EditorFileLoader.load(it) }.getOrNull() }
                         val diskText = disk as? EditorFileLoadResult.Text
                         val text = when {
                             state.dirty && state.text != null -> state.text
                             diskText != null -> diskText.content
-                            file == null && state.path.isNullOrBlank() -> state.text.orEmpty()
+                            file == null && state.path.isNullOrBlank() && state.externalPath == null -> state.text.orEmpty()
                             else -> null
                         }
                         if (text == null) {
@@ -2921,6 +2991,10 @@ class EditorActivity : AppCompatActivity() {
 
     private fun saveTabBlocking(tab: EditorTab): Boolean {
         val file = tab.file ?: return false
+        if (runCatching { editorFileAccess().hostFile(file.path) }.isFailure) {
+            toast(getString(R.string.dsh_file_access_denied))
+            return false
+        }
         val observed = externalSnapshot(tab)
         if (observed != null) {
             toast(getString(R.string.external_file_save_blocked, file.name))

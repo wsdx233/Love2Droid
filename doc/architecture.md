@@ -45,8 +45,8 @@ projects/
 存储不变量：
 
 - 目录名是稳定 project id；显示名和简介存放在元数据中。
-- 用户输入的名称和路径不得包含 `..`、路径分隔符或控制字符。
-- 所有用户输入路径先 canonicalize，再用 `StorageUtils.isWithin` 确认未逃逸项目根目录。
+- 项目内新建和重命名的名称不得包含 `..`、路径分隔符或控制字符。
+- 项目文件操作先 canonicalize，再用 `StorageUtils.isWithin` 确认未逃逸项目根目录。DSH Web 主动打开外部文件走单独的 `EditorFileAccess` 边界，不扩大 Drawer、项目搜索、Git 或打包的操作范围。
 - 文本保存使用 `StorageUtils.writeTextAtomic`，不直接覆盖源文件。
 - 递归文件 I/O 和大型文件读取不得在主线程执行。
 
@@ -116,9 +116,16 @@ Android 发布与 Play 分离；发布结果是可安装、可分享的独立 AP
 - Ubuntu guest 的 `/etc/group` 补齐 Android 应用进程继承的 supplementary GID，避免登录 shell 查询组名时输出未知 group ID。
 - OMP 标签不持有或持久化 session ID；启动时统一使用 `omp --allow-home --continue`，由 OMP 自己选择当前工作目录下的第一个可恢复 session。
 - 产品启动的 Git 进程注入 `core.createObject=rename`，绕过 Android 共享存储上不可靠的硬链接对象落盘；终端 Git 继承同一设置。
-- DSH 后台服务使用独立 `TerminalSession` 并显式初始化终端模拟器；通过 `exec dsh --profile web --no-open --port 3080` 启动，让服务退出结束后台会话。后台和应用内普通终端仅从完整、已换行的 `dsh web:` 输出捕获 `127.0.0.1:3080` 认证 URL，不能使用分批输出中的 token 前缀。token 仅在当前进程内存使用，工作区只持久化无 token 的 loopback 基地址。
+- DSH 后台服务使用独立 `TerminalSession` 并显式初始化终端模拟器；先运行随 APK 部署的 `dsh-love2droid/activate.mjs`，成功后以 `exec dsh --profile web --no-open --port 3080` 启动，让服务退出结束后台会话。后台和应用内普通终端仅从完整、已换行的 `dsh web:` 输出捕获 `127.0.0.1:3080` 认证 URL，不能使用分批输出中的 token 前缀。token 仅在当前进程内存使用，工作区只持久化无 token 的 loopback 基地址。
 - WebView 等待认证 URL，不抢先加载无 token 基地址；同一认证 URL 只提交一次，避免服务重定向到 `/` 后切换标签又触发认证。API 24+ 通过 `network_security_config.xml` 仅允许 `127.0.0.1` 的 HTTP；API 23 使用 Manifest 的 `usesCleartextTraffic` 兼容开关。
 - DSH profile 是 pnpm workspace root。安装脚本和每次 PRoot 启动准备都会在 `/root/.dsh/profiles/web/.npmrc` 确保 `ignore-workspace-root-check=true`，兼容终端、插件市场和 DSH CLI 的直接 `plugin add`；预装移动端适配插件使用 `dsh-web-mobile`，已有其他 npm 配置保留。
+- PRoot 每次启动通过 `StorageUtils.writeTextAtomic` 把 APK 中的 `proot/dsh-filesystem-compat.mjs` 安装或更新到 guest `/root/.local/share/love2droid/`，并通过 `NODE_OPTIONS=--import=...` 注入。后台 DSH、普通终端、安装脚本和继承环境的子进程/worker 使用同一适配；无需重装旧环境，已经运行的进程需要重启。安装脚本追加 `--jitless` 时保留该选项。
+- Android 共享存储不支持硬链接或符号链接，`--link2symlink` 不能补齐该能力。适配只替换 `dsh-fs-local` 的 `createIfAbsent`、`dsh-session-persistence-jsonl` 的首次日志提交及 `dsh-attachment-local` 的附件提交，使用 `renameat2(RENAME_NOREPLACE)` 发布已写完并同步的临时文件；附件成功提交后的清理接受源文件已被移动。并发创建仍失败而非覆盖，版本检查、取消、附件去重/完整性验证和上游同步步骤保留；普通覆盖/编辑仍沿用原有 rename 路径。
+- 适配复用 DSH 已依赖的 Koffi 和 Ubuntu glibc，不修改已安装 npm 包、Node 全局 `fs.link` 或 PRoot syscall 语义。最低 Node.js 22.15；当前核对的 DSH 包为 `0.1.2-rc.1`。上游提交代码结构变化时明确报错，不能静默漏补；内核/挂载点拒绝 `RENAME_NOREPLACE` 时保留真实错误，不退化为先检查再覆盖或非原子复制。普通终端工具主动创建链接、把 npm/pnpm 安装目录移到共享存储等行为不因此获得通用 POSIX 链接能力。
+- `assets/proot/dsh-love2droid/` 是应用自有的 DSH 集成插件，不是文件系统加载补丁的另一份实现。每次 PRoot 准备原子更新插件文件；DSH 启动前通过正在运行的 CLI 的 `dsh-app-boot` 初始化/读取 Web profile，维护本地包软链接并幂等加入 bundle 列表，不联网安装、不覆盖用户 patch 或其他配置。包路径被同名真实目录占用时明确失败，不删除用户文件。
+- Web 插件仅在当前窗口存在 `Love2DroidFiles` 桥接时包装公开的 `connection.rpc.call`：接管 `session/openWorkspacePath` 文件请求和可用性查询；普通浏览器、目录、HTTP(S) 链接及其他 RPC 沿用原实现。不修改 `xdg-open`、Node 文件系统 API 或上游网页源码。插件卸载时还原调用并取消等待中的请求。
+- 插件通过继承 DSH Host/Origin 与认证检查的 `/love2droid/resolve-file` RPC，在 guest 内执行 realpath/stat；Android 使用 `WebViewCompat.addWebMessageListener`，仅接受 `http://127.0.0.1:3080` 主 frame 的请求，并再次校验路径。`EditorFileAccess` 按真实 PRoot bind 映射 rootfs、应用 files/cache、专属外部存储、`/tmp`、`/var/tmp` 和 `/dev/shm`；拒绝越界、逃逸软链接及其他 `/dev`、`/proc`、`/sys` 文件。不开放任意 Android 存储权限。
+- 外部文件复用 `EditorActivity.openFile` 的受限后台加载和 canonical 标签身份：同一文件不重复开标签，dirty 内容不因重开被覆盖，不切换当前项目。保存仍使用原子写入并复核应用存储边界；`.lovedroid` 使用 `externalPath` 保存外部绝对路径，恢复时重新校验，未保存文本仍保留。外部文件和 `.lovedroid` 不进入当前游戏快照。
 - WebView 已经位于应用自行消费系统状态栏 inset 后的内容区；移动端插件的 `viewport-fit=cover` 安全区规则若再次作用于 `[data-mobile-ux="frame"]`，应用在页面完成后清除这两个 frame padding，避免顶部重复空白。
 - 安装失败保留可复用阶段并允许重试，不提前写入完成状态。
 

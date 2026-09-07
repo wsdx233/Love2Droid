@@ -15,9 +15,9 @@ class DshDaemonTest {
         )
     }
     @Test
-    fun dshStartupCommandDisablesExternalBrowser() {
+    fun dshStartupActivatesAppPluginBeforeHeadlessDaemon() {
         assertEquals(
-            "exec dsh --profile web --no-open --port 3080",
+            "node ${ProotRuntime.DSH_PLUGIN_GUEST_PATH}/activate.mjs /root/.local/bin/dsh && exec dsh --profile web --no-open --port 3080",
             ProotRuntime.dshStartupCommand(),
         )
     }

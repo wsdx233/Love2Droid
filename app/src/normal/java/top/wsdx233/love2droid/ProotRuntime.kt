@@ -25,6 +25,11 @@ object ProotRuntime {
     const val OMP_READY_MARKER_NAME = ".omp-complete"
     const val DSH_READY_MARKER_NAME = ".dsh-complete"
     private const val DSH_PNPM_WORKSPACE_ROOT_ENTRY = "ignore-workspace-root-check=true"
+    private const val DSH_FILESYSTEM_COMPAT_ASSET = "proot/dsh-filesystem-compat.mjs"
+    internal const val DSH_FILESYSTEM_COMPAT_GUEST_PATH =
+        "/root/.local/share/love2droid/dsh-filesystem-compat.mjs"
+    internal const val DSH_PLUGIN_GUEST_PATH = "/root/.local/share/love2droid/dsh-love2droid"
+    private val DSH_PLUGIN_FILES = listOf("package.json", "index.mjs", "client.js", "cordis.patch.yml", "activate.mjs")
     private const val RESOLV_CONF_PATH = "etc/resolv.conf"
 
     data class LaunchSpec(
@@ -162,7 +167,8 @@ object ProotRuntime {
     fun dshBinary(context: Context): File =
         File(rootfsDir(context), "root/.local/bin/dsh")
 
-    internal fun dshStartupCommand(): String = "exec dsh --profile web --no-open --port 3080"
+    internal fun dshStartupCommand(): String =
+        "node $DSH_PLUGIN_GUEST_PATH/activate.mjs /root/.local/bin/dsh && exec dsh --profile web --no-open --port 3080"
 
     fun isDshReady(context: Context): Boolean {
         return isRootfsReady(context) &&
@@ -258,6 +264,13 @@ object ProotRuntime {
         check(isSupportedDevice()) { "Only arm64-v8a supports the bundled proot runtime" }
         val rootfs = rootfsDir(context)
         ensureDshPnpmWorkspaceRoot(rootfs)
+        ensureDshFilesystemCompat(
+            rootfs,
+            context.assets.open(DSH_FILESYSTEM_COMPAT_ASSET).bufferedReader().use { it.readText() },
+        )
+        ensureDshWebPlugin(rootfs, DSH_PLUGIN_FILES.associateWith { name ->
+            context.assets.open("proot/dsh-love2droid/$name").bufferedReader().use { it.readText() }
+        })
         val externalFilesDir = context.getExternalFilesDir(null)
         prepareProjectsLink(rootfs, externalFilesDir ?: context.filesDir)
         return buildLaunch(
@@ -293,6 +306,26 @@ object ProotRuntime {
     }
 
     internal fun ensureDshPnpmWorkspaceRootForTest(rootfs: File) = ensureDshPnpmWorkspaceRoot(rootfs)
+
+    @Synchronized
+    internal fun ensureDshFilesystemCompat(rootfs: File, content: String) {
+        check(rootfs.isDirectory) { "Ubuntu rootfs is missing" }
+        val target = File(rootfs, DSH_FILESYSTEM_COMPAT_GUEST_PATH.removePrefix("/"))
+        require(StorageUtils.isWithin(rootfs, target)) { "DSH filesystem adapter escapes rootfs" }
+        if (target.isFile && target.readText() == content) return
+        StorageUtils.writeTextAtomic(target, content)
+    }
+
+    @Synchronized
+    internal fun ensureDshWebPlugin(rootfs: File, assets: Map<String, String>) {
+        check(rootfs.isDirectory) { "Ubuntu rootfs is missing" }
+        DSH_PLUGIN_FILES.forEach { name ->
+            val target = File(rootfs, "${DSH_PLUGIN_GUEST_PATH.removePrefix("/")}/$name")
+            require(StorageUtils.isWithin(rootfs, target)) { "DSH plugin escapes rootfs" }
+            val content = requireNotNull(assets[name]) { "DSH plugin asset is missing: $name" }
+            if (!target.isFile || target.readText() != content) StorageUtils.writeTextAtomic(target, content)
+        }
+    }
 
     internal fun buildLaunch(
         proot: File,
@@ -367,6 +400,7 @@ object ProotRuntime {
             "TMPDIR=/tmp",
             "R2_NOCOLOR=1",
             "TERM=$terminalType",
+            "NODE_OPTIONS=--import=$DSH_FILESYSTEM_COMPAT_GUEST_PATH",
             // Android shared storage does not reliably support Git's hard-link object finalization.
             // Force Git to rename its temporary object instead; this is inherited by terminal Git.
             "GIT_CONFIG_COUNT=1",

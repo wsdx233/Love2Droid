@@ -25,6 +25,37 @@
 
 测试必须不依赖 Android runtime，保持确定、隔离并可在完整测试集中运行。
 
+## DSH 文件系统兼容性
+
+使用 Node.js 22.15+ 和 Linux 主机，测试真实 npm 包而不是模拟 DSH 后端；下载内容仅放在被忽略的 `.proot-debug/`。测试使用 `/tmp` 和 `/dev/shm` 的不同文件系统验证 `EXDEV`，不调用模型 API，也不需要 Android runtime：
+
+```sh
+npm install --prefix .proot-debug/dsh-fs-verification --ignore-scripts --no-audit --no-fund --save-exact @deepseek-ai/dsh@0.1.2-rc.1 @deepseek-ai/dsh-fs-local@0.1.2-rc.1 @deepseek-ai/dsh-session-persistence-jsonl@0.1.2-rc.1 @deepseek-ai/dsh-attachment-local@0.1.2-rc.1
+node --test tools/dsh-filesystem-compat.test.mjs
+./gradlew :app:testNormalNoRecordDebugUnitTest --tests top.wsdx233.love2droid.ProotRuntimeTest --tests top.wsdx233.love2droid.DshDaemonTest --tests top.wsdx233.love2droid.DshWebLoadStateTest
+```
+
+- 测试依赖使用 npm 发布的原生预构建包；`--ignore-scripts` 仅用于隔离主机研究依赖的生命周期脚本，不是产品安装或 APK 构建的跳过检查开关。原生依赖加载失败时必须处理依赖问题，不跳过对应测试。可用 `DSH_FS_FIXTURE` 指定已安装同版依赖的其他目录。
+- 禁用 Node 硬链接后，未适配 DSH 新建返回 `FS_IO_ERROR/EPERM`，适配后同一路径成功；包含嵌套目录、空文件、Unicode/空格/引号名称和完整大内容。
+- 四进程在临时文件写完后同时发布，只能有一个成功；其余 `FS_NOT_OBSERVED`，成功内容完整且无临时目录残留。现有文件、并发出现的目录/悬空软链接均不能被覆盖。
+- 覆盖/编辑保留 CRLF 和旧版本保护；取消发生在暂存后时不生成目标；原生调用的 `ENOENT`、`EXDEV` 等错误保留源文件并原样报告，不降级覆盖。Node 自身的硬链接语义不变。
+- 首次会话日志提交后可读取，竞争者不能覆盖；附件新建、重复内容去重、读回和损坏对象检测正常，清理接受 rename 已消费临时文件。严格依赖布局的 Koffi 解析不依赖 npm 提升。
+- `NODE_OPTIONS` 传递到 worker；上游提交结构不匹配时明确失败。Kotlin 测试覆盖旧环境部署、幂等更新、路径逃逸拒绝和 PRoot 环境参数。
+- 已通过主机 PRoot `--link2symlink --root-id` 执行真实 DSH 文件、会话和附件发布 smoke；该结果只验证主机 Linux/PRoot，不等同于 Android FUSE/厂商内核验证。
+
+## DSH Web 文件打开
+
+沿用上节的真实 DSH npm fixture，运行：
+
+```sh
+node --test tools/dsh-web-opener.test.mjs
+./gradlew :app:testNormalNoRecordDebugUnitTest --tests top.wsdx233.love2droid.EditorFileAccessTest --tests top.wsdx233.love2droid.EditorFileRobustnessTest --tests top.wsdx233.love2droid.StorageAndPackagingTest --tests top.wsdx233.love2droid.ProotRuntimeTest --tests top.wsdx233.love2droid.DshDaemonTest --tests top.wsdx233.love2droid.DshWebLoadStateTest
+```
+
+- Node 回归覆盖 WebView 文件请求的 guest realpath、Unicode/空格/引号及 file URI、等待原生确认、多请求乱序回复、取消与插件卸载；普通浏览器、目录、网页及其他 RPC 不改道。激活测试运行真实 DSH CLI，验证首次初始化、重复启动不改写 profile、保留用户设置、重建丢失软链接和保留同名真实目录。
+- Kotlin 回归覆盖 guest/app 绑定映射、虚拟设备拒绝、软链接逃逸拒绝、外部标签别名去重且保留 dirty 文本、原路径原子保存、工作区序列化与恢复边界，以及外部文件和编辑器状态不进入 `.love`。
+- 主机已启动真实 DSH Web，并在 Chromium 中验证插件被发现、`session/openWorkspacePath` 经过认证 RPC 解析路径并收到桥接确认；浏览器中的 `Love2DroidFiles` 为原生端替身，不代表 Android WebView 或 Sora 标签交互已验证。
+
 ## APK 构建
 
 修改任何源码、资源、Manifest、Gradle、native/CMake 或 TextMate 资源后，必须执行：
@@ -54,6 +85,10 @@ app/build/outputs/apk/normalNoRecord/debug/app-normal-noRecord-debug.apk
 - DSH 冷启动等待服务和加载文档时，Tab 内容区顶部应显示进度条；认证跳转完成、主页面错误或服务启动准备失败后消失。加载期间切换到文件/终端不显示进度条，切回仍加载的 DSH 时恢复显示，已完成页面不闪现加载条。
 - 新安装及旧环境升级后启动 PRoot，确认 `readlink ~/projects` 指向应用项目根目录，`cd ~/projects/<项目>` 可读取 `main.lua`；在 DSH 的工作目录选择器中从 Home → projects 进入项目。同名真实文件/文件夹必须保持原样，不自动覆盖。
 - 在终端执行 `dsh plugin --profile web add <可用插件>`，确认不再出现 `ERR_PNPM_ADDING_TO_ROOT`；从插件市场安装插件执行同一 profile 安装路径并成功进入队列。新安装的 profile 应预装 `dsh-web-mobile`，确认 profile 原有 `.npmrc` 其他设置保留，重复启动不会重复追加该配置。
+- 升级 APK 后完全退出并重开应用，让普通终端和 DSH 后台进程重新启动；无需删除 rootfs 或重装 DSH。在应用专属项目真实路径及 `~/projects` 入口下，让 DSH 新建 `src/audio.lua`，再读取、编辑并覆盖，确认没有 `link ... EPERM`，文件完整且无 `.tmpdir` 残留。同名文件未经读取不能被静默覆盖；同时回归附件上传/重复上传和新会话关闭后恢复。
+- 如果出现 `unsupported ... publication code`，记录实际 DSH 包版本，需要更新适配；如果 `renameat2` 返回不支持/权限错误，记录 Android 版本与目标挂载点，不能用普通 rename、copy 或关闭观察保护绕过。该适配不支持第三方工具在共享存储上任意创建硬/软链接。
+- 在 DSH Web 分别点击当前项目文件、其他项目文件及 guest `/root/` 下的文本配置文件：均在同一编辑器工作区打开，项目标题、Drawer 根目录和运行目标不变；重复点击与软链接入口不产生重复标签，dirty 内容仍保留。修改后保存，确认写回原文件且当前项目没有复制件；关闭并重开应用，确认外部标签、选区和未保存内容恢复。
+- 真机验证二进制、非 UTF-8、超过 5 MB、缺失文件和越界路径的明确错误；运行/打包当前项目不得包含外部文件。普通终端 `xdg-open`、DSH 目录动作及外部浏览器原行为保持不变；非 loopback 页面或子 frame 不应获得文件打开权限。
 - 真机打开 DSH Web 标签，对照桌面浏览器页面：应用内会话标题应紧接 Tab 下方显示，不应出现额外顶部空白；滚动、输入框和移动端插件交互保持可用。
 - 真机滚动问题尚未定位：分别记录键盘关闭/打开、竖屏/横屏时的内容区和 WebView 实测高度，并区分文档根滚动、DSH 内部列表滚动与移动插件布局；不要仅凭滚动条存在就隐藏滚动条或强制屏幕高度。
 - 新建项目 → 编辑 `main.lua` → Play → LÖVE 渲染 → 返回编辑器。

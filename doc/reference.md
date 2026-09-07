@@ -63,6 +63,20 @@ npx --yes --package=@expo/material-symbols add-material-symbols -o app/src/main/
 
 - 运行命令后只提交实际使用的 XML，并通过资源引用搜索移除被替换的旧图标。命令无法解析包或图标名时应先确认 npm 包源和 Material Symbol 名称，不得猜测 path data。
 
+## DeepSeek Harness 文件系统适配
+
+- 上游：<https://github.com/deepseek-ai/deepseek-harness>；核对 npm 发布包 `@deepseek-ai/dsh`、`dsh-fs-local`、`dsh-session-persistence-jsonl`、`dsh-attachment-local` 的 `0.1.2-rc.1` 版本，许可证 MIT。
+- 参考范围：`packages/fs/fs-local/src/fsio.ts` 的不覆盖提交、会话 JSONL 首次提交、附件提交与清理；仅在加载时替换这三处原子发布边界，不复制整个后端或取消安全防护。附件/会话默认位于私有 `DSH_HOME`，适配同样覆盖其目录被配置到不支持链接的挂载点时的提交问题。
+- 原生调用复用 DSH 已依赖的 [Koffi](https://koffi.dev/misc#posix-error-codes)；严格 pnpm 布局下，附件后端通过 DSH CLI 声明的 `dsh-fs-local` 依赖解析 Koffi，不要求包被提升到公共 `node_modules`。
+- Android 依据：[AOSP FuseDaemon.cpp](https://github.com/aosp-mirror/platform_packages_providers_mediaprovider/blob/main/jni/FuseDaemon.cpp) 未注册 link/symlink 操作，rename 接受 `RENAME_NOREPLACE`；不同厂商内核/挂载点仍须真机验证。
+- 使用 [Node.js `module.registerHooks`](https://nodejs.org/docs/latest-v22.x/api/module.html#moduleregisterhooksoptions)（22.15+），兼容性核对与回归命令见 [verification.md](verification.md#dsh-文件系统兼容性)。npm 上游更新改变提交代码时需重新核对，适配不承诺任意未来版本自动兼容。
+
+## DSH Web 与 Android 编辑器集成
+
+- 应用自有包位于 `app/src/normal/assets/proot/dsh-love2droid/`，随 APK 部署；使用 DSH `0.1.2-rc.1` 的 `dsh.bundle`/`dsh.client` 声明、`dsh-app-boot` profile API 和 `connection.rpc` 调用接口，不复制上游 UI、不修改已安装包源码。
+- Web 文件动作链路为 `session.openWorkspacePath` → `openNativePath` → Linux `xdg-open`；插件只在应用 WebView 内提前交给原生编辑器。写文件兼容仍由独立的最小加载适配维护，不能把插件形式视为任意上游版本的兼容保证。
+- 原生桥使用 Google Maven `androidx.webkit:webkit:1.14.0` 的 [WebViewCompat](https://developer.android.com/reference/androidx/webkit/WebViewCompat) origin 限制与主 frame 校验，许可证 Apache-2.0；不使用对所有页面/frame 暴露的通用 `addJavascriptInterface`。
+
 ## 许可证要求
 
 - LÖVE、SDL、Termux 组件、参考项目和第三方 TextMate grammar 的上游许可证必须保留。

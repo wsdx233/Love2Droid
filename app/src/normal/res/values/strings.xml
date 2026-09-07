@@ -9,6 +9,10 @@
     <string name="welcome_title">欢迎使用 Love2Droid</string>
     <string name="welcome_message">打开项目文件，或新建文件开始编辑</string>
     <string name="open_file">打开文件</string>
+    <string name="dsh_file_access_denied">无法打开此文件：路径不在应用可访问的存储范围内。</string>
+    <string name="dsh_file_bridge_unsupported">在编辑器打开 DSH 文件需要更新 Android System WebView。</string>
+    <string name="dsh_file_open_cancelled">文件打开已取消。</string>
+    <string name="dsh_file_open_project_changed">打开文件时工作区已切换，请重试。</string>
     <string name="open">打开</string>
     <string name="save">保存</string>
     <string name="undo">撤销</string>

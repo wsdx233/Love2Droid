@@ -56,6 +56,7 @@ class ProotRuntimeTest {
             assertFalse(binds.any { it == "/root:/root!" || it == "/storage:/storage!" || it == "/mnt:/mnt!" })
             assertEquals(project.canonicalPath, spec.command[spec.command.indexOf("-w") + 1])
             assertEquals("1", spec.environment["PROOT_DONT_POLLUTE_ROOTFS"])
+            assertTrue(spec.command.contains("NODE_OPTIONS=--import=${ProotRuntime.DSH_FILESYSTEM_COMPAT_GUEST_PATH}"))
             assertTrue(Files.getPosixFilePermissions(placeholder.toPath()).isEmpty())
             val projectsLink = File(rootfs, "root/projects").toPath()
             assertTrue(Files.isSymbolicLink(projectsLink))
@@ -81,6 +82,7 @@ class ProotRuntimeTest {
             )
             assertFalse(spec.command.contains("/root:/root!"))
             assertEquals("/root", spec.command[spec.command.indexOf("-w") + 1])
+            assertTrue(spec.command.contains("NODE_OPTIONS=--import=${ProotRuntime.DSH_FILESYSTEM_COMPAT_GUEST_PATH}"))
         } finally {
             directory.deleteRecursively()
         }
@@ -164,6 +166,71 @@ class ProotRuntimeTest {
             assertFalse(File(directory, "root/.dsh/profiles/web/.npmrc").exists())
         } finally {
             directory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun dshFilesystemAdapterInstallsAndMigratesWithoutRewritingUnchangedContent() {
+        val rootfs = Files.createTempDirectory("proot-dsh-filesystem").toFile()
+        try {
+            val target = File(rootfs, ProotRuntime.DSH_FILESYSTEM_COMPAT_GUEST_PATH.removePrefix("/"))
+            ProotRuntime.ensureDshFilesystemCompat(rootfs, "old adapter")
+            assertEquals("old adapter", target.readText())
+            val identity = Files.getAttribute(target.toPath(), "unix:ino")
+            ProotRuntime.ensureDshFilesystemCompat(rootfs, "old adapter")
+            assertEquals(identity, Files.getAttribute(target.toPath(), "unix:ino"))
+            ProotRuntime.ensureDshFilesystemCompat(rootfs, "current adapter")
+            assertEquals("current adapter", target.readText())
+        } finally {
+            rootfs.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun dshFilesystemAdapterRejectsGuestPathEscapingRootfs() {
+        val directory = Files.createTempDirectory("proot-dsh-filesystem-escape").toFile()
+        try {
+            val rootfs = File(directory, "ubuntu").apply { mkdirs() }
+            val outside = File(directory, "outside").apply { mkdirs() }
+            Files.createSymbolicLink(File(rootfs, "root").toPath(), outside.toPath())
+            org.junit.Assert.assertThrows(IllegalArgumentException::class.java) {
+                ProotRuntime.ensureDshFilesystemCompat(rootfs, "adapter")
+            }
+            assertTrue(outside.listFiles()!!.isEmpty())
+            Files.delete(File(rootfs, "root").toPath())
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun dshWebPluginUpdatesAssetsWithoutRewritingUnchangedFiles() {
+        val rootfs = Files.createTempDirectory("proot-dsh-plugin").toFile()
+        val assets = listOf("package.json", "index.mjs", "client.js", "cordis.patch.yml", "activate.mjs")
+            .associateWith { "old $it" }
+        try {
+            ProotRuntime.ensureDshWebPlugin(rootfs, assets)
+            val client = File(rootfs, "${ProotRuntime.DSH_PLUGIN_GUEST_PATH.removePrefix("/")}/client.js")
+            val identity = Files.getAttribute(client.toPath(), "unix:ino")
+            ProotRuntime.ensureDshWebPlugin(rootfs, assets)
+            assertEquals(identity, Files.getAttribute(client.toPath(), "unix:ino"))
+            ProotRuntime.ensureDshWebPlugin(rootfs, assets + ("client.js" to "updated client"))
+            assertEquals("updated client", client.readText())
+            val outside = Files.createTempDirectory("proot-dsh-plugin-outside").toFile()
+            try {
+                val protectedFile = File(outside, "client.js").apply { writeText("user content") }
+                assertTrue(client.delete())
+                Files.createSymbolicLink(client.toPath(), protectedFile.toPath())
+                org.junit.Assert.assertThrows(IllegalArgumentException::class.java) {
+                    ProotRuntime.ensureDshWebPlugin(rootfs, assets)
+                }
+                assertEquals("user content", protectedFile.readText())
+                Files.delete(client.toPath())
+            } finally {
+                outside.deleteRecursively()
+            }
+        } finally {
+            rootfs.deleteRecursively()
         }
     }
 

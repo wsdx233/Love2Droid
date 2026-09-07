@@ -618,8 +618,8 @@ object ProotInstaller {
             nvm use --lts || nvm use 22
             nvm alias default 'lts/*' 2>/dev/null || true
 
-            # 设置 NODE_OPTIONS=--jitless 兼容各种环境
-            export NODE_OPTIONS=--jitless
+            # 保留 PRoot 注入的 DSH 文件系统适配，安装时额外关闭 JIT。
+            export NODE_OPTIONS="--jitless ${'$'}{NODE_OPTIONS:-}"
 
             # 安装 pnpm 和 @deepseek-ai/dsh
             npm install -g pnpm@9 @deepseek-ai/dsh

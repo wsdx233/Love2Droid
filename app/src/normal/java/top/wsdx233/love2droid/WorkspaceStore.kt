@@ -13,6 +13,7 @@ internal enum class WorkspaceTabType {
 internal data class WorkspaceTabSnapshot(
     val type: WorkspaceTabType,
     val path: String? = null,
+    val externalPath: String? = null,
     val text: String? = null,
     val dirty: Boolean = false,
     val selectionStart: Int = 0,
@@ -58,6 +59,7 @@ internal object WorkspaceStore {
                             WorkspaceTabSnapshot(
                                 type = WorkspaceTabType.EDITOR,
                                 path = tab.optionalString("path"),
+                                externalPath = tab.optionalString("externalPath"),
                                 text = tab.optionalString("text"),
                                 dirty = tab.optBoolean("dirty", false),
                                 selectionStart = tab.optInt("selectionStart", 0).coerceAtLeast(0),
@@ -111,6 +113,7 @@ internal object WorkspaceStore {
             when (state.type) {
                 WorkspaceTabType.EDITOR -> {
                     state.path?.let { tab.put("path", it) }
+                    state.externalPath?.let { tab.put("externalPath", it) }
                     state.text?.let { tab.put("text", it) }
                     tab.put("dirty", state.dirty)
                     tab.put("selectionStart", state.selectionStart.coerceAtLeast(0))
