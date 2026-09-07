@@ -7,7 +7,35 @@ import org.json.JSONObject
 import top.wsdx233.love2droid.runtime.DebugWatchStore
 import java.io.File
 import java.io.IOException
+import java.io.InputStream
 import java.util.Locale
+
+internal object ProjectTemplate {
+    private val fontFiles = listOf(
+        "fusion-pixel-12px-monospaced-zh_hans.otf",
+        "OFL.txt",
+        "LICENSES/ark-pixel/OFL.txt",
+        "LICENSES/cubic-11/OFL.txt",
+        "LICENSES/galmuri/LICENSE.txt",
+    )
+
+    fun write(root: File, openAsset: (String) -> InputStream) {
+        val mainLua = openAsset("main.lua").bufferedReader(Charsets.UTF_8).use { it.readText() }
+        StorageUtils.writeTextAtomic(StorageUtils.resolveChild(root, "main.lua"), mainLua)
+        for (name in fontFiles) {
+            val path = "assets/fonts/$name"
+            val target = StorageUtils.resolveChild(root, path)
+            val parent = requireNotNull(target.parentFile)
+            if (!parent.isDirectory && !parent.mkdirs()) {
+                throw IOException("Unable to create ${parent.path}")
+            }
+            openAsset(path).use { input ->
+                target.outputStream().use { output -> input.copyTo(output) }
+            }
+        }
+    }
+}
+
 internal object LuaLanguageServerProjectConfig {
     const val FILE_NAME = ".luarc.json"
 
@@ -171,11 +199,9 @@ class ProjectRepository(context: Context) {
         require(!root.exists()) { "A project with this id already exists" }
         require(root.mkdirs()) { "Unable to create project directory" }
         try {
-            File(root, "assets").mkdirs()
-            StorageUtils.writeTextAtomic(
-                File(root, "main.lua"),
-                "function love.load()\nend\n\nfunction love.draw()\n    love.graphics.print(\"Hello from Love2Droid\", 32, 32)\nend\n",
-            )
+            ProjectTemplate.write(root) { path ->
+                appContext.assets.open("project-template/$path")
+            }
             StorageUtils.writeTextAtomic(
                 File(root, "conf.lua"),
                 defaultProjectConf(id, cleanName),

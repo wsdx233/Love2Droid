@@ -77,6 +77,14 @@ npx --yes --package=@expo/material-symbols add-material-symbols -o app/src/main/
 - Web 文件动作链路为 `session.openWorkspacePath` → `openNativePath` → Linux `xdg-open`；插件只在应用 WebView 内提前交给原生编辑器。写文件兼容仍由独立的最小加载适配维护，不能把插件形式视为任意上游版本的兼容保证。
 - 原生桥使用 Google Maven `androidx.webkit:webkit:1.14.0` 的 [WebViewCompat](https://developer.android.com/reference/androidx/webkit/WebViewCompat) origin 限制与主 frame 校验，许可证 Apache-2.0；不使用对所有页面/frame 暴露的通用 `addJavascriptInterface`。
 
+## Fusion Pixel Font
+
+- 上游：[TakWolf/fusion-pixel-font](https://github.com/TakWolf/fusion-pixel-font)，固定开发版 `dev-2026.09.07`，提交 `2a01310292913d78021cdfb94498d128e1f3114b`。
+- 发布包：[fusion-pixel-font-12px-monospaced-otf-v2026.09.07.zip](https://github.com/TakWolf/fusion-pixel-font/releases/download/dev-2026.09.07/fusion-pixel-font-12px-monospaced-otf-v2026.09.07.zip)；SHA-256：`88b63f8ae75d5b3dda45df6d72d2e83d6d3d8cab5fa3e61977704e5f136fb726`，已与 GitHub 发布资产摘要核对。
+- 仅引入未经修改的 `fusion-pixel-12px-monospaced-zh_hans.otf`，4,905,832 字节，SHA-256：`fe5476d0913c56bed54804bbeec9d1b41d00370694910ff1cf8a181202ee0733`。不引入其他地区字形、WOFF2、字体构建程序或 native Brotli 依赖。
+- 字体采用 OFL-1.1；发布包中的 `OFL.txt` 及 `LICENSES/ark-pixel/OFL.txt`、`LICENSES/cubic-11/OFL.txt`、`LICENSES/galmuri/LICENSE.txt` 原样保留在模板 `assets/fonts/`，并随新项目和导出游戏分发。字体可以随游戏商用，不得单独出售字体；修改字体时须继续遵守许可证要求。
+- 使用边界：作为新项目可替换的默认绘制字体，不替换 LÖVE 引擎内置字体。该版本覆盖常用简繁中文，但并不覆盖全部汉字；行为与验证分别见 [design.md](design.md#项目管理) 和 [verification.md](verification.md#新项目默认字体)。
+
 ## 许可证要求
 
 - LÖVE、SDL、Termux 组件、参考项目和第三方 TextMate grammar 的上游许可证必须保留。

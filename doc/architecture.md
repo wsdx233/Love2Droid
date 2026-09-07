@@ -40,7 +40,10 @@ projects/
     ├── main.lua           # LÖVE 入口
     ├── conf.lua
     └── assets/
+        └── fonts/         # 新项目默认字体及许可证
 ```
+
+新项目的静态入口和字体来自 `app/src/normal/assets/project-template/`。`ProjectTemplate` 负责复制入口、OTF 和许可证，`ProjectRepository` 继续生成配置与元数据，并在创建失败时删除未完成的项目目录。创建操作在 `Dispatchers.IO` 执行；字体是项目普通资产，随 Play 快照、`.love` 导出和游戏 APK 分发，不依赖编辑器私有路径，也不修改上游 runtime 的内置字体。
 
 存储不变量：
 

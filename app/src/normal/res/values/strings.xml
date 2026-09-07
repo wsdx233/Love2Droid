@@ -3,6 +3,7 @@
     <string name="play">运行项目</string>
     <string name="project_manager">项目管理</string>
     <string name="new_project">新建项目</string>
+    <string name="project_create_failed">创建项目失败：%1$s</string>
     <string name="no_project">请选择或新建一个项目</string>
     <string name="no_projects">还没有项目</string>
     <string name="file_browser">文件浏览器</string>

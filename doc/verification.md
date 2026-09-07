@@ -25,6 +25,16 @@
 
 测试必须不依赖 Android runtime，保持确定、隔离并可在完整测试集中运行。
 
+## 新项目默认字体
+
+```sh
+./gradlew :app:testNormalNoRecordDebugUnitTest --tests top.wsdx233.love2droid.StorageAndPackagingTest
+```
+
+- 聚焦测试从真实内置模板生成项目，并逐字节检查 `main.lua`、OTF 和四份许可证在项目目录及 `.love` 快照中保持完整；缺失字体必须传播 I/O 错误，不能静默退回不支持中文的字体。
+- 主机已执行 Lua 模板行为检查：`love.load()` 创建一次 24px 字体、设置字体自身的 `nearest` 过滤并启用，重复 `love.draw()` 不重新创建字体。该检查使用图形 API 替身，不等同于 LÖVE 渲染验证；实际 OTF 另经主机 FreeType 加载和中文样例字形栅格化验证。
+- arm64 真机：离线新建项目，确认 `assets/fonts/` 包含字体与许可证；把示例绘制文本改为“你好，世界！开始游戏”，Play 后确认中文可读，并观察高 DPI、横竖屏下的清晰度。导出 `.love` 与游戏 APK 后继续验证中文显示；打开旧项目、导入其他项目时，不应自动添加字体或改写入口。
+
 ## DSH 文件系统兼容性
 
 使用 Node.js 22.15+ 和 Linux 主机，测试真实 npm 包而不是模拟 DSH 后端；下载内容仅放在被忽略的 `.proot-debug/`。测试使用 `/tmp` 和 `/dev/shm` 的不同文件系统验证 `EXDEV`，不调用模型 API，也不需要 Android runtime：

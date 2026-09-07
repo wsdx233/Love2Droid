@@ -374,16 +374,21 @@ class ProjectManagerActivity : AppCompatActivity() {
             .setNegativeButton(R.string.cancel, null)
             .setPositiveButton(android.R.string.ok) { _, _ ->
                 val values = form.tag as ProjectForm
-                try {
-                    val project = repository.createProject(
-                        values.name.text.toString(),
-                        values.id.text.toString(),
-                        values.description.text.toString(),
-                        values.group.text.toString().trim(),
-                    )
-                    returnProject(project)
-                } catch (error: Exception) {
-                    showError(error.message ?: "创建项目失败")
+                val name = values.name.text.toString()
+                val id = values.id.text.toString()
+                val description = values.description.text.toString()
+                val group = values.group.text.toString().trim()
+                lifecycleScope.launch {
+                    try {
+                        val project = withContext(Dispatchers.IO) {
+                            repository.createProject(name, id, description, group)
+                        }
+                        returnProject(project)
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (error: Exception) {
+                        showError(getString(R.string.project_create_failed, error.message ?: error.javaClass.simpleName))
+                    }
                 }
             }
             .show()

@@ -1,12 +1,15 @@
 package top.wsdx233.love2droid
 
 import java.io.File
+import java.io.IOException
 import java.io.InputStream
 import java.io.InterruptedIOException
 import java.nio.file.Files
 import java.util.zip.ZipFile
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -46,6 +49,53 @@ class StorageAndPackagingTest {
         } finally {
             StorageUtils.deleteRecursively(root)
             StorageUtils.deleteRecursively(cache)
+        }
+    }
+
+    @Test
+    fun projectTemplateFontAndLicensesSurvivePackaging() {
+        val root = Files.createTempDirectory("love2droid-template").toFile()
+        val cache = Files.createTempDirectory("love2droid-template-cache").toFile()
+        val template = File("src/normal/assets/project-template")
+        try {
+            ProjectTemplate.write(root) { path -> File(template, path).inputStream() }
+            val project = Project("demo", "Demo", "", root, 0L)
+            val packageFile = LovePackageBuilder.build(project, cache)
+            val paths = listOf(
+                "main.lua",
+                "assets/fonts/fusion-pixel-12px-monospaced-zh_hans.otf",
+                "assets/fonts/OFL.txt",
+                "assets/fonts/LICENSES/ark-pixel/OFL.txt",
+                "assets/fonts/LICENSES/cubic-11/OFL.txt",
+                "assets/fonts/LICENSES/galmuri/LICENSE.txt",
+            )
+            ZipFile(packageFile).use { zip ->
+                for (path in paths) {
+                    val expected = File(template, path).readBytes()
+                    assertArrayEquals(path, expected, File(root, path).readBytes())
+                    val entry = requireNotNull(zip.getEntry(path)) { "Missing packaged template asset: $path" }
+                    assertArrayEquals(path, expected, zip.getInputStream(entry).use { it.readBytes() })
+                }
+            }
+        } finally {
+            StorageUtils.deleteRecursively(root)
+            StorageUtils.deleteRecursively(cache)
+        }
+    }
+
+    @Test
+    fun projectTemplateRejectsMissingFontRatherThanSilentlyFallingBack() {
+        val root = Files.createTempDirectory("love2droid-template-missing-font").toFile()
+        val template = File("src/normal/assets/project-template")
+        try {
+            assertThrows(IOException::class.java) {
+                ProjectTemplate.write(root) { path ->
+                    if (path.endsWith(".otf")) throw IOException("Missing bundled font: $path")
+                    File(template, path).inputStream()
+                }
+            }
+        } finally {
+            StorageUtils.deleteRecursively(root)
         }
     }
 
