@@ -1,19 +1,104 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="18 18 72 72">
-  <title>Love2Droid</title>
-  <desc>An Android robot hugging the LÖVE logo. Android robot: Google, CC BY 3.0; head: Material Symbols, Apache-2.0; LÖVE vector: Devicon, MIT. See ../reference.md.</desc>
-  <rect x="18" y="18" width="72" height="72" rx="16" fill="#F5F5EE"/>
-  <g id="foreground" transform="translate(54 54) scale(0.825) rotate(-12) translate(-54 -54)">
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="512"
+   height="512"
+   viewBox="18 18 72 72"
+   version="1.1"
+   id="svg5"
+   sodipodi:docname="icon.svg"
+   inkscape:version="1.4 (86a8ad7, 2024-10-11)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs5" />
+  <sodipodi:namedview
+     id="namedview5"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     showgrid="false"
+     inkscape:zoom="0.55517578"
+     inkscape:cx="-446.70536"
+     inkscape:cy="76.552331"
+     inkscape:window-width="3440"
+     inkscape:window-height="1351"
+     inkscape:window-x="-9"
+     inkscape:window-y="-9"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="foreground" />
+  <title
+     id="title1">Love2Droid</title>
+  <desc
+     id="desc1">An Android robot hugging the LÖVE logo. Android robot: Google, CC BY 3.0; head: Material Symbols, Apache-2.0; LÖVE vector: Devicon, MIT. See ../reference.md.</desc>
+  <rect
+     x="18"
+     y="18"
+     width="72"
+     height="72"
+     rx="16"
+     fill="#F5F5EE"
+     id="rect1" />
+  <g
+     id="foreground"
+     transform="matrix(0.80697177,-0.17152714,0.17152714,0.80697177,0.77862949,16.176615)">
     <!-- Android head: Material Symbols Rounded, weight 400, unfilled. -->
-    <path fill="#3DDC84" transform="translate(28 9.5) scale(0.052)" d="M40,720Q50,615 104,529Q158,443 243,389L166,260Q157,246 161.5,230Q166,214 180,206Q194,197 210,201Q226,205 234,219L314,352Q352,336 393.5,328Q435,320 480,320Q525,320 566.5,328Q608,336 646,352L726,219Q734,205 750,201Q766,197 780,206Q794,214 798,230Q802,246 794,260L717,389Q802,443 856,529Q910,615 920,720L40,720ZM720.5,568.5Q722,551 711,534Q700,517 684,512Q668,507 655,516Q642,525 640,542Q638,559 649,576Q660,593 676.5,598.5Q693,604 706,595Q719,586 720.5,568.5ZM284,598Q300,593 311,576Q322,559 320.5,541.5Q319,524 306,515Q293,506 276.5,511.5Q260,517 249,534Q238,551 240,568Q242,585 255,594Q268,603 284,598Z"/>
+    <path
+       fill="#3ddc84"
+       d="m 34.915035,47.235082 q 0.406169,-4.310576 2.634966,-7.837765 2.228797,-3.527189 5.74309,-5.738166 l -3.196659,-5.302438 q -0.373557,-0.575505 -0.188475,-1.232136 0.185082,-0.65663 0.763971,-0.984079 0.578818,-0.368508 1.241377,-0.203088 0.662558,0.165421 0.994723,0.740853 l 3.321129,5.466899 q 1.571696,-0.654159 3.288853,-0.979579 1.717157,-0.32542 3.579774,-0.322101 1.862616,0.0033 3.580953,0.334862 1.718337,0.331543 3.292393,0.991308 l 3.301508,-5.455097 q 0.3301,-0.574252 0.992068,-0.737312 0.66197,-0.163061 1.242113,0.207513 0.580072,0.329514 0.746817,0.98677 0.166746,0.657258 -0.163352,1.23151 l -3.17763,5.291078 q 3.522261,2.223517 5.763744,5.758672 2.241485,3.535156 2.663143,7.847207 z m 28.15573,-6.170415 q 0.0608,-0.718442 -0.395764,-1.417275 -0.45656,-0.698834 -1.119192,-0.905316 -0.662633,-0.20648 -1.200058,0.162102 -0.537425,0.368582 -0.618955,1.066457 -0.08153,0.697875 0.375031,1.396709 0.456561,0.698834 1.139926,0.925881 0.683365,0.227049 1.220791,-0.141535 0.537425,-0.368582 0.598221,-1.087023 z m -18.065207,1.179077 q 0.661895,-0.204121 1.115948,-0.901332 0.454052,-0.697211 0.390674,-1.415875 -0.06338,-0.718662 -0.602131,-1.089162 -0.538753,-0.3705 -1.221308,-0.145887 -0.682553,0.224615 -1.136605,0.921826 -0.454052,0.697209 -0.370016,1.395379 0.08404,0.69817 0.622789,1.068671 0.538754,0.3705 1.200649,0.16638 z"
+       id="path1"
+       style="stroke-width:0.0412254" />
     <!-- Rounded body and hugging arms adapted from the supplied Android robot. -->
-    <rect x="31" y="48" width="46" height="29" rx="5.5" fill="#3DDC84"/>
-    <circle cx="54" cy="67" r="25.5" fill="#FFFFFF"/>
-    <g transform="translate(30 43) scale(0.375)">
-      <path xmlns="http://www.w3.org/2000/svg" fill="#e74a99" d="M106.23 15.595c-.016-.015-.034-.025-.05-.04C86.066-1.712 57.648-4.776 34.131 7.233 10.63 19.235-2.749 46 .476 71.94c2.252 18.127 12.359 34.022 26.796 44.235 0 0 39.797-35.537 50.365-48.148 9.912-11.837 31.554-49.638 31.554-49.638a62.743 62.743 0 0 0-2.962-2.793z" />
-      <path xmlns="http://www.w3.org/2000/svg" fill="#27aae1" fill-rule="nonzero" d="M27.273 116.174a64.99 64.99 0 0 0 22.37 10.161c25.488 6.103 52.97-4.98 67.55-26.586 17.185-25.473 13.406-59.878-8.001-81.36L68.444 67.03a569939.128 569939.128 0 0 0-41.171 49.143z" />
-      <path xmlns="http://www.w3.org/2000/svg" fill="#fff" fill-rule="nonzero" d="M66.05 47.945s-6.1-13.346-18.796-10.309C34.559 40.675 8.045 66.604 64.059 98.863h-.045c56.013-32.26 29.502-58.187 16.806-61.227C68.123 34.6 62.024 47.945 62.024 47.945Z" />
+    <circle
+       cx="54"
+       cy="67"
+       r="25.5"
+       fill="#ffffff"
+       id="circle2" />
+    <g
+       transform="matrix(0.375,0,0,0.375,30,43)"
+       id="g4">
+      <path
+         fill="#e74a99"
+         d="M 106.23,15.595 C 106.214,15.58 106.196,15.57 106.18,15.555 86.066,-1.712 57.648,-4.776 34.131,7.233 10.63,19.235 -2.749,46 0.476,71.94 c 2.252,18.127 12.359,34.022 26.796,44.235 0,0 39.797,-35.537 50.365,-48.148 9.912,-11.837 31.554,-49.638 31.554,-49.638 a 62.743,62.743 0 0 0 -2.962,-2.793 z"
+         id="path2" />
+      <path
+         fill="#27aae1"
+         fill-rule="nonzero"
+         d="m 27.273,116.174 a 64.99,64.99 0 0 0 22.37,10.161 c 25.488,6.103 52.97,-4.98 67.55,-26.586 17.185,-25.473 13.406,-59.878 -8.001,-81.36 L 68.444,67.03 a 569939.13,569939.13 0 0 0 -41.171,49.143 z"
+         id="path3" />
+      <path
+         fill="#ffffff"
+         fill-rule="nonzero"
+         d="m 66.05,47.945 c 0,0 -6.1,-13.346 -18.796,-10.309 C 34.559,40.675 8.045,66.604 64.059,98.863 H 64.014 C 120.027,66.603 93.516,40.676 80.82,37.636 68.123,34.6 62.024,47.945 62.024,47.945 Z"
+         id="path4" />
     </g>
-    <rect x="27.5" y="49" width="10" height="27" rx="5" transform="rotate(-22 32.5 54)" fill="#3DDC84" stroke="#FFFFFF" stroke-width="2.5"/>
-    <rect x="70.5" y="49" width="10" height="27" rx="5" transform="rotate(22 75.5 54)" fill="#3DDC84" stroke="#FFFFFF" stroke-width="2.5"/>
+    <rect
+       x="27.5"
+       y="49"
+       width="10"
+       height="27"
+       rx="5"
+       transform="rotate(-22,32.5,54)"
+       fill="#3ddc84"
+       stroke="#ffffff"
+       stroke-width="2.5"
+       id="rect4" />
+    <rect
+       x="70.5"
+       y="49"
+       width="10"
+       height="27"
+       rx="5"
+       transform="rotate(22,75.5,54)"
+       fill="#3ddc84"
+       stroke="#ffffff"
+       stroke-width="2.5"
+       id="rect5" />
   </g>
 </svg>

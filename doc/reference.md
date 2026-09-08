@@ -67,7 +67,7 @@ npx --yes --package=@expo/material-symbols add-material-symbols -o app/src/main/
 
 - README 排版参考 [ModinMobileSTS/Sts2MobileLauncher](https://github.com/ModinMobileSTS/Sts2MobileLauncher/blob/main/README.md)（2026-09-08 核对）：语言切换、居中图标与标题、Shields.io 徽章、截图画廊和简洁分区；Love2Droid 另用 GitHub 支持的 HTML 表格呈现功能卡片。不复制该项目的业务文案、代码或游戏资产。
 - `images/screenshots/` 的五张图片来自用户提供的 Love2Droid 截图；仅等比例缩小、转为 JPEG 并去除元数据，未伪造界面。英文和中文 README 共享这些仓库内的相对路径。
-- 启动图标按用户提供的 `ref.png` 构图，组合 Android 机器人与 LÖVE 标志。Android 头部通过 Material Symbols 标准命令取得，Rounded、未填充、weight 400，Apache-2.0；躯干与手臂从用户提供的 `Android_robot.svg` 圆角几何变换而来，不引入来源不明的路径。
+- 启动图标采用用户提供的优化版 `icon.svg`，保留其头部尺寸、整体位置、路径和配色；构图沿用 `ref.png` 中 Android 机器人拥抱 LÖVE 标志的形象。Android 头部最初通过 Material Symbols 标准命令取得，Rounded、未填充、weight 400，Apache-2.0；手臂从用户提供的 `Android_robot.svg` 圆角几何变换而来，不引入来源不明的路径。
 
 ```sh
 npx --yes --package=@expo/material-symbols add-material-symbols --style rounded -o /tmp/love2droid-brand-symbols android

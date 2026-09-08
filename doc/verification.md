@@ -198,7 +198,9 @@ podman unshare unshare --net sh -ec \
 ## README 与启动图标
 
 - README 的英文、中文入口应互相切换，五张截图及品牌 SVG 使用仓库内相对路径；在 GitHub 桌面与手机宽度下检查图片、徽章、双列功能卡片、折叠截图和章节跳转，页面本身不能横向溢出。代码块允许自身水平滚动。
-- 本地主机已通过 GitHub Markdown API 渲染与 Chromium 检查桌面/390px 布局、图片加载和折叠交互；单色图层通过 Chromium 矢量预览检查。Android 前景矢量转绘与 SVG 的可见像素平均通道误差小于 0.04/255（曲线栅格化差异），主体最大半径约 31.81dp，小于安全圆的 33dp。
+- README 布局此前已通过 GitHub Markdown API 渲染与 Chromium 桌面/390px 布局、图片加载和折叠交互检查。优化版 SVG 原样保存，两份 README 的实际图标元素均通过 Chromium 加载检查，512px PNG 由同一 SVG 渲染导出。
+- 优化版 Android 矢量转绘已与源 SVG 比较：兼容图标可见像素平均通道误差约 0.00086/255，自适应前景约 0.02541/255（曲线栅格化差异）；2048px 栅格采样的主体最大半径约 28.60dp，小于安全圆的 33dp。圆形、圆角方形与单色图层已通过 Chromium 预览；单色像素检查确认眼睛、心形和两侧手臂边界透明，头部、手臂与 LÖVE 主体保持填充。
+- 优化版已成功构建 `:app:assembleNormalNoRecordDebug`，并通过 `aapt2` 检查应用图标入口及编译后的兼容、自适应和单色 XML；包内署名与 `licenses/APP-ICON-NOTICE.txt` 一致。
 - 必须重新执行上节 APK 构建，并用 SDK `aapt2 dump badging` 检查应用图标指向 `ic_launcher`；包内应保留普通矢量、v26 自适应、v33 含 monochrome 的资源及 `assets/licenses/app-icon-notice.txt`。导出游戏的默认 `love.png` 和用户项目图标保持原行为。
 - 真机升级安装后检查桌面与应用抽屉图标：支持自适应图标的桌面分别观察圆形、圆角方形裁切；Android 13+ 开关主题图标，确认眼睛、心形与拥抱手臂仍清晰；Android 6.0/7.x 检查兼容图标。桌面可能缓存旧图标，需重新添加快捷方式或刷新桌面缓存。本地几何预览与 APK 检查不等同于真机桌面验证，不使用模拟器代替。
 
