@@ -78,6 +78,9 @@ class SetupActivity : AppCompatActivity() {
         val setupSubtitle = findViewById<TextView>(R.id.setup_subtitle)
         val progressStatusIcon = findViewById<ImageView>(R.id.setup_progress_status_icon)
         val setupProgress = findViewById<LinearProgressIndicator>(R.id.setup_progress)
+        val setupProgressPercent = findViewById<TextView>(R.id.setup_progress_percent)
+        val setupProgressDetail = findViewById<TextView>(R.id.setup_progress_detail)
+        val setupProgressFile = findViewById<TextView>(R.id.setup_progress_file)
         val setupLogs = findViewById<TextView>(R.id.setup_logs)
         val setupLogsScroll = findViewById<NestedScrollView>(R.id.setup_logs_scroll)
         val setupRetryButton = findViewById<Button>(R.id.setup_retry_button)
@@ -242,6 +245,7 @@ class SetupActivity : AppCompatActivity() {
             }
         })
 
+        var displayedLogs: List<String>? = null
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 ProotInstaller.state.collect { state ->
@@ -271,12 +275,25 @@ class SetupActivity : AppCompatActivity() {
                     }
                     setupSubtitle.text = state.message.ifBlank { getString(R.string.proot_install_preparing) }
                     setupProgress.setProgressCompat(state.progress, true)
-                    setupLogs.text = if (state.logs.isEmpty()) {
-                        getString(R.string.proot_setup_logs_empty)
-                    } else {
-                        state.logs.joinToString("\n")
+                    setupProgressPercent.visibility = if (BuildConfig.BUNDLED_ROOTFS) View.VISIBLE else View.GONE
+                    if (BuildConfig.BUNDLED_ROOTFS) {
+                        setupProgressPercent.text = getString(R.string.proot_install_progress, state.progress)
                     }
-                    setupLogsScroll.post { setupLogsScroll.fullScroll(View.FOCUS_DOWN) }
+                    setupProgressDetail.visibility = if (state.detail.isEmpty()) View.GONE else View.VISIBLE
+                    setupProgressDetail.text = state.detail
+                    setupProgressFile.visibility = if (state.currentFile.isEmpty()) View.GONE else View.VISIBLE
+                    setupProgressFile.text = if (state.currentFile.isEmpty()) "" else {
+                        getString(R.string.proot_offline_current_file, state.currentFile)
+                    }
+                    if (displayedLogs !== state.logs) {
+                        displayedLogs = state.logs
+                        setupLogs.text = if (state.logs.isEmpty()) {
+                            getString(R.string.proot_setup_logs_empty)
+                        } else {
+                            state.logs.joinToString("\n")
+                        }
+                        setupLogsScroll.post { setupLogsScroll.fullScroll(View.FOCUS_DOWN) }
+                    }
                 }
             }
         }

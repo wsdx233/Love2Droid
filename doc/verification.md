@@ -180,14 +180,16 @@ podman unshare unshare --net sh -ec \
     'ip link set lo up; ip -brief address; ip route; python3 tools/offline-rootfs.py verify-restored'
 ```
 
-- 逻辑回归覆盖解压权限、可移植链接、越界拒绝、损坏/截断、声明大小和条目上限、既有环境保护、重试不重复解包，以及导出游戏 APK 不夹带 rootfs。
+- 逻辑回归覆盖解压权限、可移植链接、越界拒绝、损坏/截断、声明大小和条目上限、既有环境保护、重试不重复解包，以及导出游戏 APK 不夹带 rootfs。进度回归覆盖大文件写入中间进度、字节/条目单调递增、链接和空文件计数、最终真实计数、归档校验前不提交目录，以及复用镜像不报告虚假的解压。
 - `smokeOfflineRootfs` 运行 App 使用的 Kotlin 恢复器而非系统 tar，在 512 MiB JVM 堆上实际解压发布归档并核对内容、链接及完整性；目标为镜像 assets 同级的 `restored/ubuntu`，拒绝覆盖既有目录。再次做全新恢复前只能移除自己上次生成的 smoke 输出，不能删除用户环境。
+- 恢复输出同时显示解压百分比、实际展开字节/总字节、已处理/总条目及当前相对路径；最终应与 Manifest 的 `unpackedBytes`、`entryCount` 一致，进入归档校验后才报告解压 100%，其后必须成功通过 SHA-256 并提交目录。
 - `verify-restored` 不重新部署或修补恢复出来的文件；在只有 loopback、没有外网路由的 network namespace 中实际执行 ARM64 Git、LuaLS、OMP、nvm、Node.js、npm、pnpm、DSH、Web profile 依赖解析、带认证的 Web 页面 HTTP 200 和三帧 `love-check doctor`。该命令不联系模型供应商，不调用 APT/npm 安装，不使用主机 x86 工具冒充 ARM64 检查。
 - 本次完整镜像已通过上述主机恢复及断网执行；Linux LÖVE 返回真实 Mesa llvmpipe renderer。它证明镜像依赖完整和恢复后离线可启动，不代表 Android 生命周期、PRoot 或 WebView 已在真机验证。
 
 ### arm64 真机验收
 
 - 新装离线 APK 后开启飞行模式，选择整包安装，确认只进行解压和自检，无下载步骤，全部组件通过后进入编辑器。
+- 安装页依次显示解压（1/3）、配置（2/3）和自检（3/3）；总安装百分比不得回退，解压区持续显示实际大小、条目计数和当前文件，长路径不撑宽界面。解压进度到 100% 时总安装尚未完成；自检显示当前组件和已通过项数，所有检查与状态保存成功后总进度才到 100%。检查横竖屏、长路径、大字体、亮暗主题和后台返回；仅解压计数变化时不应强制滚动用户正在查看的日志。
 - 确认普通终端及 bash-prompt、LuaLS 补全、OMP 启动、DSH Web、`love-check doctor --frames 3 --timeout 60` 可用；远程模型请求不属于离线验收。
 - 解压中断、空间不足和验证失败均不得假报完成；重试应清理 staging 或继续同一已恢复镜像的验证。检查实际空间占用、安装时间、后台切换与低内存表现。
 - 对已有完整环境覆盖升级，确认项目、模型配置、DSH/OMP 会话和用户安装工具不变；对已有不完整在线环境，确认明确拒绝覆盖而非清空，可切回同签名普通版补齐。

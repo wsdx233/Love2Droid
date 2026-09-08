@@ -27,6 +27,16 @@ internal object OfflineRootfs {
         val requiredSpace: Long get() = unpackedBytes + entryCount.toLong() * 4096 + 64L * 1024 * 1024
     }
 
+    data class Progress(
+        val unpackedBytes: Long,
+        val completedEntries: Int,
+        val currentPath: String,
+        val verifying: Boolean = false,
+    ) {
+        fun extractionPercent(manifest: Manifest): Int =
+            if (verifying) 100 else (unpackedBytes * 100 / manifest.unpackedBytes).toInt().coerceIn(0, 99)
+    }
+
     fun parseManifest(text: String): Manifest {
         val json = JSONObject(text)
         require(json.getInt("formatVersion") == 1) { "Unsupported offline image format" }
@@ -61,7 +71,7 @@ internal object OfflineRootfs {
         createSymlink: (String, String) -> Unit,
         setMode: (String, Int) -> Unit,
         isSymlink: (File) -> Boolean,
-        onProgress: (Long) -> Unit = {},
+        onProgress: (Progress) -> Unit = {},
     ): Boolean {
         check(canRestore(rootfs, manifest)) { "Existing rootfs will not be overwritten" }
         if (File(rootfs, IMAGE_MARKER).isFile) return false
@@ -71,6 +81,10 @@ internal object OfflineRootfs {
         try {
             val digest = MessageDigest.getInstance("SHA-256")
             var compressed = 0L
+            var unpacked = 0L
+            var completedEntries = 0
+            var lastReport = System.nanoTime()
+            onProgress(Progress(0, 0, ""))
             openArchive().buffered().use { archive ->
                 val source = DigestInputStream(archive, digest)
                 val counting = object : FilterInputStream(source) {
@@ -80,15 +94,24 @@ internal object OfflineRootfs {
                     private fun report(count: Int) {
                         compressed += count
                         check(compressed <= manifest.compressedBytes) { "Offline archive exceeds its declared size" }
-                        onProgress(compressed)
                     }
                 }
                 XZInputStream(counting, DECODER_MEMORY_KIB).use { xz ->
                     val entries = RootfsArchive.extract(
                         object : FilterInputStream(xz) { override fun close() = Unit }, staging,
                         createSymlink, setMode, manifest.entryCount, manifest.unpackedBytes,
-                    )
+                    ) { bytes, completed, path ->
+                        unpacked = bytes
+                        completedEntries = completed
+                        val now = System.nanoTime()
+                        // File and buffer callbacks stay cheap; publish at most five times a second.
+                        if (now - lastReport >= 200_000_000L) {
+                            lastReport = now
+                            onProgress(Progress(bytes, completed, path))
+                        }
+                    }
                     check(entries == manifest.entryCount) { "Offline archive entry count mismatch" }
+                    onProgress(Progress(unpacked, completedEntries, "", verifying = true))
                     // Read through the XZ footer, validating its checksum and any remaining padding.
                     val buffer = ByteArray(64 * 1024)
                     while (xz.read(buffer) >= 0) { /* drain */ }

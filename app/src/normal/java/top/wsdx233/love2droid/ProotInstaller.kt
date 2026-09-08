@@ -51,6 +51,8 @@ data class ProotInstallState(
     val progress: Int = 0,
     val message: String = "",
     val logs: List<String> = emptyList(),
+    val detail: String = "",
+    val currentFile: String = "",
 ) {
     enum class Status {
         IDLE,
@@ -208,6 +210,8 @@ object ProotInstaller {
                         ProotInstallState.Status.ERROR,
                         _state.value.progress,
                         appContext.getString(R.string.proot_install_failed, detail),
+                        detail = _state.value.detail,
+                        currentFile = _state.value.currentFile,
                     )
                 }
             }
@@ -233,20 +237,32 @@ object ProotInstaller {
                 context.getString(R.string.proot_offline_space_required, StorageUtils.formatBytes(manifest.requiredSpace))
             }
         }
-        update(ProotInstallState.Status.EXTRACTING, 5, context.getString(R.string.proot_offline_extracting))
-        var lastProgress = -1
+        val unpackedSize = StorageUtils.formatBytes(manifest.unpackedBytes)
         OfflineRootfs.restore(
             rootfs, manifest,
             openArchive = { context.assets.open("${OfflineRootfs.ASSET_DIRECTORY}/${manifest.archive}") },
             createSymlink = Os::symlink,
             setMode = Os::chmod,
             isSymlink = { OsConstants.S_ISLNK(Os.lstat(it.absolutePath).st_mode) },
-        ) { bytes ->
-            val progress = 5 + (bytes * 70 / manifest.compressedBytes).toInt()
-            if (progress != lastProgress) {
-                lastProgress = progress
-                update(ProotInstallState.Status.EXTRACTING, progress, context.getString(R.string.proot_offline_extracting))
+        ) { extraction ->
+            val percent = extraction.extractionPercent(manifest)
+            val message = context.getString(if (extraction.verifying) {
+                R.string.proot_offline_archive_verifying
+            } else {
+                R.string.proot_offline_extracting
+            })
+            if (extraction.unpackedBytes == 0L && extraction.completedEntries == 0 || extraction.verifying) {
+                appendLog(message)
             }
+            update(
+                ProotInstallState.Status.EXTRACTING,
+                if (extraction.verifying) 71 else 5 + percent * 65 / 100,
+                message,
+                detail = context.getString(R.string.proot_offline_extract_progress, percent,
+                    StorageUtils.formatBytes(extraction.unpackedBytes), unpackedSize,
+                    extraction.completedEntries, manifest.entryCount),
+                currentFile = extraction.currentPath,
+            )
         }
         configureRootfs(context)
         configureResolver(context)
@@ -256,8 +272,33 @@ object ProotInstaller {
         require(StorageUtils.isWithin(rootfs, verifier)) { "Offline verifier escapes rootfs" }
         StorageUtils.writeTextAtomic(verifier, context.assets.open("proot/offline-verify.py")
             .bufferedReader().use { it.readText() })
-        update(ProotInstallState.Status.INSTALLING, 80, context.getString(R.string.proot_offline_verifying))
-        runProotCommand(context, "/usr/bin/python3 $verifierPath")
+        // The verifier emits one success line per component, in this order.
+        val checks = listOf(
+            "base: " to R.string.components_base_rootfs_name,
+            "luals: " to R.string.components_lua_lsp_name,
+            "omp: " to R.string.components_omp_name,
+            "dsh: " to R.string.components_dsh_name,
+            "love-check: " to R.string.components_love_check_name,
+        )
+        var verified = 0
+        val verifyingMessage = context.getString(R.string.proot_offline_verifying)
+        fun reportVerification() {
+            val detail = if (verified < checks.size) {
+                context.getString(R.string.proot_offline_verify_progress, verified, checks.size,
+                    context.getString(checks[verified].second))
+            } else {
+                context.getString(R.string.proot_offline_verify_complete, checks.size)
+            }
+            update(ProotInstallState.Status.INSTALLING, 80 + verified * 19 / checks.size, verifyingMessage, detail)
+        }
+        appendLog(verifyingMessage)
+        reportVerification()
+        runProotCommand(context, "/usr/bin/python3 $verifierPath") { line ->
+            if (verified < checks.size && line.startsWith(checks[verified].first)) {
+                verified++
+                reportVerification()
+            }
+        }
         // Commit completion only after every real CLI and the headless renderer pass.
         InstallRegistry.availableComponents.forEach { component ->
             val content = if (component.id == InstallRegistry.ID_LOVE_CHECK) LoveCheckRuntime.READY_CONTENT else "ready=true\n"
@@ -441,7 +482,7 @@ object ProotInstaller {
         update(
             ProotInstallState.Status.CONFIGURING,
             72,
-            context.getString(R.string.proot_install_configuring),
+            context.getString(if (BuildConfig.BUNDLED_ROOTFS) R.string.proot_offline_configuring else R.string.proot_install_configuring),
         )
         val rootfs = ProotRuntime.rootfsDir(context)
         replaceTextFile(File(rootfs, "etc/hosts"), "127.0.0.1 localhost\n::1 localhost\n")
@@ -680,7 +721,7 @@ object ProotInstaller {
         appendLog(context.getString(R.string.proot_log_dsh_installed))
     }
 
-    private fun runProotCommand(context: Context, script: String) {
+    private fun runProotCommand(context: Context, script: String, onLine: ((String) -> Unit)? = null) {
         val spec = ProotRuntime.shellLaunch(context, script)
         val process = ProcessBuilder(spec.command)
             .directory(spec.workingDirectory)
@@ -691,6 +732,7 @@ object ProotInstaller {
             process.inputStream.bufferedReader().useLines { lines ->
                 lines.forEach { line ->
                     if (line.isNotBlank()) appendLog(line)
+                    onLine?.invoke(line)
                 }
             }
             val exitCode = process.waitFor()
@@ -724,11 +766,19 @@ object ProotInstaller {
         return digest.digest().joinToString("") { byte -> "%02x".format(byte) }
     }
 
-    private fun update(status: ProotInstallState.Status, progress: Int, message: String) {
+    private fun update(
+        status: ProotInstallState.Status,
+        progress: Int,
+        message: String,
+        detail: String = "",
+        currentFile: String = "",
+    ) {
         _state.value = _state.value.copy(
             status = status,
             progress = progress.coerceIn(0, 100),
             message = message,
+            detail = detail,
+            currentFile = currentFile,
         )
     }
 

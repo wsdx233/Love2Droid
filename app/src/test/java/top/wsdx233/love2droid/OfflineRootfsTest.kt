@@ -48,11 +48,16 @@ class OfflineRootfsTest {
             entries.sumOf { it.content.toByteArray().size.toLong() }.coerceAtLeast(1), entries.size)
     }
 
-    private fun restore(root: File, data: ByteArray, manifest: OfflineRootfs.Manifest): Boolean =
+    private fun restore(
+        root: File,
+        data: ByteArray,
+        manifest: OfflineRootfs.Manifest,
+        onProgress: (OfflineRootfs.Progress) -> Unit = {},
+    ): Boolean =
         OfflineRootfs.restore(root, manifest, { ByteArrayInputStream(data) },
             { target, path -> Files.createSymbolicLink(File(path).toPath(), File(target).toPath()); Unit },
             { path, mode -> assertTrue(File(path).setExecutable(mode and 64 != 0)) },
-            { Files.isSymbolicLink(it.toPath()) })
+            { Files.isSymbolicLink(it.toPath()) }, onProgress)
 
     private fun inDirectory(block: (File) -> Unit) {
         val directory = Files.createTempDirectory("offline-rootfs").toFile()
@@ -81,6 +86,56 @@ class OfflineRootfsTest {
         assertFalse(File(directory, OfflineRootfs.VERIFIED_MARKER).exists())
         assertEquals("neighbor", File(root, "bin/neighbor").readText())
         assertEquals(entries[0].content, File(root, "bin/absolute").readText())
+    }
+
+    @Test
+    fun extractionReportsWrittenBytesCurrentFileAndCompletedEntries() = inDirectory { directory ->
+        val content = "x".repeat(3 * 64 * 1024)
+        val entries = listOf(Entry("./"), Entry("usr/bin/tool", content),
+            Entry("usr/bin/link", link = "tool"), Entry("empty"))
+        val root = File(directory, "ubuntu").apply { mkdirs() }
+        val updates = mutableListOf<OfflineRootfs.Progress>()
+        val count = RootfsArchive.extract(ByteArrayInputStream(tar(entries)), root,
+            { target, path -> Files.createSymbolicLink(File(path).toPath(), File(target).toPath()); Unit },
+            { _, _ -> },
+        ) { bytes, completed, path ->
+            updates += OfflineRootfs.Progress(bytes, completed, path)
+        }
+        assertEquals(entries.size, count)
+        assertTrue(updates.any { it.currentPath == "usr/bin/tool" &&
+            it.unpackedBytes in 1 until content.length.toLong() && it.completedEntries == 1 })
+        assertTrue(updates.zipWithNext().all { (before, after) ->
+            before.unpackedBytes <= after.unpackedBytes && before.completedEntries <= after.completedEntries
+        })
+        assertEquals(content.length.toLong(), updates.last().unpackedBytes)
+        assertEquals(entries.size, updates.last().completedEntries)
+        assertEquals("empty", updates.last().currentPath)
+        assertEquals(content, File(root, "usr/bin/link").readText())
+    }
+
+    @Test
+    fun restorationReportsExactTotalsBeforeArchiveVerification() = inDirectory { directory ->
+        val (data, manifest) = archive(listOf(Entry("usr/bin/tool", "payload"), Entry("bin", link = "usr/bin")))
+        val root = File(directory, "ubuntu")
+        val updates = mutableListOf<OfflineRootfs.Progress>()
+        assertTrue(restore(root, data, manifest) { progress ->
+            assertFalse(root.exists())
+            updates += progress
+        })
+        assertEquals(OfflineRootfs.Progress(0, 0, ""), updates.first())
+        assertEquals(OfflineRootfs.Progress(manifest.unpackedBytes, manifest.entryCount, "", verifying = true), updates.last())
+        assertTrue(updates.dropLast(1).all { !it.verifying && it.extractionPercent(manifest) < 100 })
+        assertEquals(100, updates.last().extractionPercent(manifest))
+        assertEquals(manifest.sha256, File(root, OfflineRootfs.IMAGE_MARKER).readText())
+    }
+
+    @Test
+    fun extractionPercentageUsesUnpackedBytesAndWaitsForRemainingEntries() {
+        val manifest = OfflineRootfs.Manifest("a".repeat(64), 10, 1000, 4)
+        assertEquals(0, OfflineRootfs.Progress(0, 0, "").extractionPercent(manifest))
+        assertEquals(50, OfflineRootfs.Progress(500, 1, "large").extractionPercent(manifest))
+        assertEquals(99, OfflineRootfs.Progress(1000, 2, "link").extractionPercent(manifest))
+        assertEquals(100, OfflineRootfs.Progress(1000, 4, "", verifying = true).extractionPercent(manifest))
     }
 
     @Test
@@ -114,7 +169,7 @@ class OfflineRootfsTest {
         File(root, "user-data").writeText("keep")
         assertFalse(OfflineRootfs.restore(root, manifest, { error("Archive must not be read again") },
             { _, _ -> error("No links to create") }, { _, _ -> error("No permissions to change") },
-            { Files.isSymbolicLink(it.toPath()) }))
+            { Files.isSymbolicLink(it.toPath()) }, { error("Reused images must not report extraction") }))
         assertEquals("keep", File(root, "user-data").readText())
     }
 

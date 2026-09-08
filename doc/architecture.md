@@ -141,6 +141,7 @@ Android 发布与 Play 分离；发布结果是可安装、可分享的独立 AP
 - 主机使用 rootless Podman user namespace 和独立 mount namespace 内的 chroot；x86_64 使用固定 BuildKit QEMU 执行真实 ARM64 程序，避免 PRoot + QEMU 的 V8 地址映射崩溃。该构建路径不是 Android 模拟器，也不替代手机 PRoot 验证。
 - 镜像采用 `tar.xz`、`-9e` 与 32 MiB 字典，APK 中不二次压缩 XZ。`OfflineRootfs` 使用流式解码，解码器内存上限 64 MiB；这不是整个 App 的堆内存上限。Manifest 记录 SHA-256、压缩/展开大小、条目数与完整组件集合，Gradle 打包前也校验镜像。
 - 在线 gzip 和离线 XZ 共用 `RootfsArchive` 的路径边界、guest 链接和权限恢复规则。离线先校验剩余空间，再解压到同级 staging；拒绝路径或链接逃逸，完整检查 XZ、大小、条目数及 SHA-256 后才改名提交。中断只清理自有 staging，不删除现有非空 rootfs。
+- 解压进度由 `RootfsArchive` 在文件写入和条目处理时上报，`OfflineRootfs` 按约 200ms 间隔发布实际展开字节数、已处理条目数和当前相对路径；归档校验阶段强制发布最终计数。`ProotInstaller` 映射连续的安装阶段进度，并根据现有离线自检脚本的逐组件成功输出更新通过项数；只有完整流程成功才提交 100%。安装页只有日志变化时才重建日志文本和滚动，不因解压进度刷新重复处理日志。
 - 手机恢复后沿用设备 DNS、GID、路径和脚本准备逻辑，再执行实际 CLI、DSH 认证 Web 页面与 `love-check doctor`；全部通过才写组件完成标记。验证失败重试复用已恢复的同一镜像，不再次解包。离线流程不调用 APT/npm 或下载回退；升级只复用完整旧环境，不用新镜像覆盖用户环境，既有不完整环境保留并明确报错。
 
 

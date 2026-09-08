@@ -173,6 +173,38 @@
                 app:trackThickness="8dp" />
 
             <TextView
+                android:id="@+id/setup_progress_percent"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:textAppearance="?attr/textAppearanceTitleSmall"
+                android:textColor="?attr/colorPrimary"
+                android:visibility="gone"
+                tools:text="安装进度：42%" />
+
+            <TextView
+                android:id="@+id/setup_progress_detail"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textAppearance="?attr/textAppearanceBodyMedium"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:visibility="gone"
+                tools:text="解压：56% · 664.0 MB / 1185.7 MB\n已处理条目：24300 / 52230" />
+
+            <TextView
+                android:id="@+id/setup_progress_file"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:layout_marginBottom="12dp"
+                android:ellipsize="middle"
+                android:maxLines="1"
+                android:textAppearance="?attr/textAppearanceBodySmall"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:visibility="gone"
+                tools:text="正在解压：usr/bin/git" />
+
+            <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/proot_setup_logs"

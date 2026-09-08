@@ -13,6 +13,7 @@ internal object RootfsArchive {
         setMode: (path: String, mode: Int) -> Unit,
         maxEntries: Int = Int.MAX_VALUE,
         maxBytes: Long = Long.MAX_VALUE,
+        onProgress: ((bytes: Long, completedEntries: Int, path: String) -> Unit)? = null,
     ): Int {
         val root = rootfs.canonicalFile
         check(root.isDirectory) { "Rootfs staging directory is missing" }
@@ -28,9 +29,13 @@ internal object RootfsArchive {
                     "Invalid rootfs archive path: ${entry.name}"
                 }
                 val name = rawName.removePrefix("./").trimEnd('/')
-                if (name.isBlank() || name == ".") continue
+                if (name.isBlank() || name == ".") {
+                    onProgress?.invoke(bytes, entries, "")
+                    continue
+                }
                 val output = File(root, name)
                 require(StorageUtils.isWithin(root, output)) { "Archive path escapes rootfs: $name" }
+                onProgress?.invoke(bytes, entries - 1, name)
                 when {
                     entry.isDirectory -> check(output.isDirectory || output.mkdirs()) {
                         "Cannot create rootfs directory: $name"
@@ -61,17 +66,22 @@ internal object RootfsArchive {
                                 bytes += count
                                 check(bytes <= maxBytes) { "Rootfs archive exceeds its declared size" }
                                 destination.write(buffer, 0, count)
+                                onProgress?.invoke(bytes, entries - 1, name)
                             }
                         }
                     }
                     // /dev and /proc are bound at launch; device nodes are not extracted.
-                    else -> continue
+                    else -> {
+                        onProgress?.invoke(bytes, entries, name)
+                        continue
+                    }
                 }
                 if (!entry.isSymbolicLink && !entry.isLink) {
                     var mode = (entry.mode and 511) or 384
                     if (entry.isDirectory) mode = mode or 64
                     setMode(output.absolutePath, mode)
                 }
+                onProgress?.invoke(bytes, entries, name)
             }
         }
         return entries

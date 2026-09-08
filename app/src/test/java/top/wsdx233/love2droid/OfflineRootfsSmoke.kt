@@ -24,10 +24,12 @@ object OfflineRootfsSmoke {
                 Files.setPosixFilePermissions(File(path).toPath(), permissions)
             },
             { Files.isSymbolicLink(it.toPath()) },
-        ) { bytes ->
-            val percent = (bytes * 100 / manifest.compressedBytes).toInt()
-            if (percent / 10 != lastPercent / 10 || lastPercent < 0) {
-                println("Offline image: $percent%")
+        ) { progress ->
+            val percent = progress.extractionPercent(manifest)
+            if (percent / 10 != lastPercent / 10 || lastPercent < 0 || progress.verifying) {
+                println("Offline image: $percent%, ${progress.unpackedBytes}/${manifest.unpackedBytes} bytes, " +
+                    "${progress.completedEntries}/${manifest.entryCount} entries, " +
+                    if (progress.verifying) "verifying archive" else progress.currentPath)
                 lastPercent = percent
             }
         }
