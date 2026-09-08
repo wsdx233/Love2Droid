@@ -11,6 +11,7 @@ import android.widget.LinearLayout
 import android.widget.PopupMenu
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
@@ -42,6 +43,15 @@ class ProjectManagerActivity : AppCompatActivity() {
     private var pendingLoveExport: Project? = null
     private var pendingBatchExportProjects: List<Project> = emptyList()
     private var batchExportDirectoryUri: Uri? = null
+
+    private val newProjectLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        if (result.resultCode == RESULT_OK && result.data?.getStringExtra(EXTRA_PROJECT_ID) != null) {
+            setResult(RESULT_OK, result.data)
+            finish()
+        }
+    }
 
     private val loveImportLauncher = registerForActivityResult(
         DocumentsUiOpenDocumentContract(),
@@ -130,7 +140,7 @@ class ProjectManagerActivity : AppCompatActivity() {
             setOnMenuItemClickListener { item ->
                 when (item.itemId) {
                     R.id.action_new_project -> {
-                        showCreateDialog()
+                        openNewProject()
                         true
                     }
                     R.id.action_import_love -> {
@@ -362,36 +372,15 @@ class ProjectManagerActivity : AppCompatActivity() {
         finish()
     }
 
-    private fun showCreateDialog() {
+    private fun openNewProject() {
         val defaultGroup = when (currentGroupFilter) {
             null, UNGROUPED_SPECIAL_KEY -> ""
             else -> currentGroupFilter ?: ""
         }
-        val form = formView(group = defaultGroup)
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.new_project)
-            .setView(form)
-            .setNegativeButton(R.string.cancel, null)
-            .setPositiveButton(android.R.string.ok) { _, _ ->
-                val values = form.tag as ProjectForm
-                val name = values.name.text.toString()
-                val id = values.id.text.toString()
-                val description = values.description.text.toString()
-                val group = values.group.text.toString().trim()
-                lifecycleScope.launch {
-                    try {
-                        val project = withContext(Dispatchers.IO) {
-                            repository.createProject(name, id, description, group)
-                        }
-                        returnProject(project)
-                    } catch (error: CancellationException) {
-                        throw error
-                    } catch (error: Exception) {
-                        showError(getString(R.string.project_create_failed, error.message ?: error.javaClass.simpleName))
-                    }
-                }
-            }
-            .show()
+        newProjectLauncher.launch(
+            Intent(this, NewProjectActivity::class.java)
+                .putExtra(NewProjectActivity.EXTRA_GROUP, defaultGroup),
+        )
     }
 
     private fun showProjectMenu(project: Project, anchor: View) {

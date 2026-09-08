@@ -37,14 +37,15 @@ projects/
 └── my-game/
     ├── .love2droid.json   # 显示名、简介、创建时间、版本
     ├── .lovedroid         # 编辑器和终端会话
+    ├── .luarc.json        # 通用 LuaLS 配置
     ├── main.lua           # LÖVE 入口
     ├── conf.lua
-    ├── AGENTS.md          # 新项目的运行与代理验证约束
+    ├── AGENTS.md          # 仅基础项目：运行与代理验证约束
     └── assets/
-        └── fonts/         # 新项目默认字体及许可证
+        └── fonts/         # 仅基础项目：默认字体及许可证
 ```
 
-新项目的静态入口、`AGENTS.md` 和字体来自 `app/src/normal/assets/project-template/`。`ProjectTemplate` 负责原子写入入口与代理说明、复制 OTF 和许可证，`ProjectRepository` 继续生成配置与元数据，并在创建失败时删除未完成的项目目录。创建操作在 `Dispatchers.IO` 执行；字体是项目普通资产，随 Play 快照、`.love` 导出和游戏 APK 分发，不依赖编辑器私有路径，也不修改上游 runtime 的内置字体。`AGENTS.md` 只在新建项目时写入，不为已有或导入项目自动补写。
+`NewProjectActivity` 承载模板选择与创建表单，创建成功后经项目管理页返回 project id，由编辑器沿用原有项目切换流程打开。`ProjectTemplate` 枚举明确区分空项目与基础项目，仓库创建接口要求调用方显式传入模板，不依赖隐式默认值。空项目入口来自 `app/src/normal/assets/project-template-empty/`，只绘制 Hello World，使用引擎内置字体；基础项目沿用 `app/src/normal/assets/project-template/` 的入口、`AGENTS.md`、OTF 与许可证。`ProjectTemplate` 原子写入文本并按模板复制字体，`ProjectRepository` 为两者生成 `conf.lua`、`.luarc.json` 和元数据，并在创建失败时删除未完成的项目目录。创建操作在 `Dispatchers.IO` 执行；空项目不生成 `assets/` 或 `AGENTS.md`。基础项目的字体与代理说明属于普通项目内容，随 Play 快照、`.love` 导出和游戏 APK 分发，不依赖编辑器私有路径，也不修改上游 runtime 的内置字体。已有或导入项目不自动补写模板内容。
 
 存储不变量：
 

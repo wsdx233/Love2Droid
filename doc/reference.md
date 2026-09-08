@@ -82,8 +82,8 @@ npx --yes --package=@expo/material-symbols add-material-symbols -o app/src/main/
 - 上游：[TakWolf/fusion-pixel-font](https://github.com/TakWolf/fusion-pixel-font)，固定开发版 `dev-2026.09.07`，提交 `2a01310292913d78021cdfb94498d128e1f3114b`。
 - 发布包：[fusion-pixel-font-12px-monospaced-otf-v2026.09.07.zip](https://github.com/TakWolf/fusion-pixel-font/releases/download/dev-2026.09.07/fusion-pixel-font-12px-monospaced-otf-v2026.09.07.zip)；SHA-256：`88b63f8ae75d5b3dda45df6d72d2e83d6d3d8cab5fa3e61977704e5f136fb726`，已与 GitHub 发布资产摘要核对。
 - 仅引入未经修改的 `fusion-pixel-12px-monospaced-zh_hans.otf`，4,905,832 字节，SHA-256：`fe5476d0913c56bed54804bbeec9d1b41d00370694910ff1cf8a181202ee0733`。不引入其他地区字形、WOFF2、字体构建程序或 native Brotli 依赖。
-- 字体采用 OFL-1.1；发布包中的 `OFL.txt` 及 `LICENSES/ark-pixel/OFL.txt`、`LICENSES/cubic-11/OFL.txt`、`LICENSES/galmuri/LICENSE.txt` 原样保留在模板 `assets/fonts/`，并随新项目和导出游戏分发。字体可以随游戏商用，不得单独出售字体；修改字体时须继续遵守许可证要求。
-- 使用边界：作为新项目可替换的默认绘制字体，不替换 LÖVE 引擎内置字体。该版本覆盖常用简繁中文，但并不覆盖全部汉字；行为与验证分别见 [design.md](design.md#项目管理) 和 [verification.md](verification.md#新项目默认字体)。
+- 字体采用 OFL-1.1；发布包中的 `OFL.txt` 及 `LICENSES/ark-pixel/OFL.txt`、`LICENSES/cubic-11/OFL.txt`、`LICENSES/galmuri/LICENSE.txt` 原样保留在基础模板 `assets/fonts/`，并随基础项目和导出游戏分发；空项目不复制这些资产。字体可以随游戏商用，不得单独出售字体；修改字体时须继续遵守许可证要求。
+- 使用边界：作为基础项目可替换的默认绘制字体，不替换 LÖVE 引擎内置字体。该版本覆盖常用简繁中文，但并不覆盖全部汉字；行为与验证分别见 [design.md](design.md#项目管理) 和 [verification.md](verification.md#项目模板)。
 
 ## Linux LÖVE 无界面检查依赖
 

@@ -42,6 +42,13 @@
             android:screenOrientation="unspecified"
             android:theme="@style/Theme.Love2Droid" />
         <activity
+            android:name="top.wsdx233.love2droid.NewProjectActivity"
+            android:exported="false"
+            android:configChanges="keyboardHidden|orientation|screenSize"
+            android:screenOrientation="unspecified"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.Love2Droid" />
+        <activity
             android:name="top.wsdx233.love2droid.SettingsActivity"
             android:exported="false"
             android:screenOrientation="unspecified"

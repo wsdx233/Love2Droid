@@ -53,12 +53,51 @@ class StorageAndPackagingTest {
     }
 
     @Test
+    fun emptyProjectTemplateContainsOnlyHelloWorldAndSurvivesPackaging() {
+        val root = Files.createTempDirectory("love2droid-empty-template").toFile()
+        val cache = Files.createTempDirectory("love2droid-empty-template-cache").toFile()
+        val assets = File("src/normal/assets")
+        try {
+            ProjectTemplate.EMPTY.write(root) { path ->
+                assertEquals("project-template-empty/main.lua", path)
+                File(assets, path).inputStream()
+            }
+            assertEquals(setOf("main.lua"), root.list()!!.toSet())
+            val expected = File(assets, "project-template-empty/main.lua").readBytes()
+            assertArrayEquals(expected, File(root, "main.lua").readBytes())
+            val project = Project("empty", "Empty", "", root, 0L)
+            ZipFile(LovePackageBuilder.build(project, cache)).use { zip ->
+                assertEquals(setOf("main.lua"), zip.entries().asSequence().map { it.name }.toSet())
+                assertArrayEquals(expected, zip.getInputStream(zip.getEntry("main.lua")).use { it.readBytes() })
+            }
+        } finally {
+            StorageUtils.deleteRecursively(root)
+            StorageUtils.deleteRecursively(cache)
+        }
+    }
+
+    @Test
+    fun everyProjectTemplateRejectsMissingEntryPoint() {
+        for (template in ProjectTemplate.entries) {
+            val root = Files.createTempDirectory("love2droid-missing-entry").toFile()
+            try {
+                assertThrows(IOException::class.java) {
+                    template.write(root) { path -> throw IOException("Missing bundled entry: $path") }
+                }
+                assertFalse(File(root, "main.lua").exists())
+            } finally {
+                StorageUtils.deleteRecursively(root)
+            }
+        }
+    }
+
+    @Test
     fun projectTemplateFontAndLicensesSurvivePackaging() {
         val root = Files.createTempDirectory("love2droid-template").toFile()
         val cache = Files.createTempDirectory("love2droid-template-cache").toFile()
         val template = File("src/normal/assets/project-template")
         try {
-            ProjectTemplate.write(root) { path -> File(template, path).inputStream() }
+            ProjectTemplate.BASIC.write(root) { path -> File("src/normal/assets", path).inputStream() }
             val project = Project("demo", "Demo", "", root, 0L)
             val packageFile = LovePackageBuilder.build(project, cache)
             val paths = listOf(
@@ -87,12 +126,12 @@ class StorageAndPackagingTest {
     @Test
     fun projectTemplateRejectsMissingFontRatherThanSilentlyFallingBack() {
         val root = Files.createTempDirectory("love2droid-template-missing-font").toFile()
-        val template = File("src/normal/assets/project-template")
+        val assets = File("src/normal/assets")
         try {
             assertThrows(IOException::class.java) {
-                ProjectTemplate.write(root) { path ->
+                ProjectTemplate.BASIC.write(root) { path ->
                     if (path.endsWith(".otf")) throw IOException("Missing bundled font: $path")
-                    File(template, path).inputStream()
+                    File(assets, path).inputStream()
                 }
             }
         } finally {
@@ -103,12 +142,12 @@ class StorageAndPackagingTest {
     @Test
     fun projectTemplateRejectsMissingAgentInstructions() {
         val root = Files.createTempDirectory("love2droid-template-missing-instructions").toFile()
-        val template = File("src/normal/assets/project-template")
+        val assets = File("src/normal/assets")
         try {
             assertThrows(IOException::class.java) {
-                ProjectTemplate.write(root) { path ->
-                    if (path == "AGENTS.md") throw IOException("Missing bundled instructions")
-                    File(template, path).inputStream()
+                ProjectTemplate.BASIC.write(root) { path ->
+                    if (path.endsWith("/AGENTS.md")) throw IOException("Missing bundled instructions")
+                    File(assets, path).inputStream()
                 }
             }
         } finally {

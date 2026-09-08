@@ -10,32 +10,41 @@ import java.io.IOException
 import java.io.InputStream
 import java.util.Locale
 
-internal object ProjectTemplate {
-    private val textFiles = listOf("main.lua", "AGENTS.md")
-    private val fontFiles = listOf(
-        "fusion-pixel-12px-monospaced-zh_hans.otf",
-        "OFL.txt",
-        "LICENSES/ark-pixel/OFL.txt",
-        "LICENSES/cubic-11/OFL.txt",
-        "LICENSES/galmuri/LICENSE.txt",
-    )
+enum class ProjectTemplate(
+    private val assetDirectory: String,
+    private val textFiles: List<String>,
+) {
+    EMPTY("project-template-empty", listOf("main.lua")),
+    BASIC("project-template", listOf("main.lua", "AGENTS.md"));
 
     fun write(root: File, openAsset: (String) -> InputStream) {
         for (name in textFiles) {
-            val content = openAsset(name).bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val content = openAsset("$assetDirectory/$name").bufferedReader(Charsets.UTF_8).use { it.readText() }
             StorageUtils.writeTextAtomic(StorageUtils.resolveChild(root, name), content)
         }
-        for (name in fontFiles) {
-            val path = "assets/fonts/$name"
-            val target = StorageUtils.resolveChild(root, path)
-            val parent = requireNotNull(target.parentFile)
-            if (!parent.isDirectory && !parent.mkdirs()) {
-                throw IOException("Unable to create ${parent.path}")
-            }
-            openAsset(path).use { input ->
-                target.outputStream().use { output -> input.copyTo(output) }
+        if (this == BASIC) {
+            for (name in fontFiles) {
+                val path = "assets/fonts/$name"
+                val target = StorageUtils.resolveChild(root, path)
+                val parent = requireNotNull(target.parentFile)
+                if (!parent.isDirectory && !parent.mkdirs()) {
+                    throw IOException("Unable to create ${parent.path}")
+                }
+                openAsset("$assetDirectory/$path").use { input ->
+                    target.outputStream().use { output -> input.copyTo(output) }
+                }
             }
         }
+    }
+
+    companion object {
+        private val fontFiles = listOf(
+            "fusion-pixel-12px-monospaced-zh_hans.otf",
+            "OFL.txt",
+            "LICENSES/ark-pixel/OFL.txt",
+            "LICENSES/cubic-11/OFL.txt",
+            "LICENSES/galmuri/LICENSE.txt",
+        )
     }
 }
 
@@ -193,24 +202,31 @@ class ProjectRepository(context: Context) {
         return iconStore.importIcon(project.id, uri)
     }
 
-    fun createProject(displayName: String, requestedId: String, description: String, group: String = ""): Project {
+    fun createProject(
+        displayName: String,
+        requestedId: String,
+        description: String,
+        template: ProjectTemplate,
+        group: String = "",
+    ): Project {
         val cleanName = displayName.trim()
         require(cleanName.isNotEmpty()) { "Project name is required" }
         val id = requestedId.trim().ifEmpty { slugify(cleanName) }
         require(isSafeProjectId(id)) { "Project id may contain only letters, numbers, '-' and '_'" }
-        val root = File(projectsRoot, id)
+        val root = File(projectsRoot, id).canonicalFile
+        require(StorageUtils.isWithin(projectsRoot, root)) { "Project is outside storage root" }
         require(!root.exists()) { "A project with this id already exists" }
         require(root.mkdirs()) { "Unable to create project directory" }
         try {
-            ProjectTemplate.write(root) { path ->
-                appContext.assets.open("project-template/$path")
+            template.write(root) { path ->
+                appContext.assets.open(path)
             }
             StorageUtils.writeTextAtomic(
-                File(root, "conf.lua"),
+                StorageUtils.resolveChild(root, "conf.lua"),
                 defaultProjectConf(id, cleanName),
             )
             StorageUtils.writeTextAtomic(
-                File(root, LuaLanguageServerProjectConfig.FILE_NAME),
+                StorageUtils.resolveChild(root, LuaLanguageServerProjectConfig.FILE_NAME),
                 LuaLanguageServerProjectConfig.content(),
             )
             val project = Project(id, cleanName, description.trim(), root, 0L, group = group.trim())
