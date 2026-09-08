@@ -29,6 +29,21 @@ This distribution contains code from the following projects (full license text b
 	Downloaded version: 3.19.1
 	License: MIT; full text: licenses/LUA-LANGUAGE-SERVER-LICENSE.txt
 
+ - XZ for Java
+	Website: https://github.com/tukaani-project/xz-java
+	Version: 1.10
+	License: 0BSD; full notice: licenses/XZ-JAVA-LICENSE.txt
+
+ - Offline Ubuntu environment (offline APK only)
+	Ubuntu Base 24.04.4 ARM64, with the installed distribution package licenses
+	retained in /usr/share/doc and /usr/share/common-licenses inside the image.
+	Exact package/source versions: /usr/local/share/love2droid/debian-packages.tsv
+	Node.js, npm, pnpm and DSH retain their upstream package license files.
+	OMP 18.1.14: MIT; full text: licenses/OMP-LICENSE.txt
+	bash-prompt 524ee94882449ff56fdd8a3bc7ae718ec78e4ed2: GPL-3.0;
+	full text: licenses/BASH-PROMPT-LICENSE.txt
+	Offline distribution and corresponding-source requirements: doc/reference.md
+
 
  - LOVE
 	Website: https://love2d.org/

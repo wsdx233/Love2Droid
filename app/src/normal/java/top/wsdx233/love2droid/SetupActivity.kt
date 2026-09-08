@@ -120,6 +120,11 @@ class SetupActivity : AppCompatActivity() {
                 selectedComponentIds.addAll(allComponents.map { it.id })
             }
         }
+        if (BuildConfig.BUNDLED_ROOTFS) {
+            selectedComponentIds.addAll(allComponents.map { it.id })
+            findViewById<TextView>(R.id.selection_header_subtitle).setText(R.string.components_offline_subtitle)
+            startInstallButton.setText(R.string.components_offline_install)
+        }
 
         fun populateComponentList() {
             componentsListContainer.removeAllViews()
@@ -148,12 +153,14 @@ class SetupActivity : AppCompatActivity() {
                 }
 
                 if (isInstalled) {
-                    size.text = getString(R.string.components_size_installed_format, comp.diskSizeEstimateMb)
+                    if (BuildConfig.BUNDLED_ROOTFS) size.setText(R.string.components_installed_tag)
+                    else size.text = getString(R.string.components_size_installed_format, comp.diskSizeEstimateMb)
                     checkBox.visibility = View.GONE
                     statusIcon.visibility = View.VISIBLE
                     card.isClickable = false
                 } else {
-                    size.text = getString(R.string.components_size_format, comp.downloadSizeEstimateMb, comp.diskSizeEstimateMb)
+                    if (BuildConfig.BUNDLED_ROOTFS) size.setText(R.string.components_offline_bundled)
+                    else size.text = getString(R.string.components_size_format, comp.downloadSizeEstimateMb, comp.diskSizeEstimateMb)
                     checkBox.visibility = View.VISIBLE
                     statusIcon.visibility = View.GONE
                     checkBox.isChecked = selectedComponentIds.contains(comp.id)
@@ -178,6 +185,8 @@ class SetupActivity : AppCompatActivity() {
 
                     card.setOnClickListener { toggleSelection() }
                     checkBox.setOnClickListener { toggleSelection() }
+                    card.isEnabled = !BuildConfig.BUNDLED_ROOTFS
+                    checkBox.isEnabled = !BuildConfig.BUNDLED_ROOTFS
                 }
 
                 componentsListContainer.addView(itemView)

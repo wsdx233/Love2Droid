@@ -1,0 +1,38 @@
+{
+  "ubuntu": {
+    "version": "24.04.4",
+    "url": "https://cdimage.ubuntu.com/ubuntu-base/releases/24.04.4/release/ubuntu-base-24.04.4-base-arm64.tar.gz",
+    "sha256": "04207713ece899c3740823d33690441ad3a7f0ded1101aca744e2b0f37ac7ff2"
+  },
+  "luals": {
+    "version": "3.19.1",
+    "url": "https://github.com/LuaLS/lua-language-server/releases/download/3.19.1/lua-language-server-3.19.1-linux-arm64.tar.gz",
+    "sha256": "abd2572e8fc929dc838a81ffb8473c5bce0bf39bfe8edb4b120b3b623176ce83"
+  },
+  "omp": {
+    "version": "18.1.14",
+    "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.1.14/omp-linux-arm64",
+    "sha256": "93ba1143e95c6a138ecfaea5efa6057e45aa6e40853d88a55b48586d118f7325"
+  },
+  "node": {
+    "version": "22.23.2",
+    "url": "https://nodejs.org/dist/v22.23.2/node-v22.23.2-linux-arm64.tar.xz",
+    "sha256": "fff4078c5def658577f92c88db7db3bc0072924bfb93fe52c1e744a54e94abb8"
+  },
+  "nvm": {
+    "version": "0.40.7",
+    "url": "https://codeload.github.com/nvm-sh/nvm/tar.gz/refs/tags/v0.40.7",
+    "sha256": "d2fb84dba9914b02cd69b97df35dfca8695b8f22df6128667034d85b69b52d57"
+  },
+  "bash-prompt": {
+    "version": "524ee94882449ff56fdd8a3bc7ae718ec78e4ed2",
+    "url": "https://raw.githubusercontent.com/Freed-Wu/bash-prompt/524ee94882449ff56fdd8a3bc7ae718ec78e4ed2/prompt.sh",
+    "sha256": "2ae4ed25865111035b5e15c53ead9b10af7bcd731d7cb237d04aaf53d74c03e6"
+  },
+  "npm": {
+    "pnpm": "9.15.9",
+    "@deepseek-ai/dsh": "0.1.2-rc.1",
+    "dsh-plugin": "1.4.2",
+    "dsh-web-mobile": "2.3.0"
+  }
+}

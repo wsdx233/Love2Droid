@@ -115,7 +115,7 @@ Android 发布与 Play 分离；发布结果是可安装、可分享的独立 AP
 - `TerminalSession` 的参数数组直接交给 `execvp()`，必须保留可执行文件作为 `argv[0]`；PRoot 开关从 `argv[1]` 开始。普通终端与 DSH 仅要求 rootfs 就绪，不依赖可选 OMP、LuaLS 或 bash-prompt。
 - 共享存储只绑定可访问的应用目录和项目真实路径，不绑定 Android 的 `/storage`、`/sdcard`、`/mnt` 父目录。绑定目标使用 `host:guest!` 保留路径，设置 `PROOT_DONT_POLLUTE_ROOTFS=1` 让 PRoot 在临时 glue 目录准备缺失路径；应用不再向 PRoot 创建的 `000` 权限占位目录递归写入，也不绑定宿主 `/root`。
 - PRoot 启动准备统一维护 guest `/root/projects` 软链接，目标沿用项目仓库的应用文件目录下 `projects` 规范路径，借助已有应用目录绑定访问真实项目。使用 API 23 可用的 `Os.readlink` / `Os.symlink`，正确链接不重建，失效链接更新，同名真实文件/目录保留；不向共享存储创建软链接。
-- 首次启动支持模块化安装选择或跳过，按用户选择校验并解压固定版本和 SHA-256 的 Ubuntu Base 24.04.4 arm64，以及可选的 LuaLS、omp、Git、DSH、bash-prompt 和 LÖVE 无界面检查；各组件独立维护安装标记，支持按需断点补充安装。
+- 普通版首次启动支持模块化安装选择或跳过，按用户选择校验并解压固定版本和 SHA-256 的 Ubuntu Base 24.04.4 arm64，以及可选的 LuaLS、omp、Git、DSH、bash-prompt 和 LÖVE 无界面检查；各组件独立维护安装标记，支持按需断点补充安装。
 - 安装向导仅在应用首次启动时展示一次，后续启动直接进入编辑器；用户可通过设置“环境与扩展组件”随时进入管理或补充安装。
 - Ubuntu guest 的 `/etc/resolv.conf` 固定使用 `8.8.8.8`、`8.8.4.4`，并通过 `options use-vc` 强制 glibc 使用 TCP DNS；真机已确认同一网络下 IP 连接和 TCP DNS 正常而默认 UDP DNS 失败。应用不启动 DNS 代理，也不把特定 Wi-Fi 或 VPN 的临时 resolver 持久化到 guest；环境完整性检查会让旧安装重新进入配置阶段并修复该文件。
 - Ubuntu guest 的 `/etc/group` 补齐 Android 应用进程继承的 supplementary GID，避免登录 shell 查询组名时输出未知 group ID。
@@ -133,6 +133,16 @@ Android 发布与 Play 分离；发布结果是可安装、可分享的独立 AP
 - 外部文件复用 `EditorActivity.openFile` 的受限后台加载和 canonical 标签身份：同一文件不重复开标签，dirty 内容不因重开被覆盖，不切换当前项目。保存仍使用原子写入并复核应用存储边界；`.lovedroid` 使用 `externalPath` 保存外部绝对路径，恢复时重新校验，未保存文本仍保留。外部文件和 `.lovedroid` 不进入当前游戏快照。
 - WebView 已经位于应用自行消费系统状态栏 inset 后的内容区；移动端插件的 `viewport-fit=cover` 安全区规则若再次作用于 `[data-mobile-ux="frame"]`，应用在页面完成后清除这两个 frame padding，避免顶部重复空白。
 - 安装失败保留可复用阶段并允许重试，不提前写入完成状态。
+
+### 离线整包
+
+- `offline` mode 与 `normal` 共用产品源码、资源、包名和发布签名，只保留 `arm64-v8a`，通过 `BuildConfig.BUNDLED_ROOTFS` 选择整包恢复；普通版不携带镜像。两种 APK 是同一应用的替代发布产物，不是可并装的两个应用。
+- `tools/offline-rootfs.py` 从固定来源的干净 Ubuntu Base 构建完整环境，预装 LuaLS、OMP、nvm/Node.js/npm/pnpm、DSH 及 Web 插件、Git、bash-prompt 和完整 `love-check` 图形依赖。版本入口为 `tools/offline-rootfs.lock.json`；发布镜像同时记录实际 APT/npm 依赖清单，不导入开发者或用户的现有 rootfs。
+- 主机使用 rootless Podman user namespace 和独立 mount namespace 内的 chroot；x86_64 使用固定 BuildKit QEMU 执行真实 ARM64 程序，避免 PRoot + QEMU 的 V8 地址映射崩溃。该构建路径不是 Android 模拟器，也不替代手机 PRoot 验证。
+- 镜像采用 `tar.xz`、`-9e` 与 32 MiB 字典，APK 中不二次压缩 XZ。`OfflineRootfs` 使用流式解码，解码器内存上限 64 MiB；这不是整个 App 的堆内存上限。Manifest 记录 SHA-256、压缩/展开大小、条目数与完整组件集合，Gradle 打包前也校验镜像。
+- 在线 gzip 和离线 XZ 共用 `RootfsArchive` 的路径边界、guest 链接和权限恢复规则。离线先校验剩余空间，再解压到同级 staging；拒绝路径或链接逃逸，完整检查 XZ、大小、条目数及 SHA-256 后才改名提交。中断只清理自有 staging，不删除现有非空 rootfs。
+- 手机恢复后沿用设备 DNS、GID、路径和脚本准备逻辑，再执行实际 CLI、DSH 认证 Web 页面与 `love-check doctor`；全部通过才写组件完成标记。验证失败重试复用已恢复的同一镜像，不再次解包。离线流程不调用 APT/npm 或下载回退；升级只复用完整旧环境，不用新镜像覆盖用户环境，既有不完整环境保留并明确报错。
+
 
 ## LÖVE 无界面检查
 

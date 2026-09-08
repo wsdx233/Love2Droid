@@ -15,6 +15,8 @@
 - Sora Editor、TextMate 语法注册、文件/终端混合多标签、未命名文档和原子保存；打开文件使用后台受限 UTF-8 加载，拒绝二进制、非 UTF-8 和超过 5 MB 的文件，并保留 LF/CRLF/CR 换行风格。AppBar 支持符号栏、当前标签只读和 LuaLS 悬浮信息开关，其中符号栏与悬浮信息状态跨重启保存。
 - `.love` 快照构建、FileProvider Content URI 和 Play 启动闭环。
 - arm64 PRoot 支持模块化按需安装（Ubuntu Base、LuaLS、OMP、Git、DSH、LÖVE 无界面检查），安装向导仅在应用首次启动时展示一次并支持跳过，设置中提供“环境与扩展组件”管理入口。
+- 已提供独立 `offlineNoRecordRelease` ARM64 整包变体，与普通版共用包名和发布签名；随包提供干净、预装完整依赖的 Ubuntu rootfs，包含 LuaLS、OMP、nvm/Node.js/npm/pnpm、DSH 与 Web 插件、Git、bash-prompt 和完整 `love-check`。普通版仍按需联网安装，不携带大镜像。
+- 离线恢复采用高压缩率 XZ、受限内存流式解码、SHA-256 与 staging 原子提交；验证失败可重试，不用镜像覆盖既有用户环境。已用实际 App 恢复器和只有 loopback 的 Linux namespace 验证完整 ARM64 工具及 DSH Web、三帧 llvmpipe 自检；流程见 [verification.md](verification.md#离线完整环境发布)，Android 首装与升级交互仍需真机验收。
 - 支持 DeepSeek Harness (DSH) 智能助手：包含 nvm、node、dsh CLI 及指定 Web 插件的安装管理；支持设置后台自启服务并在编辑器中以专用 Web Tab (WebView) 嵌入访问 `http://127.0.0.1:3080`，当服务未启动时提供交互式提示与一键启用。
 - DSH 后台会话显式初始化 Terminal emulator，先离线激活应用内置插件，再以 `exec dsh --profile web --no-open --port 3080` 启动；等待完整启动行中的认证 URL 后加载 WebView，避免无 token 请求和半截 token。APK 显式配置 loopback HTTP 许可，认证 token 不写入工作区。
 - DSH Web 标签提供等待服务及页面加载的顶部进度条；PRoot 启动自动维护 `~/projects` 项目入口，支持从 WebUI 的 Home 浏览项目，不覆盖同名真实文件或文件夹。
@@ -81,6 +83,7 @@
 ## 已知限制与非计划事项
 
 - PRoot 当前只支持 `arm64-v8a`。
+- 离线版仅支持 `arm64-v8a`，只离线提供工具环境，不携带 AI 模型权重；远程模型、额外插件和远程 Git 仍需联网。已有不完整在线环境不与镜像自动合并，应使用普通版补齐，不能通过清空用户数据换取安装成功。
 - Android 6.0/7.x 不加载 Sora `editor-lsp`，仅保留 TextMate 编辑能力。
 - 标签暂不支持拖拽排序。
 - 基础项目像素字体不保证覆盖全部生僻字；24px 与高 DPI 下的实际显示效果仍需真机确认。模板只设置当前绘制字体，不改变引擎内置字体或提供自动系统字体兜底。空项目使用引擎内置字体，不保证中文显示。

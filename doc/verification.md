@@ -147,6 +147,52 @@ app/build/outputs/apk/normalNoRecord/debug/app-normal-noRecord-debug.apk
 
 不得通过跳过任务、关闭检查或吞掉异常换取构建成功。只修改 `doc/` 或其他 Markdown 文档时不要求重新构建 APK。
 
+## 离线完整环境发布
+
+### 制作与签名
+
+构建机要求 Linux、Python 3.12+、curl、GNU tar、xz、util-linux 与已配置的 rootless Podman。x86_64 首次构建会下载并校验固定 BuildKit QEMU，ARM64 构建机直接运行 ARM64 guest。构建和下载发生在主机，所有临时内容位于被忽略的 `build/offline-rootfs/`，不修改系统软件包或 `binfmt_misc`。
+
+```sh
+python3 tools/offline-rootfs.py build
+# 同一脚本工作区、版本锁未改时才允许恢复安装：
+# python3 tools/offline-rootfs.py build --resume
+
+CMAKE_BUILD_PARALLEL_LEVEL=2 ./gradlew :app:assembleNormalNoRecordDebug
+CMAKE_BUILD_PARALLEL_LEVEL=2 ./gradlew :app:assembleOfflineNoRecordRelease
+```
+
+- 镜像产物为 `build/offline-rootfs/assets/proot/offline/rootfs-arm64.tar.xz` 与 `manifest.json`。指定其他镜像 assets 目录时使用 Gradle `-PofflineRootfsDir=/绝对路径/assets`；缺少镜像、组件集合不完整或 SHA-256 不符均拒绝构建，不在线自动补下载。
+- 离线 APK 为 `app/build/outputs/apk/offlineNoRecord/release/app-offline-noRecord-release.apk`，仅包含 `arm64-v8a`。普通发布继续使用 `:app:assembleNormalNoRecordRelease`，不携带离线 rootfs。
+- Release 沿用根目录被忽略的 `keystore.properties`（`storeFile`、`storePassword`、`keyAlias`、`keyPassword`），密钥和本地说明保持私有且文件权限为 `0600`；不得将密码或私钥写入提交、日志或文档。发布前用 SDK `apksigner verify --verbose --print-certs` 检查 APK 签名及证书。
+- 普通版和离线版共用包名、数据目录和发布签名，可相互覆盖升级，不并装。Debug 签名与 Release 不同，不能为了安装 Release 而直接删除未备份的现有应用数据。
+- 对外发布时保留第三方声明，并按 [对应源码要求](reference.md#离线环境与-xz) 提供 Linux 依赖的源码获取方式；源码附件不必装入 APK。
+
+### 聚焦回归与实际镜像恢复
+
+```sh
+./gradlew :app:testNormalNoRecordDebugUnitTest \
+    --tests top.wsdx233.love2droid.OfflineRootfsTest \
+    --tests top.wsdx233.love2droid.ProotRuntimeTest \
+    --tests top.wsdx233.love2droid.AndroidApkAssemblerTest
+./gradlew :app:smokeOfflineRootfs
+podman unshare unshare --net sh -ec \
+    'ip link set lo up; ip -brief address; ip route; python3 tools/offline-rootfs.py verify-restored'
+```
+
+- 逻辑回归覆盖解压权限、可移植链接、越界拒绝、损坏/截断、声明大小和条目上限、既有环境保护、重试不重复解包，以及导出游戏 APK 不夹带 rootfs。
+- `smokeOfflineRootfs` 运行 App 使用的 Kotlin 恢复器而非系统 tar，在 512 MiB JVM 堆上实际解压发布归档并核对内容、链接及完整性；目标为镜像 assets 同级的 `restored/ubuntu`，拒绝覆盖既有目录。再次做全新恢复前只能移除自己上次生成的 smoke 输出，不能删除用户环境。
+- `verify-restored` 不重新部署或修补恢复出来的文件；在只有 loopback、没有外网路由的 network namespace 中实际执行 ARM64 Git、LuaLS、OMP、nvm、Node.js、npm、pnpm、DSH、Web profile 依赖解析、带认证的 Web 页面 HTTP 200 和三帧 `love-check doctor`。该命令不联系模型供应商，不调用 APT/npm 安装，不使用主机 x86 工具冒充 ARM64 检查。
+- 本次完整镜像已通过上述主机恢复及断网执行；Linux LÖVE 返回真实 Mesa llvmpipe renderer。它证明镜像依赖完整和恢复后离线可启动，不代表 Android 生命周期、PRoot 或 WebView 已在真机验证。
+
+### arm64 真机验收
+
+- 新装离线 APK 后开启飞行模式，选择整包安装，确认只进行解压和自检，无下载步骤，全部组件通过后进入编辑器。
+- 确认普通终端及 bash-prompt、LuaLS 补全、OMP 启动、DSH Web、`love-check doctor --frames 3 --timeout 60` 可用；远程模型请求不属于离线验收。
+- 解压中断、空间不足和验证失败均不得假报完成；重试应清理 staging 或继续同一已恢复镜像的验证。检查实际空间占用、安装时间、后台切换与低内存表现。
+- 对已有完整环境覆盖升级，确认项目、模型配置、DSH/OMP 会话和用户安装工具不变；对已有不完整在线环境，确认明确拒绝覆盖而非清空，可切回同签名普通版补齐。
+- 从离线版导出游戏 APK，确认产物不含 `assets/proot/offline/` 或编辑器资产，游戏仍使用原 Android LÖVE runtime。
+
 ## README 与启动图标
 
 - README 的英文、中文入口应互相切换，五张截图及品牌 SVG 使用仓库内相对路径；在 GitHub 桌面与手机宽度下检查图片、徽章、双列功能卡片、折叠截图和章节跳转，页面本身不能横向溢出。代码块允许自身水平滚动。

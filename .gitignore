@@ -25,6 +25,7 @@ hs_err_pid*
 *.jks
 *.keystore
 keystore.properties
+/.omp/AGENTS.md
 
 # OS metadata
 .DS_Store

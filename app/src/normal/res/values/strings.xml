@@ -233,6 +233,14 @@
     <string name="proot_install_downloading">正在下载 Ubuntu Base 24.04.4…</string>
     <string name="proot_install_downloaded">Ubuntu Base 下载完成</string>
     <string name="proot_install_extracting">正在解压 Ubuntu Base…</string>
+    <string name="proot_offline_extracting">正在校验并解压内置完整环境，无需联网…</string>
+    <string name="proot_offline_verifying">正在离线验证全部工具、DSH 网页与 LÖVE 软件渲染…</string>
+    <string name="proot_offline_space_required">空间不足，解压和验证至少需要 %1$s 可用空间。</string>
+    <string name="proot_offline_existing_environment">已有运行环境不会被离线镜像覆盖。请使用普通版补充缺失组件；如需重新初始化，请先备份项目和配置，再清除应用数据。</string>
+    <string name="proot_offline_existing_reused">沿用已有完整环境，未覆盖用户数据。</string>
+    <string name="components_offline_subtitle">此版本内置全部组件，包含 LÖVE 无界面检查。首次使用整包离线解压；已有环境不会被覆盖。AI 调用远程模型仍需联网。</string>
+    <string name="components_offline_install">解压并验证完整离线环境</string>
+    <string name="components_offline_bundled">已随 APK 内置，无需下载</string>
     <string name="proot_install_configuring">正在配置 Ubuntu proot 环境…</string>
     <string name="proot_install_packages">正在 Ubuntu 中安装 Lua Language Server…</string>
     <string name="proot_install_omp">正在安装 omp…</string>

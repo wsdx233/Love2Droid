@@ -83,10 +83,12 @@ This is an independent community project, not an official LÖVE or Google produc
 ## Getting started
 
 1. **Install Love2Droid.** Check [Releases](https://github.com/wsdx233/Love2Droid/releases) for published APKs, or [build one yourself](#build-from-source) if no package is available.
-2. **Choose your tools.** The first-run setup can be skipped. Optional components can be installed later from **Settings → Environment & extension components**; downloading them requires a network connection.
+2. **Set up your tools.** The normal APK downloads selected components; the ARM64 offline APK restores the complete bundled environment, including OMP, DSH and `love-check`, without downloads. Setup can be skipped and reopened from **Settings → Environment & extension components**.
 3. **Create or import a project.** Choose the empty template for a minimal Hello World, or the basic template for a bundled Chinese-capable pixel font. Existing `.love` and `.zip` projects must contain `main.lua` at the archive root.
 4. **Edit, then tap Play.** Save unnamed documents to project files first. Play saves writable tabs, validates `main.lua`, and runs a fresh snapshot.
 5. **Export when ready.** Share a `.love` archive, or configure the project's name, package ID, version, orientation, permissions, and icon before building a game APK.
+
+The offline edition bundles development tools, not AI model weights; remote models, extra plugins and remote Git operations still need a network connection. Existing environments are not replaced during upgrades. See the [offline build and verification procedure](doc/verification.md#离线完整环境发布) for packaging and signing.
 
 > **Keep backups.** Projects live in the app-specific external files directory, under `Android/data/top.wsdx233.love2droid/files/projects`. Uninstalling the app can remove them. Export important work before uninstalling or clearing app data.
 

@@ -1,8 +1,13 @@
 import java.nio.charset.StandardCharsets
+import groovy.json.JsonSlurper
+import java.security.MessageDigest
+
 
 plugins {
     id 'com.android.application'
 }
+def offlineAssetsDir = providers.gradleProperty('offlineRootfsDir').map { file(it) }
+        .orElse(rootProject.layout.buildDirectory.dir('offline-rootfs/assets').map { it.asFile })
 
 android {
     namespace "top.wsdx233.love2droid"
@@ -17,6 +22,7 @@ android {
         // PRoot executes its bundled guest loader from app-private storage; Android's
         // targetSdk 29+ W^X policy rejects that exec even when chmod succeeds.
         targetSdk = 28
+        buildConfigField 'boolean', 'BUNDLED_ROOTFS', 'false'
 
         externalNativeBuild {
             cmake {
@@ -31,8 +37,6 @@ android {
         }
 
         ndk {
-            //noinspection ChromeOsAbiSupport
-            abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86_64'
             debugSymbolLevel 'full'
         }
 
@@ -96,24 +100,50 @@ android {
         return modules
     }
 
+    def releasePropertiesFile = rootProject.file('keystore.properties')
+    if (releasePropertiesFile.isFile()) {
+        def releaseProperties = new Properties()
+        releasePropertiesFile.withInputStream { releaseProperties.load(it) }
+        ['storeFile', 'storePassword', 'keyAlias', 'keyPassword'].each { key ->
+            if (!releaseProperties.getProperty(key)) throw new GradleException("Missing signing property: $key")
+        }
+        signingConfigs {
+            release {
+                storeFile rootProject.file(releaseProperties.getProperty('storeFile'))
+                storePassword releaseProperties.getProperty('storePassword')
+                keyAlias releaseProperties.getProperty('keyAlias')
+                keyPassword releaseProperties.getProperty('keyPassword')
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (releasePropertiesFile.isFile()) signingConfig signingConfigs.release
         }
     }
 
     buildFeatures {
         prefab true
+        buildConfig true
     }
 
     flavorDimensions = ['mode', 'recording']
     productFlavors {
         normal {
             dimension 'mode'
+            ndk { abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86_64' }
         }
         embed {
             dimension 'mode'
+            ndk { abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86_64' }
+        }
+        offline {
+            dimension 'mode'
+            buildConfigField 'boolean', 'BUNDLED_ROOTFS', 'true'
+            ndk { abiFilters 'arm64-v8a' }
         }
         record {
             dimension 'recording'
@@ -138,6 +168,14 @@ android {
             }
             assets.srcDir "$buildDir/generated/game-template/assets"
         }
+        offline {
+            manifest.srcFile 'src/normal/AndroidManifest.xml'
+            java.srcDir 'src/normal/java'
+            kotlin.directories.add('src/normal/java')
+            res.srcDir 'src/normal/res'
+            jniLibs.srcDir 'src/normal/jniLibs'
+            assets.srcDirs 'src/normal/assets', "$buildDir/generated/game-template/assets", offlineAssetsDir.get()
+        }
     }
 
     compileOptions {
@@ -159,6 +197,9 @@ android {
             version '3.21.0+'
         }
     }
+    androidResources {
+        noCompress += ['xz']
+    }
     packagingOptions {
         jniLibs {
             useLegacyPackaging true
@@ -168,6 +209,32 @@ android {
                 'lib/x86/libOpenSLES.so',
                 'lib/x86_64/libOpenSLES.so'
             ]
+        }
+    }
+}
+
+def verifyOfflineRootfs = tasks.register('verifyOfflineRootfs') {
+    def manifestFile = offlineAssetsDir.map { new File(it, 'proot/offline/manifest.json') }
+    def archiveFile = offlineAssetsDir.map { new File(it, 'proot/offline/rootfs-arm64.tar.xz') }
+    inputs.file(manifestFile)
+    inputs.file(archiveFile)
+    doLast {
+        def metadata = new JsonSlurper().parse(manifestFile.get())
+        def archive = archiveFile.get()
+        if (metadata.formatVersion != 1 || metadata.abi != 'arm64-v8a' ||
+                metadata.archive != archive.name || metadata.compressedBytes != archive.length() ||
+                metadata.components.toSet() != ['rootfs', 'lua_lsp', 'omp', 'dsh', 'git', 'love_check'].toSet() ||
+                metadata.decoderMemoryLimitKiB > 65536) {
+            throw new GradleException('Invalid full offline image; run python3 tools/offline-rootfs.py build')
+        }
+        def digest = MessageDigest.getInstance('SHA-256')
+        archive.withInputStream { stream ->
+            byte[] buffer = new byte[65536]
+            int count
+            while ((count = stream.read(buffer)) != -1) digest.update(buffer, 0, count)
+        }
+        if (digest.digest().encodeHex().toString() != metadata.sha256) {
+            throw new GradleException('Offline image SHA-256 mismatch')
         }
     }
 }
@@ -218,8 +285,13 @@ def linkGameTemplate = tasks.register('linkGameTemplate', Exec) {
 }
 
 tasks.configureEach { task ->
-    if (task.name.startsWith('mergeNormal') && task.name.endsWith('Assets')) {
+    if ((task.name.contains('Normal') || task.name.contains('Offline')) &&
+            ((task.name.startsWith('merge') && task.name.endsWith('Assets')) ||
+                    task.name.contains('Lint') || task.name.startsWith('lint'))) {
         task.dependsOn linkGameTemplate
+    }
+    if (task.name.startsWith('mergeOffline') && task.name.endsWith('Assets')) {
+        task.dependsOn verifyOfflineRootfs
     }
 }
 
@@ -228,6 +300,18 @@ tasks.withType(org.gradle.api.tasks.testing.Test).configureEach {
     systemProperty 'love2droid.gameTemplateApk', gameTemplateAsset.get().asFile.absolutePath
     systemProperty 'love2droid.testApkOutput', layout.buildDirectory.file('intermediates/game-template/test-game.apk').get().asFile.absolutePath
 }
+
+tasks.register('smokeOfflineRootfs', JavaExec) {
+    dependsOn 'compileNormalNoRecordDebugUnitTestKotlin', verifyOfflineRootfs
+    def unitTests = tasks.named('testNormalNoRecordDebugUnitTest', org.gradle.api.tasks.testing.Test)
+    classpath = files(unitTests.map { it.classpath })
+    mainClass = 'top.wsdx233.love2droid.OfflineRootfsSmoke'
+    maxHeapSize = '512m'
+    args new File(offlineAssetsDir.get(), 'proot/offline/manifest.json').absolutePath,
+            new File(offlineAssetsDir.get(), 'proot/offline/rootfs-arm64.tar.xz').absolutePath,
+            new File(offlineAssetsDir.get().parentFile, 'restored/ubuntu').absolutePath
+}
+
 kotlin {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
@@ -253,6 +337,7 @@ dependencies {
     implementation 'io.github.rosemoe:editor-lsp:0.24.6'
     implementation 'org.eclipse.lsp4j:org.eclipse.lsp4j:1.0.0'
     implementation 'org.apache.commons:commons-compress:1.28.0'
+    implementation 'org.tukaani:xz:1.10'
     implementation 'org.yaml:snakeyaml:2.4'
     implementation 'com.android.tools.build:apksig:9.3.1'
     implementation project(':terminal-view')

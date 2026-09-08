@@ -11,7 +11,7 @@
 | [architecture.md](architecture.md) | 已采用的系统架构、模块边界、数据流和技术约束 |
 | [design.md](design.md) | 当前界面布局、交互和编辑器行为 |
 | [reference.md](reference.md) | 外部参考项目、来源、版本和借鉴边界 |
-| [verification.md](verification.md) | 逻辑测试、APK 构建和真机验证要求 |
+| [verification.md](verification.md) | 逻辑测试、普通与离线 APK 构建、签名及真机验收 |
 | [status.md](status.md) | 已实现能力、已知限制和已确认的非计划事项 |
 
 ## 待实现计划

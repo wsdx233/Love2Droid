@@ -1,7 +1,9 @@
 package top.wsdx233.love2droid
 
 import android.content.Context
+import android.os.StatFs
 import android.system.Os
+import android.system.OsConstants
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,8 +14,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import org.apache.commons.compress.archivers.tar.TarArchiveEntry
-import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import kotlinx.coroutines.launch
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream
 import java.io.BufferedInputStream
@@ -118,6 +118,12 @@ object ProotInstaller {
                     val installLoveCheck = targets.contains(InstallRegistry.ID_LOVE_CHECK)
 
                     prepareRuntime(appContext)
+                    if (BuildConfig.BUNDLED_ROOTFS) {
+                        installOffline(appContext)
+                        update(ProotInstallState.Status.DONE, 100, appContext.getString(R.string.proot_install_done))
+                        appendLog(appContext.getString(R.string.proot_log_completed))
+                        return@runCatching
+                    }
                     if (installRootfs) {
                         val rootfsMarker = File(ProotRuntime.runtimeDir(appContext), ROOTFS_MARKER)
                         if (!rootfsMarker.isFile || !File(ProotRuntime.rootfsDir(appContext), "bin").isDirectory) {
@@ -206,6 +212,60 @@ object ProotInstaller {
                 }
             }
         }
+    }
+
+    private fun installOffline(context: Context) {
+        val manifest = context.assets.open("${OfflineRootfs.ASSET_DIRECTORY}/manifest.json")
+            .bufferedReader().use { OfflineRootfs.parseManifest(it.readText()) }
+        val rootfs = ProotRuntime.rootfsDir(context)
+        val runtime = ProotRuntime.runtimeDir(context)
+        val completed = File(runtime, OfflineRootfs.VERIFIED_MARKER)
+        val allInstalled = InstallRegistry.availableComponents.all { it.isInstalled(context) }
+        if (allInstalled && (completed.isFile || !OfflineRootfs.canRestore(rootfs, manifest))) {
+            appendLog(context.getString(R.string.proot_offline_existing_reused))
+            return
+        }
+        check(OfflineRootfs.canRestore(rootfs, manifest)) {
+            context.getString(R.string.proot_offline_existing_environment)
+        }
+        if (!File(rootfs, OfflineRootfs.IMAGE_MARKER).isFile) {
+            check(StatFs(runtime.absolutePath).availableBytes >= manifest.requiredSpace) {
+                context.getString(R.string.proot_offline_space_required, StorageUtils.formatBytes(manifest.requiredSpace))
+            }
+        }
+        update(ProotInstallState.Status.EXTRACTING, 5, context.getString(R.string.proot_offline_extracting))
+        var lastProgress = -1
+        OfflineRootfs.restore(
+            rootfs, manifest,
+            openArchive = { context.assets.open("${OfflineRootfs.ASSET_DIRECTORY}/${manifest.archive}") },
+            createSymlink = Os::symlink,
+            setMode = Os::chmod,
+            isSymlink = { OsConstants.S_ISLNK(Os.lstat(it.absolutePath).st_mode) },
+        ) { bytes ->
+            val progress = 5 + (bytes * 70 / manifest.compressedBytes).toInt()
+            if (progress != lastProgress) {
+                lastProgress = progress
+                update(ProotInstallState.Status.EXTRACTING, progress, context.getString(R.string.proot_offline_extracting))
+            }
+        }
+        configureRootfs(context)
+        configureResolver(context)
+        configureHostGroups(context)
+        val verifierPath = "/root/.local/share/love2droid/offline-verify.py"
+        val verifier = File(rootfs, verifierPath.removePrefix("/"))
+        require(StorageUtils.isWithin(rootfs, verifier)) { "Offline verifier escapes rootfs" }
+        StorageUtils.writeTextAtomic(verifier, context.assets.open("proot/offline-verify.py")
+            .bufferedReader().use { it.readText() })
+        update(ProotInstallState.Status.INSTALLING, 80, context.getString(R.string.proot_offline_verifying))
+        runProotCommand(context, "/usr/bin/python3 $verifierPath")
+        // Commit completion only after every real CLI and the headless renderer pass.
+        InstallRegistry.availableComponents.forEach { component ->
+            val content = if (component.id == InstallRegistry.ID_LOVE_CHECK) LoveCheckRuntime.READY_CONTENT else "ready=true\n"
+            StorageUtils.writeTextAtomic(component.readyMarker(context), content)
+        }
+        StorageUtils.writeTextAtomic(File(runtime, ROOTFS_MARKER), "ubuntu=24.04.4\nimage-sha256=${manifest.sha256}\n")
+        writeReadyMarker(context)
+        StorageUtils.writeTextAtomic(completed, manifest.sha256)
     }
 
     private fun prepareRuntime(context: Context) {
@@ -346,7 +406,6 @@ object ProotInstaller {
         val rootfs = ProotRuntime.rootfsDir(context)
         rootfs.deleteRecursively()
         check(rootfs.mkdirs()) { "Unable to create rootfs directory" }
-        val rootPath = rootfs.canonicalPath
         val total = archive.length().coerceAtLeast(1L)
         var lastReported = 0L
 
@@ -364,12 +423,9 @@ object ProotInstaller {
                     }
                 }
                 GzipCompressorInputStream(countingInput).use { gzipInput ->
-                    TarArchiveInputStream(gzipInput).use { tarInput ->
-                        while (true) {
-                            val entry = tarInput.nextEntry ?: break
-                            extractEntry(tarInput, entry, rootfs, rootPath)
-                        }
-                    }
+                    RootfsArchive.extract(gzipInput, rootfs, Os::symlink, { path, mode ->
+                        runCatching { Os.chmod(path, mode) }
+                    })
                 }
             }
             appendLog(context.getString(R.string.proot_log_extract_complete))
@@ -380,58 +436,6 @@ object ProotInstaller {
         }
     }
 
-    private fun extractEntry(
-        tarInput: TarArchiveInputStream,
-        entry: TarArchiveEntry,
-        rootfs: File,
-        rootPath: String,
-    ) {
-        val rawName = entry.name.replace('\\', '/')
-        check(!rawName.startsWith('/')) { "Absolute archive path is not allowed: ${entry.name}" }
-        val name = rawName.removePrefix("./").trimEnd('/')
-        if (name.isBlank()) return
-        check(name.split('/').none { it == ".." }) { "Invalid archive path: ${entry.name}" }
-        val output = File(rootfs, name)
-        val outputPath = output.canonicalPath
-        check(outputPath == rootPath || outputPath.startsWith("$rootPath${File.separator}")) {
-            "Archive path escapes rootfs: ${entry.name}"
-        }
-
-        when {
-            entry.isDirectory -> output.mkdirs()
-            entry.isSymbolicLink -> {
-                output.parentFile?.mkdirs()
-                output.delete()
-                Os.symlink(entry.linkName, output.absolutePath)
-            }
-            entry.isLink -> {
-                output.parentFile?.mkdirs()
-                output.delete()
-                val target = entry.linkName.removePrefix("./")
-                val linkTarget = if (target.startsWith('/')) target else File(rootfs, target).relativeTo(output.parentFile ?: rootfs).path
-                Os.symlink(linkTarget, output.absolutePath)
-            }
-            entry.isFile -> {
-                output.parentFile?.mkdirs()
-                BufferedOutputStream(FileOutputStream(output)).use { fileOutput ->
-                    val buffer = ByteArray(64 * 1024)
-                    while (true) {
-                        val count = tarInput.read(buffer)
-                        if (count < 0) break
-                        fileOutput.write(buffer, 0, count)
-                    }
-                }
-            }
-            else -> return
-        }
-
-        if (!entry.isSymbolicLink && !entry.isLink) {
-            var mode = entry.mode and 511
-            mode = mode or 384
-            if (entry.isDirectory) mode = mode or 64
-            runCatching { Os.chmod(output.absolutePath, mode) }
-        }
-    }
 
     private fun configureRootfs(context: Context) {
         update(

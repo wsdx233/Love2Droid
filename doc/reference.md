@@ -106,7 +106,16 @@ npx --yes --package=@expo/material-symbols add-material-symbols --style rounded 
 - 虚拟显示使用 Ubuntu [Xvfb](https://packages.ubuntu.com/noble/arm64/xvfb)，软件渲染使用 Mesa llvmpipe；这些依赖跟随 Ubuntu 24.04 软件源维护，结果报告真实 Mesa/LLVM renderer 信息，不宣称跨版本或跨平台逐位一致。
 - ARM64 CPU 兼容依据：[LLVM 20.1.2 `Host.cpp`](https://github.com/llvm/llvm-project/blob/llvmorg-20.1.2/llvm/lib/TargetParser/Host.cpp) 的 `LLVM_CPUINFO` 读取与通用目标回退，以及 [Mesa 25.2.8 `lp_bld_misc.cpp`](https://github.com/chaotic-cx/mesa-mirror/blob/mesa-25.2.8/src/gallium/auxiliary/gallivm/lp_bld_misc.cpp) 对 `getHostCPUName()` 的使用。仅设置检查子进程环境，不复制或修改上游 LLVM/Mesa，不把主机测试等同于 Android 真机结果。
 - Xauthority 文件按 X11 `Xauth` 记录格式写入；服务端只加载协议与 cookie，客户端同时匹配显示编号，依据 [Xserver 授权读取实现](https://github.com/mirror/xserver/blob/master/os/auth.c)。不复制上游显示服务器实现，不关闭认证以规避 PRoot 文件锁问题。
-- 依赖通过 APT 的已签名仓库安装到 guest，保留包自带的许可证与 copyright 文件；APK 只携带应用自有安装/检查脚本，不打包下载的 Linux 二进制或研究 rootfs。使用与验证见 [verification.md](verification.md#löve-无界面检查)。
+- 依赖通过 APT 的已签名仓库安装到 guest，保留包自带的许可证与 copyright 文件；普通 APK 只携带应用自有安装/检查脚本，离线 APK 另携带下节所述的干净完整镜像，不打包个人或研究 rootfs。使用与验证见 [verification.md](verification.md#löve-无界面检查)。
+
+## 离线环境与 XZ
+
+- 固定来源及 SHA-256 集中在 [`tools/offline-rootfs.lock.json`](../tools/offline-rootfs.lock.json)：Ubuntu Base 24.04.4 ARM64、LuaLS 3.19.1、OMP 18.1.14、Node.js 22.23.2、nvm 0.40.7、pnpm 9.15.9、DSH 0.1.2-rc.1、`dsh-plugin` 1.4.2、`dsh-web-mobile` 2.3.0 和固定提交的 bash-prompt。APT 传递依赖随 Ubuntu 源更新，实际版本记录在镜像 `/usr/local/share/love2droid/debian-packages.tsv`；不宣称每次重建逐位一致。
+- OMP 使用上游 [ARM64 release](https://github.com/can1357/oh-my-pi/releases/tag/v18.1.14)，MIT；bash-prompt 使用 [固定提交](https://github.com/Freed-Wu/bash-prompt/tree/524ee94882449ff56fdd8a3bc7ae718ec78e4ed2)，GPL-3.0。完整文本分别见 [`OMP-LICENSE.txt`](../licenses/OMP-LICENSE.txt) 和 [`BASH-PROMPT-LICENSE.txt`](../licenses/BASH-PROMPT-LICENSE.txt)，也放入镜像 `/usr/local/share/love2droid/licenses/`。
+- 保留 Ubuntu `/usr/share/doc/*/copyright`、`/usr/share/common-licenses`、Node.js/npm/pnpm/DSH 与插件各自的许可证及安装依赖；压缩前仅移除下载缓存、日志和构建过程产生的身份/会话状态，不用删除许可证或运行依赖缩小镜像。
+- 对外发布完整 Linux 镜像时，须按其中各组件许可证在发布页提供对应源码或满足条款的源码获取方式；APT 精确源码包名/版本已随清单记录，GPL/LGPL 组件不能只附许可证文本而忽略对应源码要求。对应源码可作为独立发布附件，无须塞进 APK。
+- APK 流式 XZ 解码使用 Maven `org.tukaani:xz:1.10`，上游 [XZ for Java](https://github.com/tukaani-project/xz-java/tree/v1.10)，0BSD，完整声明见 [`XZ-JAVA-LICENSE.txt`](../licenses/XZ-JAVA-LICENSE.txt)。解码器固定 64 MiB 上限，镜像使用 32 MiB 字典。
+- 仅用于 x86_64 Linux 构建机的 QEMU 来自 [BuildKit v0.33.0](https://github.com/moby/buildkit/releases/tag/v0.33.0)，归档 SHA-256 固定在构建脚本；只解出 `buildkit-qemu-aarch64`。它使用 [tonistiigi/binfmt direct-exec 补丁](https://github.com/tonistiigi/binfmt/tree/deploy/v10.2.3-68/patches/buildkit-direct-execve-v10.2)，无需修改系统 `binfmt_misc`；普通 qemu-user 不具备相同递归执行约定。主机 QEMU、Podman 及其缓存不进入 APK 或 rootfs。
 
 ## 许可证要求
 
