@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Adapted for Love2Droid from Google Android / Material Symbols and Devicon.
+     Attribution and licenses: doc/reference.md, licenses/APP-ICON-NOTICE.txt. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <group android:translateX="54" android:translateY="54">
+        <group android:scaleX="0.825" android:scaleY="0.825">
+            <group android:rotation="-12" android:pivotX="0" android:pivotY="0">
+                <group android:translateX="-54" android:translateY="-54">
+                    <group android:translateX="28" android:translateY="9.5">
+                        <group android:scaleX="0.052" android:scaleY="0.052">
+                            <path android:fillColor="#3DDC84" android:pathData="M40,720Q50,615 104,529Q158,443 243,389L166,260Q157,246 161.5,230Q166,214 180,206Q194,197 210,201Q226,205 234,219L314,352Q352,336 393.5,328Q435,320 480,320Q525,320 566.5,328Q608,336 646,352L726,219Q734,205 750,201Q766,197 780,206Q794,214 798,230Q802,246 794,260L717,389Q802,443 856,529Q910,615 920,720L40,720ZM720.5,568.5Q722,551 711,534Q700,517 684,512Q668,507 655,516Q642,525 640,542Q638,559 649,576Q660,593 676.5,598.5Q693,604 706,595Q719,586 720.5,568.5ZM284,598Q300,593 311,576Q322,559 320.5,541.5Q319,524 306,515Q293,506 276.5,511.5Q260,517 249,534Q238,551 240,568Q242,585 255,594Q268,603 284,598Z" />
+                        </group>
+                    </group>
+                    <path android:fillColor="#3DDC84" android:pathData="M36.5,48 L71.5,48 A5.5,5.5 0 0,1 77,53.5 L77,71.5 A5.5,5.5 0 0,1 71.5,77 L36.5,77 A5.5,5.5 0 0,1 31,71.5 L31,53.5 A5.5,5.5 0 0,1 36.5,48 Z" />
+                    <path android:fillColor="#FFFFFF" android:pathData="M28.5,67.0 A25.5,25.5 0,1 1,79.5,67.0 A25.5,25.5 0,1 1,28.5,67.0 Z" />
+                    <group android:translateX="30" android:translateY="43">
+                        <group android:scaleX="0.375" android:scaleY="0.375">
+                            <path android:fillColor="#e74a99" android:pathData="M106.23 15.595c-.016-.015-.034-.025-.05-.04C86.066-1.712 57.648-4.776 34.131 7.233 10.63 19.235-2.749 46 .476 71.94c2.252 18.127 12.359 34.022 26.796 44.235 0 0 39.797-35.537 50.365-48.148 9.912-11.837 31.554-49.638 31.554-49.638a62.743 62.743 0 0 0-2.962-2.793z" />
+                            <path android:fillColor="#27aae1" android:pathData="M27.273 116.174a64.99 64.99 0 0 0 22.37 10.161c25.488 6.103 52.97-4.98 67.55-26.586 17.185-25.473 13.406-59.878-8.001-81.36L68.444 67.03a569939.128 569939.128 0 0 0-41.171 49.143z" />
+                            <path android:fillColor="#ffffff" android:pathData="M66.05 47.945s-6.1-13.346-18.796-10.309C34.559 40.675 8.045 66.604 64.059 98.863h-.045c56.013-32.26 29.502-58.187 16.806-61.227C68.123 34.6 62.024 47.945 62.024 47.945Z" />
+                        </group>
+                    </group>
+                    <group android:rotation="-22" android:pivotX="32.5" android:pivotY="54">
+                        <path android:fillColor="#3DDC84" android:pathData="M32.5,49 L32.5,49 A5.0,5.0 0 0,1 37.5,54 L37.5,71 A5.0,5.0 0 0,1 32.5,76 L32.5,76 A5.0,5.0 0 0,1 27.5,71 L27.5,54 A5.0,5.0 0 0,1 32.5,49 Z" android:strokeColor="#FFFFFF" android:strokeWidth="2.5" />
+                    </group>
+                    <group android:rotation="22" android:pivotX="75.5" android:pivotY="54">
+                        <path android:fillColor="#3DDC84" android:pathData="M75.5,49 L75.5,49 A5.0,5.0 0 0,1 80.5,54 L80.5,71 A5.0,5.0 0 0,1 75.5,76 L75.5,76 A5.0,5.0 0 0,1 70.5,71 L70.5,54 A5.0,5.0 0 0,1 75.5,49 Z" android:strokeColor="#FFFFFF" android:strokeWidth="2.5" />
+                    </group>
+                </group>
+            </group>
+        </group>
+    </group>
+</vector>

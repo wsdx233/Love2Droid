@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="18 18 72 72">
+  <title>Love2Droid</title>
+  <desc>An Android robot hugging the LÖVE logo. Android robot: Google, CC BY 3.0; head: Material Symbols, Apache-2.0; LÖVE vector: Devicon, MIT. See ../reference.md.</desc>
+  <rect x="18" y="18" width="72" height="72" rx="16" fill="#F5F5EE"/>
+  <g id="foreground" transform="translate(54 54) scale(0.825) rotate(-12) translate(-54 -54)">
+    <!-- Android head: Material Symbols Rounded, weight 400, unfilled. -->
+    <path fill="#3DDC84" transform="translate(28 9.5) scale(0.052)" d="M40,720Q50,615 104,529Q158,443 243,389L166,260Q157,246 161.5,230Q166,214 180,206Q194,197 210,201Q226,205 234,219L314,352Q352,336 393.5,328Q435,320 480,320Q525,320 566.5,328Q608,336 646,352L726,219Q734,205 750,201Q766,197 780,206Q794,214 798,230Q802,246 794,260L717,389Q802,443 856,529Q910,615 920,720L40,720ZM720.5,568.5Q722,551 711,534Q700,517 684,512Q668,507 655,516Q642,525 640,542Q638,559 649,576Q660,593 676.5,598.5Q693,604 706,595Q719,586 720.5,568.5ZM284,598Q300,593 311,576Q322,559 320.5,541.5Q319,524 306,515Q293,506 276.5,511.5Q260,517 249,534Q238,551 240,568Q242,585 255,594Q268,603 284,598Z"/>
+    <!-- Rounded body and hugging arms adapted from the supplied Android robot. -->
+    <rect x="31" y="48" width="46" height="29" rx="5.5" fill="#3DDC84"/>
+    <circle cx="54" cy="67" r="25.5" fill="#FFFFFF"/>
+    <g transform="translate(30 43) scale(0.375)">
+      <path xmlns="http://www.w3.org/2000/svg" fill="#e74a99" d="M106.23 15.595c-.016-.015-.034-.025-.05-.04C86.066-1.712 57.648-4.776 34.131 7.233 10.63 19.235-2.749 46 .476 71.94c2.252 18.127 12.359 34.022 26.796 44.235 0 0 39.797-35.537 50.365-48.148 9.912-11.837 31.554-49.638 31.554-49.638a62.743 62.743 0 0 0-2.962-2.793z" />
+      <path xmlns="http://www.w3.org/2000/svg" fill="#27aae1" fill-rule="nonzero" d="M27.273 116.174a64.99 64.99 0 0 0 22.37 10.161c25.488 6.103 52.97-4.98 67.55-26.586 17.185-25.473 13.406-59.878-8.001-81.36L68.444 67.03a569939.128 569939.128 0 0 0-41.171 49.143z" />
+      <path xmlns="http://www.w3.org/2000/svg" fill="#fff" fill-rule="nonzero" d="M66.05 47.945s-6.1-13.346-18.796-10.309C34.559 40.675 8.045 66.604 64.059 98.863h-.045c56.013-32.26 29.502-58.187 16.806-61.227C68.123 34.6 62.024 47.945 62.024 47.945Z" />
+    </g>
+    <rect x="27.5" y="49" width="10" height="27" rx="5" transform="rotate(-22 32.5 54)" fill="#3DDC84" stroke="#FFFFFF" stroke-width="2.5"/>
+    <rect x="70.5" y="49" width="10" height="27" rx="5" transform="rotate(22 75.5 54)" fill="#3DDC84" stroke="#FFFFFF" stroke-width="2.5"/>
+  </g>
+</svg>

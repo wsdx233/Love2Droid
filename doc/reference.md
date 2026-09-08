@@ -63,6 +63,21 @@ npx --yes --package=@expo/material-symbols add-material-symbols -o app/src/main/
 
 - 运行命令后只提交实际使用的 XML，并通过资源引用搜索移除被替换的旧图标。命令无法解析包或图标名时应先确认 npm 包源和 Material Symbol 名称，不得猜测 path data。
 
+## 应用品牌与 README 素材
+
+- README 排版参考 [ModinMobileSTS/Sts2MobileLauncher](https://github.com/ModinMobileSTS/Sts2MobileLauncher/blob/main/README.md)（2026-09-08 核对）：语言切换、居中图标与标题、Shields.io 徽章、截图画廊和简洁分区；Love2Droid 另用 GitHub 支持的 HTML 表格呈现功能卡片。不复制该项目的业务文案、代码或游戏资产。
+- `images/screenshots/` 的五张图片来自用户提供的 Love2Droid 截图；仅等比例缩小、转为 JPEG 并去除元数据，未伪造界面。英文和中文 README 共享这些仓库内的相对路径。
+- 启动图标按用户提供的 `ref.png` 构图，组合 Android 机器人与 LÖVE 标志。Android 头部通过 Material Symbols 标准命令取得，Rounded、未填充、weight 400，Apache-2.0；躯干与手臂从用户提供的 `Android_robot.svg` 圆角几何变换而来，不引入来源不明的路径。
+
+```sh
+npx --yes --package=@expo/material-symbols add-material-symbols --style rounded -o /tmp/love2droid-brand-symbols android
+```
+
+- Android 机器人依据 [Google 品牌规范](https://developer.android.com/distribute/marketing-tools/brand-guidelines)，使用 `#3DDC84`，按 CC BY 3.0 署名：**The Android robot is reproduced or modified from work created and shared by Google and used according to terms described in the [Creative Commons 3.0 Attribution License](https://creativecommons.org/licenses/by/3.0/).** Android 是 Google LLC 的商标；不宣称官方背书或对机器人衍生形象的商标权。
+- 用户提供的 `love2d-original.svg` 已与 [Devicon 源文件](https://github.com/devicons/devicon/blob/master/icons/love2d/love2d-original.svg) 核对，保留原有粉蓝色和心形路径；Devicon 采用 MIT（Copyright (c) 2015 konpa），标志本身的权利仍归原权利人。
+- 矢量品牌源为 `images/icon.svg`，栅格导出为 `images/icon.png`；Android 资源位于 `app/src/normal/res/` 的 `ic_launcher` 系列。修改品牌时同步两种载体，保持图层几何、背景色和安全区一致；单色版用透明镂空保留眼睛、心形与手臂边界，不能把白色填充直接当单色遮罩。
+- 完整署名、Devicon MIT 与 Material Symbols Apache-2.0 文本保存在 [`licenses/APP-ICON-NOTICE.txt`](../licenses/APP-ICON-NOTICE.txt)，同内容随 normal APK 的 `assets/licenses/app-icon-notice.txt` 分发。`ref.png` 等研究素材和临时工具输出不提交。
+
 ## DeepSeek Harness 文件系统适配
 
 - 上游：<https://github.com/deepseek-ai/deepseek-harness>；核对 npm 发布包 `@deepseek-ai/dsh`、`dsh-fs-local`、`dsh-session-persistence-jsonl`、`dsh-attachment-local` 的 `0.1.2-rc.1` 版本，许可证 MIT。

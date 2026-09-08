@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Adapted for Love2Droid from Google Android / Material Symbols and Devicon.
+     Attribution and licenses: doc/reference.md, licenses/APP-ICON-NOTICE.txt. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <group android:translateX="54" android:translateY="54">
+        <group android:scaleX="0.825" android:scaleY="0.825">
+            <group android:rotation="-12" android:pivotX="0" android:pivotY="0">
+                <group android:translateX="-54" android:translateY="-54">
+                    <clip-path android:fillType="evenOdd" android:pathData="M0,0 H108 V108 H0 Z M30.158709,48.205101 L30.158709,48.205101 A6.25,6.25 -22 0,1 38.294899,51.658709 L44.663211,67.420834 A6.25,6.25 -22 0,1 41.209603,75.557025 L41.209603,75.557025 A6.25,6.25 -22 0,1 33.073413,72.103417 L26.705101,56.341291 A6.25,6.25 -22 0,1 30.158709,48.205101 Z M77.841291,48.205101 L77.841291,48.205101 A6.25,6.25 22 0,1 81.294899,56.341291 L74.926587,72.103417 A6.25,6.25 22 0,1 66.790397,75.557025 L66.790397,75.557025 A6.25,6.25 22 0,1 63.336789,67.420834 L69.705101,51.658709 A6.25,6.25 22 0,1 77.841291,48.205101 Z" />
+                    <group android:translateX="28" android:translateY="9.5">
+                        <group android:scaleX="0.052" android:scaleY="0.052">
+                            <path android:fillColor="#000000" android:pathData="M40,720Q50,615 104,529Q158,443 243,389L166,260Q157,246 161.5,230Q166,214 180,206Q194,197 210,201Q226,205 234,219L314,352Q352,336 393.5,328Q435,320 480,320Q525,320 566.5,328Q608,336 646,352L726,219Q734,205 750,201Q766,197 780,206Q794,214 798,230Q802,246 794,260L717,389Q802,443 856,529Q910,615 920,720L40,720ZM720.5,568.5Q722,551 711,534Q700,517 684,512Q668,507 655,516Q642,525 640,542Q638,559 649,576Q660,593 676.5,598.5Q693,604 706,595Q719,586 720.5,568.5ZM284,598Q300,593 311,576Q322,559 320.5,541.5Q319,524 306,515Q293,506 276.5,511.5Q260,517 249,534Q238,551 240,568Q242,585 255,594Q268,603 284,598Z" />
+                        </group>
+                    </group>
+                    <group android:translateX="30" android:translateY="43">
+                        <group android:scaleX="0.375" android:scaleY="0.375">
+                            <path android:fillColor="#000000" android:pathData="M0,64 A64,64 0,1 1,128,64 A64,64 0,1 1,0,64 Z M66.05 47.945s-6.1-13.346-18.796-10.309C34.559 40.675 8.045 66.604 64.059 98.863h-.045c56.013-32.26 29.502-58.187 16.806-61.227C68.123 34.6 62.024 47.945 62.024 47.945Z" android:fillType="evenOdd" />
+                        </group>
+                    </group>
+                </group>
+            </group>
+        </group>
+    </group>
+    <group android:translateX="54" android:translateY="54">
+        <group android:scaleX="0.825" android:scaleY="0.825">
+            <group android:rotation="-12" android:pivotX="0" android:pivotY="0">
+                <group android:translateX="-54" android:translateY="-54">
+                    <group android:rotation="-22" android:pivotX="32.5" android:pivotY="54">
+                        <path android:fillColor="#000000" android:pathData="M32.5,49 L32.5,49 A5.0,5.0 0 0,1 37.5,54 L37.5,71 A5.0,5.0 0 0,1 32.5,76 L32.5,76 A5.0,5.0 0 0,1 27.5,71 L27.5,54 A5.0,5.0 0 0,1 32.5,49 Z" />
+                    </group>
+                    <group android:rotation="22" android:pivotX="75.5" android:pivotY="54">
+                        <path android:fillColor="#000000" android:pathData="M75.5,49 L75.5,49 A5.0,5.0 0 0,1 80.5,54 L80.5,71 A5.0,5.0 0 0,1 75.5,76 L75.5,76 A5.0,5.0 0 0,1 70.5,71 L70.5,54 A5.0,5.0 0 0,1 75.5,49 Z" />
+                    </group>
+                </group>
+            </group>
+        </group>
+    </group>
+</vector>

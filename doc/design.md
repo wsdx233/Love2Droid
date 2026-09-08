@@ -2,6 +2,13 @@
 
 本文记录当前产品界面和用户可见行为。系统边界见 [architecture.md](architecture.md)；尚未实现的增强只记录在 [`plan/`](plan/) 中。
 
+## 应用品牌与启动图标
+
+- Love2Droid 使用 Android 机器人抱着 LÖVE 标志的倾斜拥抱造型：Android 绿色、LÖVE 原有粉蓝配色、暖白背景；品牌与上游项目的关系及素材署名见 [reference.md](reference.md#应用品牌与-readme-素材)。
+- Android 8.0 及以上使用前景/背景分层的自适应图标，主体位于 108dp 画布中心的 66dp 安全圆内；圆形、圆角方形等裁切不应截断触角、手臂或 LÖVE 标志。Android 13 及以上额外提供透明镂空的单色图层，由支持主题图标的桌面着色。
+- Android 6.0/7.x 使用同一造型的矢量兼容图标；圆形图标入口复用同一资源。新品牌仅应用于 `normal` 产品，不改变导出游戏的默认 LÖVE 图标或用户自定义项目图标。
+- [英文 README](../README.md) 与[中文 README](../README_CN.md) 使用同一 SVG 品牌图；`images/icon.png` 是对应的 512px 栅格导出。README 截图为用户提供的真实界面记录，不用新品牌重绘截图内容。
+
 ## 主界面
 
 ```text

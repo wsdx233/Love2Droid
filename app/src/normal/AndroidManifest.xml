@@ -12,7 +12,9 @@
         android:extractNativeLibs="true"
         android:usesCleartextTraffic="true"
         android:networkSecurityConfig="@xml/network_security_config"
-        android:icon="@drawable/love"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
+        tools:replace="android:icon"
         android:label="${NAME}"
         android:theme="@style/Theme.Love2Droid">
 

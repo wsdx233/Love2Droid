@@ -2,6 +2,13 @@ Licensing information
 =====================
 
 This distribution contains code from the following projects (full license text below):
+ - Love2Droid app icon (modified composition)
+	Android robot: Google, Creative Commons Attribution 3.0
+	Material Symbols Android head: Google, Apache License 2.0
+	LOVE vector: Devicon, MIT, Copyright (c) 2015 konpa
+	Full notices: licenses/APP-ICON-NOTICE.txt
+	Also distributed in the normal APK as assets/licenses/app-icon-notice.txt
+
  - r2droid terminal/proot integration reference
 	Website: https://github.com/wsdx233/r2droid
 	Reference commit: f1c63598688027dcbf4404c27ef14a3893ccb9e1
