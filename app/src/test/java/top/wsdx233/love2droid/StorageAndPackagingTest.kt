@@ -201,8 +201,9 @@ class StorageAndPackagingTest {
         assertFalse(logged)
     }
     @Test
-    fun ompStartupResumesFirstAvailableSession() {
-        assertEquals("omp --allow-home --continue", ProotRuntime.ompStartupCommand())
+    fun ompStartupOnlyContinuesWhenRestoring() {
+        assertEquals("omp --allow-home", ProotRuntime.ompStartupCommand(resume = false))
+        assertEquals("omp --allow-home --continue", ProotRuntime.ompStartupCommand(resume = true))
     }
 
     @Test

@@ -1066,7 +1066,7 @@ class EditorActivity : AppCompatActivity() {
     }
 
     private fun newOmp() {
-        newTerminal(startupCommand = ProotRuntime.ompStartupCommand(), isOmp = true)
+        newTerminal(startupCommand = ProotRuntime.ompStartupCommand(resume = false), isOmp = true)
     }
 
     private fun newDsh() {
@@ -2636,7 +2636,7 @@ class EditorActivity : AppCompatActivity() {
                             }.getOrNull()?.takeIf { it.isDirectory }
                                 ?: project.root
                         }
-                        val startup = if (isOmp) ProotRuntime.ompStartupCommand() else null
+                        val startup = if (isOmp) ProotRuntime.ompStartupCommand(resume = true) else null
                         createTerminalTab(
                             startupCommand = startup,
                             isOmp = isOmp,

@@ -119,7 +119,7 @@ Android 发布与 Play 分离；发布结果是可安装、可分享的独立 AP
 - 安装向导仅在应用首次启动时展示一次，后续启动直接进入编辑器；用户可通过设置“环境与扩展组件”随时进入管理或补充安装。
 - Ubuntu guest 的 `/etc/resolv.conf` 固定使用 `8.8.8.8`、`8.8.4.4`，并通过 `options use-vc` 强制 glibc 使用 TCP DNS；真机已确认同一网络下 IP 连接和 TCP DNS 正常而默认 UDP DNS 失败。应用不启动 DNS 代理，也不把特定 Wi-Fi 或 VPN 的临时 resolver 持久化到 guest；环境完整性检查会让旧安装重新进入配置阶段并修复该文件。
 - Ubuntu guest 的 `/etc/group` 补齐 Android 应用进程继承的 supplementary GID，避免登录 shell 查询组名时输出未知 group ID。
-- OMP 标签不持有或持久化 session ID；启动时统一使用 `omp --allow-home --continue`，由 OMP 自己选择当前工作目录下的第一个可恢复 session。
+- OMP 标签不持有或持久化 session ID；新建标签使用 `omp --allow-home`，仅恢复工作区中的 OMP 标签时使用 `omp --allow-home --continue`，由 OMP 自己选择当前工作目录下的第一个可恢复 session。
 - 产品启动的 Git 进程注入 `core.createObject=rename`，绕过 Android 共享存储上不可靠的硬链接对象落盘；终端 Git 继承同一设置。
 - DSH 后台服务使用独立 `TerminalSession` 并显式初始化终端模拟器；先运行随 APK 部署的 `dsh-love2droid/activate.mjs`，成功后以 `exec dsh --profile web --no-open --port 3080` 启动，让服务退出结束后台会话。后台和应用内普通终端仅从完整、已换行的 `dsh web:` 输出捕获 `127.0.0.1:3080` 认证 URL，不能使用分批输出中的 token 前缀。token 仅在当前进程内存使用，工作区只持久化无 token 的 loopback 基地址。
 - WebView 等待认证 URL，不抢先加载无 token 基地址；同一认证 URL 只提交一次，避免服务重定向到 `/` 后切换标签又触发认证。API 24+ 通过 `network_security_config.xml` 仅允许 `127.0.0.1` 的 HTTP；API 23 使用 Manifest 的 `usesCleartextTraffic` 兼容开关。

@@ -117,7 +117,7 @@ Drawer 使用 `RecyclerView` 展示当前目录的直接子项，不渲染可展
 - 普通版环境管理提供可选的“LÖVE 11.5 无界面检查”组件，离线版则随完整环境提供；说明其 Linux 11.5 验证边界。安装过程包含真实软件渲染自检，失败时显示安装日志并允许重试，不显示为已就绪。
 - 终端、OMP 和 DSH 可通过同一 `love-check` 命令检查项目，不新增 Play 按钮行为或自动保存编辑器缓冲区。用户应先保存文件；检查不弹出游戏窗口，成功也仅表示指定运行片段未捕获到错误。用法见 [verification.md](verification.md#löve-无界面检查)。
 - bash-prompt 使用 `PROMPT_DIRTRIM=1`，避免展示完整 `Android/data` 长路径。
-- 从 guest `/root` 启动 OMP 时固定传入 `--allow-home`，保持会话工作目录为 `/root`；会话恢复继续使用同一工作目录。
+- 新建 OMP 标签执行 `omp --allow-home`，不自动继续旧会话；恢复工作区中的 OMP 标签时才追加 `--continue`。从 guest `/root` 启动时保留 `--allow-home`，会话恢复沿用已保存的工作目录。
 - guest 主目录提供 `~/projects` 软链接，指向应用的项目根目录；DSH 工作目录选择器可从 Home → projects → 项目进入。升级后首次启动 PRoot 自动补建，不迁移或复制项目；已有同名真实文件或文件夹不会被覆盖。
 - DSH Web 标签由应用内后台 PRoot 会话启动；命令使用 `--no-open`，避免调起外部浏览器。应用等待完整启动行中的 loopback 认证 URL 后再加载，不先访问无 token 地址；切换标签不重复提交已经使用的认证 URL，URL token 不写入工作区。
 - WebView 访问 DSH 的 `127.0.0.1:3080` HTTP 服务；API 24+ 明确按该 IP 放行本地 cleartext，API 23 使用 Manifest 兼容开关。服务启动准备失败、WebView 主页面加载失败均显示错误提示。

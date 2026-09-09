@@ -140,7 +140,8 @@ object ProotRuntime {
 
     fun ompBinary(context: Context): File =
         File(rootfsDir(context), OMP_GUEST_PATH.removePrefix("/"))
-    internal fun ompStartupCommand(): String = "omp --allow-home --continue"
+    internal fun ompStartupCommand(resume: Boolean): String =
+        if (resume) "omp --allow-home --continue" else "omp --allow-home"
 
     fun ompModelsFile(context: Context): File {
         val directory = File(rootfsDir(context), "root/.omp/agent")

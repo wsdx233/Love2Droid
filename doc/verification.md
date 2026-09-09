@@ -18,6 +18,7 @@
 - `LanguageResolver` 对 TOML 和 GLSL 着色器扩展名返回已注册 scope。
 - 终端 Git 在项目路径执行 `git init`、`git add` 和首次提交时，Git 对象可以正常写入 Android 共享存储；版本控制页面初始化仓库后，状态分组、文件级/全部暂存、取消暂存和提交状态与 Git 一致。
 - PRoot 启动参数保留 `argv[0]`，仅绑定可访问的应用目录和项目真实路径；已有 rootfs 挂载占位目录为 `000` 权限时仍可生成启动命令，不修改占位目录。DSH 只接受完整换行的 `dsh web:` loopback 认证 URL，分批 token 不提前加载，重启后的最新完整 URL 生效，后台命令使用 `exec` 和 `--no-open`。
+- OMP 启动命令区分新建与恢复：新建不含 `--continue`，恢复包含 `--continue`，两者均保留 `--allow-home`。聚焦回归：`./gradlew :app:testNormalNoRecordDebugUnitTest --tests top.wsdx233.love2droid.StorageAndPackagingTest`。
 - DSH 加载状态覆盖服务等待、`about:blank`、认证重定向、旧 URL 完成回调、错误终止和再次加载。项目软链接覆盖正确目标、重复准备、含空格路径、失效链接修复及同名真实文件/目录保留；主机逻辑测试以真实主机文件系统操作替代 Android `Os` 调用，Android API 23+ 系统调用仍由真机回归。
 - 版本控制 Diff 中新增行显示绿色、删除行显示红色，hunk 显示旧/新行号；未跟踪文本文件显示为新增内容，暂存 Diff 与未暂存 Diff 不混淆。
 - 项目属性保存后重新打开面板仍一致；使用非默认应用名、包名、版本、方向和权限打包后，成品 Manifest 与属性一致。
@@ -210,7 +211,7 @@ podman unshare unshare --net sh -ec \
 
 - 首次安装、安装失败重试、应用重启、横竖屏切换、后台恢复。
 - Tab 栏在真机上单击文件或终端标签应一次完成切换；即使 OMP 终端连续刷新内容，标签点击仍应及时响应；关闭和新建按钮均可直接操作。
-- 打开普通终端，确认登录 shell 不输出 `groups: cannot find name for group ID`；关闭“OMP 使用项目目录”后新建 OMP 标签，确认 OMP 自动恢复当前目录下的第一个可恢复 session，没有可恢复 session 时创建新 session；退出并重启应用后，确认恢复的 OMP 标签仍直接执行 `omp --allow-home --continue`。
+- 打开普通终端，确认登录 shell 不输出 `groups: cannot find name for group ID`；分别打开和关闭“OMP 使用项目目录”，在已有 OMP 会话的目录中新建 OMP 标签，确认执行 `omp --allow-home` 且不恢复旧会话；退出并重启应用后，确认恢复的 OMP 标签沿用已保存的工作目录并执行 `omp --allow-home --continue`，由 OMP 选择该目录下第一个可恢复 session，没有可恢复 session 时创建新 session。启动时先停留在文件标签，再首次选中恢复的 OMP 标签，确认启动命令没有丢失；来回切换标签不重复发送命令。
 - 首次安装以及从旧版本升级后，在普通终端确认 `/etc/resolv.conf` 包含 `8.8.8.8`、`8.8.4.4` 和 `options use-vc timeout:2 attempts:2`；执行 `getent hosts baidu.com` 与 `curl` 域名请求，确认默认命令无需临时设置 `RES_OPTIONS` 即可解析。
 - 从项目打开普通终端，确认不再闪退或输出 `proot warning: can't chdir`，`pwd` 为项目真实路径且可读取 `main.lua`；保持一个终端运行，再打开第二个普通终端和 DSH，确认挂载占位目录不影响并行会话。只安装 rootfs、未安装 OMP/LuaLS 的环境中，普通终端仍可打开。
 - 打开 DSH Web 标签，确认不会调起外部浏览器，等待服务启动后不显示 `ERR_CLEARTEXT_NOT_PERMITTED` 或未认证错误；切换到文件再返回 DSH，不重新加载或丢失页面状态。停止后台服务并重新打开时使用新的完整认证 URL；加载失败时应看到错误提示。主机 Chromium 的认证 Cookie/页面验证不能替代此 Android WebView 回归。
