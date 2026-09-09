@@ -145,8 +145,14 @@ class EditorActivity : AppCompatActivity() {
     private var terminalScreenUpdateScheduled = false
     private var lspJob: Job? = null
     private var workspaceRestoreJob: Job? = null
-    private var symbolNavigationJob: Job? = null
+    private val hoverResumeHandler = Handler(Looper.getMainLooper())
+    private val hoverResumeRunnable = Runnable {
+        if (settings.editorHoverInfo) {
+            lspController?.setHoverInfoEnabled(true)
+        }
+    }
     private var breakpointSaveJob: Job? = null
+    private var symbolNavigationJob: Job? = null
     private val openingFiles = mutableMapOf<String, MutableList<(String?) -> Unit>>()
     private var selectedSymbolForNavigation: SelectedSymbol? = null
     private var directoryObserver: FileObserver? = null
@@ -416,8 +422,16 @@ class EditorActivity : AppCompatActivity() {
             adapter = browserAdapter
             setHasFixedSize(true)
         }
-
         editor.subscribeAlways<ContentChangeEvent> { event ->
+            // Hover requests are independent from completion. Disable the hover
+            // subscription while typing so an obsolete response cannot cover the
+            // current completion popup; restore it after the cursor settles.
+            if (settings.editorHoverInfo) {
+                lspController?.dismissHover()
+                hoverResumeHandler.removeCallbacks(hoverResumeRunnable)
+                lspController?.setHoverInfoEnabled(false)
+                hoverResumeHandler.postDelayed(hoverResumeRunnable, HOVER_RESUME_DELAY_MS)
+            }
             if (!suppressEditorEvents) {
                 editorSession.activeEditorTab?.let { tab ->
                     tab.text = editor.text.toString()
@@ -427,6 +441,7 @@ class EditorActivity : AppCompatActivity() {
                 }
             }
         }
+
 
         val initial = projectRepository.lastOpenedProject()
         if (initial != null) {
@@ -3184,6 +3199,7 @@ class EditorActivity : AppCompatActivity() {
     override fun onDestroy() {
         persistWorkspace()
         directoryRefreshHandler.removeCallbacks(directoryRefreshRunnable)
+        hoverResumeHandler.removeCallbacks(hoverResumeRunnable)
         directoryObserver?.stopWatching()
         directoryObserver = null
         workspaceRestoreJob?.cancel()
@@ -3234,6 +3250,7 @@ class EditorActivity : AppCompatActivity() {
         private const val DIRECTORY_REFRESH_DEBOUNCE_MS = 250L
         private const val SELECTION_ACTION_BAR_HEIGHT_DP = 56
         private const val SELECTION_BAR_SHOW_DURATION_MS = 160L
+        private const val HOVER_RESUME_DELAY_MS = 1_200L
         private const val SELECTION_BAR_HIDE_DURATION_MS = 100L
         private const val DIRECTORY_WATCH_MASK =
             FileObserver.CREATE or FileObserver.DELETE or FileObserver.MOVED_FROM or
