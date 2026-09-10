@@ -95,6 +95,7 @@ Drawer 使用 `RecyclerView` 展示当前目录的直接子项，不渲染可展
 - 文件标签活动时，AppBar 直接显示“保存”和“撤销”图标，窄屏时优先压缩标题；“另存为”使用 Google Material Symbols 标准 `save_as` 图标。保存使用原子写入并恢复打开文件的 LF/CRLF/CR 换行风格：项目文件受项目边界约束，DSH 打开的外部文件保存回原路径并受应用存储边界约束；“另存为”仍选择当前项目根目录中的文件名。
 - 顶栏及 overflow 的文件操作（保存、撤销、另存为、查找和替换、自动换行、符号栏、只读、LuaLS 悬浮信息）仅在文件标签活动时显示；终端、OMP、DSH 和无标签页面隐藏这些操作，切回文件恢复显示及对应勾选状态。只读文件禁用撤销，但仍允许保存、另存为及关闭只读；无当前项目时，已有路径的文件仍可保存回原位置，未命名文件的保存和所有文件的另存为禁用。
 - Play 与 Android 打包仅在存在当前项目时显示，在终端、OMP、DSH 及项目内无标签页面仍可使用，目标始终为当前项目；不随文件所在目录或长按标签改变。新建菜单、设置和项目管理保持全局可用，不把同一个操作 ID 或图标复用成不同含义的功能。
+- DSH 标签活动时，顶栏直接显示独立的“后退”和“刷新”操作；其他类型标签及无标签页面不显示。后退作用于当前 DSH 页面的浏览历史，无历史时禁用；刷新重新加载当前页面，而非重置到首页，仍在等待服务地址时沿用原服务启动流程。
 - Lua 及已注册语言使用 TextMate 高亮；当前注册覆盖 Lua、Java、Kotlin、JavaScript/TypeScript、Python、HTML、XML、Markdown、JSON、CSS、Shell、TOML 和 GLSL（含 `.vert`/`.frag`），没有匹配 grammar 时以纯文本打开并给出可理解的错误。
 - 编辑器主题从独立的 TextMate 主题注册表加载，亮色使用 `quietlight`，暗色使用 `darcula`，跟随系统按系统明暗选择。
 - LuaLS 已连接时，长按 Lua 标识符仍按编辑器默认行为选择单词；在文本选区操作浮动菜单中，完整符号选区会额外显示“转到定义”和“查找用法”两个图标按钮。多定义和用法结果使用可滚动 Bottom Sheet 展示项目相对路径、行号与代码摘要，点击结果在应用内打开标签并定位。
@@ -138,7 +139,8 @@ Drawer 使用 `RecyclerView` 展示当前目录的直接子项，不渲染可展
 - bash-prompt 使用 `PROMPT_DIRTRIM=1`，避免展示完整 `Android/data` 长路径。
 - 新建 OMP 标签执行 `omp --allow-home`，不自动继续旧会话；恢复工作区中的 OMP 标签时才追加 `--continue`。从 guest `/root` 启动时保留 `--allow-home`，会话恢复沿用已保存的工作目录。
 - guest 主目录提供 `~/projects` 软链接，指向应用的项目根目录；DSH 工作目录选择器可从 Home → projects → 项目进入。升级后首次启动 PRoot 自动补建，不迁移或复制项目；已有同名真实文件或文件夹不会被覆盖。
-- DSH Web 标签由应用内后台 PRoot 会话启动；命令使用 `--no-open`，避免调起外部浏览器。应用等待完整启动行中的 loopback 认证 URL 后再加载，不先访问无 token 地址；切换标签不重复提交已经使用的认证 URL，URL token 不写入工作区。
+- DSH Web 标签由应用内后台 PRoot 会话启动；命令使用 `--no-open`，避免调起外部浏览器。应用等待完整启动行中的 loopback 认证 URL 后再加载，不先访问无 token 地址；每个标签独立记录已使用的认证 URL，切换标签不重复提交，URL token 不写入工作区。
+- 每次“新建 DSH”都新增标签，不再跳转到已有 DSH 标签；所有标签沿用同一后台服务和认证地址规则。各标签独立保留页面、浏览历史及加载状态，切换不重新创建页面；关闭一个标签不影响其他标签。关闭标签、切换项目或销毁 Activity 时释放对应 WebView。工作区仍只保存标签标题和无 token 基地址，恢复时保留多个 DSH 标签及活动索引，不持久化网页浏览历史或认证 URL。
 - WebView 访问 DSH 的 `127.0.0.1:3080` HTTP 服务；API 24+ 明确按该 IP 放行本地 cleartext，API 23 使用 Manifest 兼容开关。服务启动准备失败、WebView 主页面加载失败均显示错误提示。
 - DSH profile 自动启用 pnpm `ignore-workspace-root-check=true`；用户可直接执行 `dsh plugin --profile web add <插件>`，不必额外追加 `-w`。预装移动端适配插件为 `dsh-web-mobile`，旧环境在下一次 PRoot 启动准备时补写配置。
 - 应用内 WebView 已由 Activity 消费系统状态栏 inset；页面完成后仅清除移动端插件对 `[data-mobile-ux="frame"]` 及其抽屉的重复顶部安全区 padding，不改变网页滚动、输入框或其他布局。

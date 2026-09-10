@@ -19,9 +19,10 @@
 - 已提供独立 `offlineNoRecordRelease` ARM64 整包变体，与普通版共用包名和发布签名；随包提供干净、预装完整依赖的 Ubuntu rootfs，包含 LuaLS、OMP、nvm/Node.js/npm/pnpm、DSH 与 Web 插件、Git、bash-prompt 和完整 `love-check`。普通版仍按需联网安装，不携带大镜像。
 - 离线恢复采用高压缩率 XZ、受限内存流式解码、SHA-256 与 staging 原子提交；验证失败可重试，不用镜像覆盖既有用户环境。已用实际 App 恢复器和只有 loopback 的 Linux namespace 验证完整 ARM64 工具及 DSH Web、三帧 llvmpipe 自检；流程见 [verification.md](verification.md#离线完整环境发布)，Android 首装与升级交互仍需真机验收。
 - 离线安装显示解压、配置和自检阶段、总安装百分比，以及实际解压大小、条目计数和当前文件；自检显示正在检查的组件与已通过项数。真实发布镜像恢复验证了字节/条目最终计数及进度输出，进度聚焦回归与普通 Debug、离线 Release 构建通过；Android 安装页的实际布局、后台切换与刷新效果仍需真机验收。
-- 支持 DeepSeek Harness (DSH) 智能助手：包含 nvm、node、dsh CLI 及指定 Web 插件的安装管理；支持设置后台自启服务并在编辑器中以专用 Web Tab (WebView) 嵌入访问 `http://127.0.0.1:3080`，当服务未启动时提供交互式提示与一键启用。
+- 支持 DeepSeek Harness (DSH) 智能助手：包含 nvm、node、dsh CLI 及指定 Web 插件的安装管理；支持设置后台自启服务并在编辑器中以多个独立 Web Tab (WebView) 嵌入访问 `http://127.0.0.1:3080`，当服务未启动时提供交互式提示与一键启用。后退/刷新仅在 DSH 标签显示，作用于当前页面；各标签独立保留浏览历史和加载状态，认证地址与工作区网址保存规则不变。
 - DSH 后台会话显式初始化 Terminal emulator，先离线激活应用内置插件，再以 `exec dsh --profile web --no-open --port 3080` 启动；等待完整启动行中的认证 URL 后加载 WebView，避免无 token 请求和半截 token。APK 显式配置 loopback HTTP 许可，认证 token 不写入工作区。
 - DSH Web 标签提供等待服务及页面加载的顶部进度条；PRoot 启动自动维护 `~/projects` 项目入口，支持从 WebUI 的 Home 浏览项目，不覆盖同名真实文件或文件夹。
+- DSH 多标签与导航改动已通过普通 Debug APK 构建、28 项 DSH/存储/文件聚焦测试及 10 个主机冒烟场景。主机执行真实标签模型、页面生命周期/菜单源码和工作区读写，WebView、界面与服务可用性使用替身；已覆盖页面隔离、历史/刷新目标、加载与错误隔离、认证去重、关闭释放及重复 DSH 条目保存。Android WebView、顶栏图标和实际网页交互仍需真机验收。
 - DSH profile 已自动配置 pnpm workspace root 依赖安装；终端命令和插件市场不再因缺少 `-w` 触发 `ERR_PNPM_ADDING_TO_ROOT`。升级旧环境时由下一次 PRoot 启动自动迁移。
 - DSH 新文件、附件和首次会话日志的硬链接发布已替换为不覆盖原子重命名。主机真实 DSH 包回归覆盖禁用硬链接、并发冲突、旧版本保护、取消、临时文件清理及附件完整性；旧环境下次 PRoot 启动自动部署，运行中的 DSH 需重启。实际 Android 存储行为仍需真机回归，不把主机 PRoot 结果视为真机验证。
 - 应用内 DSH Web 通过本地 `dsh-love2droid` 插件将文件打开请求交给编辑器。当前项目外的可访问文本文件也在当前工作区复用/新建标签，不切换项目；外部路径、dirty 内容和选区可恢复，文件保存回原位置，不进入当前项目的运行或打包快照。普通浏览器、终端 `xdg-open` 和目录打开未被替换。已完成真实 DSH + Chromium 的桥接路由验证（原生端使用替身）和主机逻辑测试，Android WebView 到原生标签的交互仍需真机回归。

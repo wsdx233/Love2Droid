@@ -115,12 +115,24 @@ class EditorActivity : AppCompatActivity() {
     private lateinit var browserAdapter: FileBrowserAdapter
     private lateinit var terminalView: TerminalView
     private lateinit var terminalKeyBar: LinearLayout
-    private lateinit var dshWebView: WebView
+    private lateinit var dshWebContainer: ViewGroup
     private lateinit var dshLoadingIndicator: LinearProgressIndicator
-    private val dshWebLoadState = DshWebLoadState()
+    private val dshPages = mutableMapOf<DshWebTab, DshPage>()
     private var lspController: LuaLspController? = null
     private var dshWebUrlObserver: (() -> Unit)? = null
-    private var loadedDshWebUrl: String? = null
+    private val activeDshPage: DshPage?
+        get() = (editorSession.activeTab as? DshWebTab)?.let { dshPages[it] }
+
+    private class DshPage(val view: WebView) {
+        val loadState = DshWebLoadState()
+        var loadedUrl: String? = null
+
+        fun destroy() {
+            (view.parent as? ViewGroup)?.removeView(view)
+            view.stopLoading()
+            view.destroy()
+        }
+    }
 
     private val projectRepository by lazy { ProjectRepository(this) }
     private val settings by lazy { SettingsStore(this) }
@@ -340,9 +352,8 @@ class EditorActivity : AppCompatActivity() {
         editor = findViewById(R.id.code_editor)
         terminalView = findViewById(R.id.terminal_view)
         terminalKeyBar = findViewById(R.id.terminal_key_bar)
-        dshWebView = findViewById(R.id.dsh_web_view)
+        dshWebContainer = findViewById(R.id.dsh_web_container)
         dshLoadingIndicator = findViewById(R.id.dsh_loading_indicator)
-        setupDshWebView()
         dshWebUrlObserver = DshDaemon.observeWebUrl { url ->
             runOnUiThread { applyDshWebUrl(url) }
         }
@@ -509,6 +520,7 @@ class EditorActivity : AppCompatActivity() {
             isVisible = hasDocument
             isChecked = settings.editorHoverInfo
         }
+        updateDshNavigationActions()
     }
 
     private fun updateSymbolBarVisibility() {
@@ -1156,14 +1168,9 @@ class EditorActivity : AppCompatActivity() {
     }
 
     private fun openDshTab() {
-        val existingIndex = editorSession.tabs.indexOfFirst { it is DshWebTab }
-        if (existingIndex >= 0) {
-            selectTab(existingIndex)
-        } else {
-            val tab = DshWebTab(title = getString(R.string.dsh_tab_title))
-            val index = editorSession.add(tab)
-            selectTab(index)
-        }
+        val tab = DshWebTab(title = getString(R.string.dsh_tab_title))
+        val index = editorSession.add(tab)
+        selectTab(index)
     }
 
     private fun newTerminal(
@@ -1263,6 +1270,14 @@ class EditorActivity : AppCompatActivity() {
             }
             R.id.action_new_dsh -> {
                 newDsh()
+                true
+            }
+            R.id.action_dsh_back -> {
+                activeDshPage?.view?.let { if (it.canGoBack()) it.goBack() }
+                true
+            }
+            R.id.action_dsh_refresh -> {
+                refreshDshPage()
                 true
             }
             R.id.action_save -> {
@@ -1416,6 +1431,7 @@ class EditorActivity : AppCompatActivity() {
         workspaceRestoreJob?.cancel()
         stopDirectoryObserver()
         finishTerminalTabs()
+        destroyDshPages()
         currentProject = projectRepository.markOpened(project)
         currentBreakpoints.clear()
         currentBreakpoints.addAll(currentProject?.breakpoints.orEmpty())
@@ -1518,10 +1534,8 @@ class EditorActivity : AppCompatActivity() {
         terminalView.clearFocus()
         editor.visibility = View.GONE
         terminalView.visibility = View.GONE
-        if (::dshWebView.isInitialized) {
-            dshWebView.visibility = View.GONE
-            updateDshLoadingIndicator()
-        }
+        dshWebContainer.visibility = View.GONE
+        updateDshLoadingIndicator()
         updateSymbolBarVisibility()
         terminalKeyBar.visibility = View.GONE
         editorSearchController.setEditorAvailable(false)
@@ -2367,10 +2381,8 @@ class EditorActivity : AppCompatActivity() {
         updateEditorBreakpointHighlights()
         terminalView.visibility = View.GONE
         terminalKeyBar.visibility = View.GONE
-        if (::dshWebView.isInitialized) {
-            dshWebView.visibility = View.GONE
-            updateDshLoadingIndicator()
-        }
+        dshWebContainer.visibility = View.GONE
+        updateDshLoadingIndicator()
         editor.visibility = View.VISIBLE
         editorSearchController.setEditorAvailable(true)
         updateSymbolBarVisibility()
@@ -2383,10 +2395,8 @@ class EditorActivity : AppCompatActivity() {
     private fun showTerminalTab(tab: TerminalTab) {
         editor.clearFocus()
         editor.visibility = View.GONE
-        if (::dshWebView.isInitialized) {
-            dshWebView.visibility = View.GONE
-            updateDshLoadingIndicator()
-        }
+        dshWebContainer.visibility = View.GONE
+        updateDshLoadingIndicator()
         editorSearchController.setEditorAvailable(false)
         updateSymbolBarVisibility()
         welcomePage.visibility = View.GONE
@@ -2404,22 +2414,25 @@ class EditorActivity : AppCompatActivity() {
         updateEditorMenuState()
     }
 
-    private fun setupDshWebView() {
-        dshWebView.settings.javaScriptEnabled = true
-        dshWebView.settings.domStorageEnabled = true
-        dshWebView.settings.databaseEnabled = true
-        dshWebView.settings.useWideViewPort = true
-        dshWebView.settings.loadWithOverviewMode = true
+    private fun setupDshWebView(tab: DshWebTab, page: DshPage) {
+        val view = page.view
+        view.settings.javaScriptEnabled = true
+        view.settings.domStorageEnabled = true
+        view.settings.databaseEnabled = true
+        view.settings.useWideViewPort = true
+        view.settings.loadWithOverviewMode = true
         if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
-            WebViewCompat.addWebMessageListener(dshWebView, "Love2DroidFiles", setOf(DshDaemon.DEFAULT_URL)) {
+            WebViewCompat.addWebMessageListener(view, "Love2DroidFiles", setOf(DshDaemon.DEFAULT_URL)) {
                     _, message, sourceOrigin, isMainFrame, reply ->
+                if (dshPages[tab] !== page) return@addWebMessageListener
                 if (!isMainFrame || sourceOrigin.toString() != DshDaemon.DEFAULT_URL) return@addWebMessageListener
                 val data = message.data ?: return@addWebMessageListener
                 if (data.length > 65536) return@addWebMessageListener
                 val request = runCatching { JSONObject(data) }.getOrNull() ?: return@addWebMessageListener
                 val id = request.optString("id")
                 if (id.isBlank() || id.length > 64) return@addWebMessageListener
-                val respond: (String?) -> Unit = { error ->
+                val respond: (String?) -> Unit = respond@{ error ->
+                    if (dshPages[tab] !== page) return@respond
                     val response = JSONObject().put("id", id)
                     error?.let { response.put("error", it) }
                     reply.postMessage(response.toString())
@@ -2434,22 +2447,31 @@ class EditorActivity : AppCompatActivity() {
                         respond(getString(R.string.dsh_file_access_denied))
                         return@launch
                     }
+                    if (dshPages[tab] !== page) return@launch
                     openFile(file, allowExternal = true, onOpened = respond)
                 }
             }
         } else {
             toast(getString(R.string.dsh_file_bridge_unsupported))
         }
-        dshWebView.webViewClient = object : WebViewClient() {
+        view.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
-                dshWebLoadState.start(url)
+                if (dshPages[tab] !== page) return
+                page.loadState.start(url)
                 updateDshLoadingIndicator()
+                updateDshNavigationActions()
             }
 
             override fun onPageFinished(view: WebView, url: String) {
+                if (dshPages[tab] !== page) return
                 normalizeDshWebViewInsets(view)
-                dshWebLoadState.finish(url, view.url)
+                page.loadState.finish(url, view.url)
                 updateDshLoadingIndicator()
+                updateDshNavigationActions()
+            }
+
+            override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
+                if (activeDshPage === page) updateDshNavigationActions()
             }
 
             override fun onReceivedError(
@@ -2457,15 +2479,17 @@ class EditorActivity : AppCompatActivity() {
                 request: android.webkit.WebResourceRequest,
                 error: android.webkit.WebResourceError,
             ) {
+                if (dshPages[tab] !== page) return
                 if (request.isForMainFrame) {
-                    loadedDshWebUrl = null
-                    dshWebLoadState.stop()
+                    page.loadedUrl = null
+                    page.loadState.stop()
                     updateDshLoadingIndicator()
+                    updateDshNavigationActions()
                     toast(getString(R.string.dsh_page_failed, error.description))
                 }
             }
         }
-        dshWebView.webChromeClient = WebChromeClient()
+        view.webChromeClient = WebChromeClient()
     }
 
     /**
@@ -2478,7 +2502,7 @@ class EditorActivity : AppCompatActivity() {
     }
 
     private fun updateDshLoadingIndicator() {
-        dshLoadingIndicator.visibility = if (dshWebView.visibility == View.VISIBLE && dshWebLoadState.isLoading) {
+        dshLoadingIndicator.visibility = if (dshWebContainer.visibility == View.VISIBLE && activeDshPage?.loadState?.isLoading == true) {
             View.VISIBLE
         } else {
             View.GONE
@@ -2486,13 +2510,13 @@ class EditorActivity : AppCompatActivity() {
     }
 
     private fun applyDshWebUrl(url: String) {
-        editorSession.tabs.filterIsInstance<DshWebTab>().forEach { it.url = url }
-        val activeTab = editorSession.activeTab
-        if (activeTab is DshWebTab && dshWebView.visibility == View.VISIBLE && loadedDshWebUrl != url) {
-            loadedDshWebUrl = url
-            dshWebLoadState.start(url)
+        editorSession.tabs.forEach { if (it is DshWebTab) it.url = url }
+        val page = activeDshPage ?: return
+        if (dshWebContainer.visibility == View.VISIBLE && page.loadedUrl != url) {
+            page.loadedUrl = url
+            page.loadState.start(url)
             updateDshLoadingIndicator()
-            dshWebView.loadUrl(url)
+            page.view.loadUrl(url)
         }
     }
 
@@ -2506,18 +2530,28 @@ class EditorActivity : AppCompatActivity() {
         updateSymbolBarVisibility()
         welcomePage.visibility = View.GONE
 
-        dshWebView.visibility = View.VISIBLE
-        dshWebView.requestFocus()
+        val page = dshPages.getOrPut(tab) {
+            DshPage(WebView(this)).also { setupDshWebView(tab, it) }
+        }
+        if (page.view.parent !== dshWebContainer) {
+            dshWebContainer.removeAllViews()
+            dshWebContainer.addView(page.view, ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ))
+        }
+        dshWebContainer.visibility = View.VISIBLE
+        page.view.requestFocus()
         val url = DshDaemon.currentWebUrl()
         if (url != null) {
             applyDshWebUrl(url)
         } else {
             tab.url = DshDaemon.DEFAULT_URL
-            loadedDshWebUrl = null
-            dshWebLoadState.waitForService()
-            dshWebView.loadUrl("about:blank")
+            page.loadedUrl = null
+            page.loadState.waitForService()
+            page.view.loadUrl("about:blank")
             if (!DshDaemon.ensureStarted(this)) {
-                dshWebLoadState.stop()
+                page.loadState.stop()
                 toast(getString(R.string.dsh_start_failed))
             }
         }
@@ -2525,6 +2559,40 @@ class EditorActivity : AppCompatActivity() {
         scheduleLsp(null)
         updateSymbolNavigationButtons()
         updateEditorMenuState()
+    }
+
+    private fun updateDshNavigationActions() {
+        val isDsh = editorSession.activeTab is DshWebTab
+        toolbar.menu.findItem(R.id.action_dsh_back).apply {
+            isVisible = isDsh
+            isEnabled = isDsh && activeDshPage?.view?.canGoBack() == true
+        }
+        toolbar.menu.findItem(R.id.action_dsh_refresh).apply {
+            isVisible = isDsh
+            isEnabled = isDsh
+        }
+    }
+
+    private fun refreshDshPage() {
+        val tab = editorSession.activeTab as? DshWebTab ?: return
+        val page = dshPages[tab] ?: return
+        val url = page.view.url
+        if (url == null || url == "about:blank") {
+            showDshTab(tab)
+        } else {
+            page.loadState.start(url)
+            updateDshLoadingIndicator()
+            page.view.reload()
+        }
+    }
+
+    private fun destroyDshPages() {
+        val iterator = dshPages.values.iterator()
+        while (iterator.hasNext()) {
+            val page = iterator.next()
+            iterator.remove()
+            page.destroy()
+        }
     }
 
     private fun captureEditorState() {
@@ -2969,6 +3037,7 @@ class EditorActivity : AppCompatActivity() {
             return
         }
         captureEditorState()
+        (editorSession.tabs[index] as? DshWebTab)?.let { dshPages.remove(it)?.destroy() }
         editorSession.remove(index)
         if (editorSession.activeIndex >= 0) selectTab(editorSession.activeIndex) else showEmptyEditor()
         refreshTabs()
@@ -3257,10 +3326,7 @@ class EditorActivity : AppCompatActivity() {
         dshWebUrlObserver?.invoke()
         dshWebUrlObserver = null
         finishTerminalTabs()
-        try {
-            dshWebView.destroy()
-        } catch (_: Throwable) {
-        }
+        destroyDshPages()
         super.onDestroy()
     }
 

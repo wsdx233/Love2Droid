@@ -122,7 +122,8 @@ Android 发布与 Play 分离；发布结果是可安装、可分享的独立 AP
 - OMP 标签不持有或持久化 session ID；新建标签使用 `omp --allow-home`，仅恢复工作区中的 OMP 标签时使用 `omp --allow-home --continue`，由 OMP 自己选择当前工作目录下的第一个可恢复 session。
 - 产品启动的 Git 进程注入 `core.createObject=rename`，绕过 Android 共享存储上不可靠的硬链接对象落盘；终端 Git 继承同一设置。
 - DSH 后台服务使用独立 `TerminalSession` 并显式初始化终端模拟器；先运行随 APK 部署的 `dsh-love2droid/activate.mjs`，成功后以 `exec dsh --profile web --no-open --port 3080` 启动，让服务退出结束后台会话。后台和应用内普通终端仅从完整、已换行的 `dsh web:` 输出捕获 `127.0.0.1:3080` 认证 URL，不能使用分批输出中的 token 前缀。token 仅在当前进程内存使用，工作区只持久化无 token 的 loopback 基地址。
-- WebView 等待认证 URL，不抢先加载无 token 基地址；同一认证 URL 只提交一次，避免服务重定向到 `/` 后切换标签又触发认证。API 24+ 通过 `network_security_config.xml` 仅允许 `127.0.0.1` 的 HTTP；API 23 使用 Manifest 的 `usesCleartextTraffic` 兼容开关。
+- WebView 等待认证 URL，不抢先加载无 token 基地址；每个 DSH 标签独立记录已提交的认证 URL，避免服务重定向到 `/` 后切换标签又触发认证。新标签和失败后的重试沿用原认证地址规则。API 24+ 通过 `network_security_config.xml` 仅允许 `127.0.0.1` 的 HTTP；API 23 使用 Manifest 的 `usesCleartextTraffic` 兼容开关。
+- `EditorActivity` 按 `DshWebTab` 对象身份持有独立的 WebView、`DshWebLoadState` 和已加载认证地址；首次显示标签时才创建页面，容器只挂载活动页，其他页保留在内存。页面回调只更新所属页状态，顶栏后退/刷新和进度条始终读取活动页，已关闭页的迟到回调不再改变界面。关闭、项目切换和 Activity 销毁时移除并销毁页面；不向标签模型或 `.lovedroid` 引入 Android View、网页历史或 token，原工作区列表格式直接支持多个 DSH 条目。
 - DSH profile 是 pnpm workspace root。安装脚本和每次 PRoot 启动准备都会在 `/root/.dsh/profiles/web/.npmrc` 确保 `ignore-workspace-root-check=true`，兼容终端、插件市场和 DSH CLI 的直接 `plugin add`；预装移动端适配插件使用 `dsh-web-mobile`，已有其他 npm 配置保留。
 - PRoot 每次启动通过 `StorageUtils.writeTextAtomic` 把 APK 中的 `proot/dsh-filesystem-compat.mjs` 安装或更新到 guest `/root/.local/share/love2droid/`，并通过 `NODE_OPTIONS=--import=...` 注入。后台 DSH、普通终端、安装脚本和继承环境的子进程/worker 使用同一适配；无需重装旧环境，已经运行的进程需要重启。安装脚本追加 `--jitless` 时保留该选项。
 - Android 共享存储不支持硬链接或符号链接，`--link2symlink` 不能补齐该能力。适配只替换 `dsh-fs-local` 的 `createIfAbsent`、`dsh-session-persistence-jsonl` 的首次日志提交及 `dsh-attachment-local` 的附件提交，使用 `renameat2(RENAME_NOREPLACE)` 发布已写完并同步的临时文件；附件成功提交后的清理接受源文件已被移动。并发创建仍失败而非覆盖，版本检查、取消、附件去重/完整性验证和上游同步步骤保留；普通覆盖/编辑仍沿用原有 rename 路径。

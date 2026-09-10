@@ -17,6 +17,18 @@
         android:title="@string/undo"
         app:showAsAction="always" />
     <item
+        android:id="@+id/action_dsh_back"
+        android:icon="@drawable/arrow_back_rounded"
+        android:title="@string/dsh_back"
+        android:visible="false"
+        app:showAsAction="always" />
+    <item
+        android:id="@+id/action_dsh_refresh"
+        android:icon="@drawable/refresh_rounded"
+        android:title="@string/refresh"
+        android:visible="false"
+        app:showAsAction="always" />
+    <item
         android:id="@+id/action_new"
         android:icon="@drawable/add_rounded"
         android:title="@string/new_action"

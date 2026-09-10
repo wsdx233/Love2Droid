@@ -241,6 +241,10 @@ podman unshare unshare --net sh -ec \
 - 从项目打开普通终端，确认不再闪退或输出 `proot warning: can't chdir`，`pwd` 为项目真实路径且可读取 `main.lua`；保持一个终端运行，再打开第二个普通终端和 DSH，确认挂载占位目录不影响并行会话。只安装 rootfs、未安装 OMP/LuaLS 的环境中，普通终端仍可打开。
 - 打开 DSH Web 标签，确认不会调起外部浏览器，等待服务启动后不显示 `ERR_CLEARTEXT_NOT_PERMITTED` 或未认证错误；切换到文件再返回 DSH，不重新加载或丢失页面状态。停止后台服务并重新打开时使用新的完整认证 URL；加载失败时应看到错误提示。主机 Chromium 的认证 Cookie/页面验证不能替代此 Android WebView 回归。
 - DSH 冷启动等待服务和加载文档时，Tab 内容区顶部应显示进度条；认证跳转完成、主页面错误或服务启动准备失败后消失。加载期间切换到文件/终端不显示进度条，切回仍加载的 DSH 时恢复显示，已完成页面不闪现加载条。
+- 连续执行两次“新建 DSH”，应生成两个标签而非切回第一个；首次显示仍等待完整认证 URL，沿用现有 loopback 和 token 规则。分别进入不同页面，再切换标签，当前页面、输入状态和浏览历史互不替换；切换回已加载页不重新认证。一个标签加载失败或完成不应改变另一个活动标签的进度条。
+- 仅在 DSH 标签顶栏显示“后退”和“刷新”，文件、普通终端、OMP 与无标签页面均不显示。无历史时后退禁用；普通跳转及网页内路由跳转后可后退，并仅影响当前标签。刷新保持当前页面地址，不改为 DSH 首页，不刷新其他标签；等待服务或首次启动失败时刷新仍走原启动流程，不抢先请求无 token 地址。窄屏、亮暗主题下检查两个 Material 图标、无障碍标题和点击区域。
+- 关闭非活动 DSH 后当前页仍可后退/刷新；关闭活动页后切换到正确的剩余标签，关闭最后一个 DSH 后不残留页面或导航按钮。关闭、批量关闭和切换项目应释放相应 WebView，迟到页面回调不得影响新活动页。退出并恢复工作区时保持多个 DSH 条目及活动索引；恢复页使用当前服务认证地址，`.lovedroid` 仍只有无 token 基地址，不要求恢复网页历史。
+- 本轮执行 `CMAKE_BUILD_PARALLEL_LEVEL=2 ./gradlew :app:assembleNormalNoRecordDebug :app:testNormalNoRecordDebugUnitTest --tests top.wsdx233.love2droid.DshDaemonTest --tests top.wsdx233.love2droid.DshWebLoadStateTest --tests top.wsdx233.love2droid.StorageAndPackagingTest --tests top.wsdx233.love2droid.EditorFileAccessTest`，28 项通过。临时 JVM 冒烟运行真实 `EditorSession`、DSH 页面管理/菜单/回调源码与 `WorkspaceStore`/原子存储，10 个场景覆盖重复新建、独立后退/刷新、非 DSH 操作隔离、加载与错误隔离、服务地址更新去重、关闭及迟到回调、启动重试、路由历史状态和重复条目持久化；界面、WebView 导航和服务可用性使用替身，不等同于 Android 手势、渲染、Cookie 或真实网络验证。
 - 新安装及旧环境升级后启动 PRoot，确认 `readlink ~/projects` 指向应用项目根目录，`cd ~/projects/<项目>` 可读取 `main.lua`；在 DSH 的工作目录选择器中从 Home → projects 进入项目。同名真实文件/文件夹必须保持原样，不自动覆盖。
 - 在终端执行 `dsh plugin --profile web add <可用插件>`，确认不再出现 `ERR_PNPM_ADDING_TO_ROOT`；从插件市场安装插件执行同一 profile 安装路径并成功进入队列。新安装的 profile 应预装 `dsh-web-mobile`，确认 profile 原有 `.npmrc` 其他设置保留，重复启动不会重复追加该配置。
 - 升级 APK 后完全退出并重开应用，让普通终端和 DSH 后台进程重新启动；无需删除 rootfs 或重装 DSH。在应用专属项目真实路径及 `~/projects` 入口下，让 DSH 新建 `src/audio.lua`，再读取、编辑并覆盖，确认没有 `link ... EPERM`，文件完整且无 `.tmpdir` 残留。同名文件未经读取不能被静默覆盖；同时回归附件上传/重复上传和新会话关闭后恢复。

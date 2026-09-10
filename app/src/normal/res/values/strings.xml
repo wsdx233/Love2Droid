@@ -296,6 +296,7 @@
     <string name="dsh_service_enable_and_start">开启并启动</string>
     <string name="dsh_not_installed_message">未安装 DSH 组件，请先在组件安装管理中安装 DSH。</string>
     <string name="dsh_tab_title">DSH 助手</string>
+    <string name="dsh_back">后退</string>
     <string name="dsh_start_failed">DSH 服务启动失败，请检查运行环境或在终端运行 dsh 查看错误。</string>
     <string name="dsh_page_failed">DSH 页面加载失败：%1$s</string>
     <string name="dsh_page_loading">正在加载 DSH…</string>
