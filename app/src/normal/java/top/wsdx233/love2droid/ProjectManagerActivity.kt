@@ -56,7 +56,11 @@ class ProjectManagerActivity : AppCompatActivity() {
     private val loveImportLauncher = registerForActivityResult(
         DocumentsUiOpenDocumentContract(),
     ) { uri ->
-        if (uri != null) importLoveProject(uri)
+        if (uri != null) {
+            importLoveProject(uri)
+        } else if (intent.action == ACTION_IMPORT_PROJECT) {
+            finish()
+        }
     }
 
     private val loveExportLauncher = registerForActivityResult(
@@ -123,6 +127,9 @@ class ProjectManagerActivity : AppCompatActivity() {
         }
 
         refresh()
+        if (savedInstanceState == null && intent.action == ACTION_IMPORT_PROJECT) {
+            openLoveImport()
+        }
     }
 
     private fun setupToolbar() {
@@ -145,7 +152,7 @@ class ProjectManagerActivity : AppCompatActivity() {
                         true
                     }
                     R.id.action_import_love -> {
-                        loveImportLauncher.launch(arrayOf("application/zip", "application/x-love", "application/octet-stream", "*/*"))
+                        openLoveImport()
                         true
                     }
                     else -> false
@@ -556,6 +563,10 @@ class ProjectManagerActivity : AppCompatActivity() {
         loveExportLauncher.launch("${project.id}.love")
     }
 
+    private fun openLoveImport() {
+        loveImportLauncher.launch(arrayOf("application/zip", "application/x-love", "application/octet-stream", "*/*"))
+    }
+
     private fun importLoveProject(uri: Uri) {
         val targetGroup = when (currentGroupFilter) {
             null, UNGROUPED_SPECIAL_KEY -> ""
@@ -702,6 +713,7 @@ class ProjectManagerActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_PROJECT_ID = "project_id"
+        const val ACTION_IMPORT_PROJECT = "top.wsdx233.love2droid.action.IMPORT_PROJECT"
         private const val MENU_EXPORT_LOVE = 3
         private const val MENU_SET_GROUP = 4
         private const val MENU_RENAME = 1

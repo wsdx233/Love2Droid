@@ -135,7 +135,6 @@ class EditorActivity : AppCompatActivity() {
     private var selectionAnchorPath: String? = null
     private var clipboardFiles: List<File> = emptyList()
     private var clipboardIsCut = false
-    private var openedManagerForEmptyState = false
     private lateinit var editorTopInset: View
     private lateinit var drawerTopInset: View
     private var textMateReady = false
@@ -372,8 +371,19 @@ class EditorActivity : AppCompatActivity() {
             drawer.openDrawer(GravityCompat.START)
         }
         findViewById<View>(R.id.welcome_new_file).setOnClickListener { newDocument() }
+        findViewById<View>(R.id.welcome_import_project).setOnClickListener {
+            projectManagerLauncher.launch(
+                Intent(this, ProjectManagerActivity::class.java)
+                    .setAction(ProjectManagerActivity.ACTION_IMPORT_PROJECT),
+            )
+        }
+        findViewById<View>(R.id.welcome_new_project).setOnClickListener {
+            projectManagerLauncher.launch(Intent(this, NewProjectActivity::class.java))
+        }
+        findViewById<View>(R.id.welcome_open_project).setOnClickListener { openProjectManager() }
 
         setupWindowInsets()
+        toolbar.setTitle(R.string.app_name)
         toolbar.navigationIcon = ContextCompat.getDrawable(this, R.drawable.ic_menu)
         toolbar.navigationContentDescription = getString(R.string.file_browser)
         toolbar.setNavigationOnClickListener { drawer.openDrawer(GravityCompat.START) }
@@ -449,7 +459,6 @@ class EditorActivity : AppCompatActivity() {
             switchProject(initial)
         } else {
             showEmptyEditor()
-            window.decorView.post { openProjectManagerIfNeeded() }
         }
     }
     @SuppressLint("RestrictedApi")
@@ -1296,7 +1305,7 @@ class EditorActivity : AppCompatActivity() {
                 true
             }
             R.id.action_projects -> {
-                openProjectManagerIfNeeded(force = true)
+                openProjectManager()
                 true
             }
             else -> false
@@ -1345,7 +1354,7 @@ class EditorActivity : AppCompatActivity() {
 
     private fun showAndroidPackaging() {
         val project = currentProject ?: run {
-            openProjectManagerIfNeeded(force = true)
+            openProjectManager()
             return
         }
         saveAllThen(requireNamed = true) {
@@ -1365,11 +1374,8 @@ class EditorActivity : AppCompatActivity() {
         }
     }
 
-    private fun openProjectManagerIfNeeded(force: Boolean = false) {
-        if (force || !openedManagerForEmptyState) {
-            openedManagerForEmptyState = true
-            projectManagerLauncher.launch(Intent(this, ProjectManagerActivity::class.java))
-        }
+    private fun openProjectManager() {
+        projectManagerLauncher.launch(Intent(this, ProjectManagerActivity::class.java))
     }
 
     private fun switchProject(project: Project) {
@@ -1493,6 +1499,13 @@ class EditorActivity : AppCompatActivity() {
         terminalKeyBar.visibility = View.GONE
         editorSearchController.setEditorAvailable(false)
         welcomePage.visibility = View.VISIBLE
+        val hasProject = currentProject != null
+        findViewById<TextView>(R.id.welcome_message).setText(
+            if (hasProject) R.string.welcome_message else R.string.welcome_project_message,
+        )
+        findViewById<View>(R.id.welcome_project_actions).visibility = if (hasProject) View.GONE else View.VISIBLE
+        findViewById<View>(R.id.welcome_file_actions).visibility = if (hasProject) View.VISIBLE else View.GONE
+        tabScroll.visibility = if (hasProject) View.VISIBLE else View.GONE
         scheduleLsp(null)
         if (::editor.isInitialized) editor.setBreakpointLines(emptyList())
         updateEditorMenuState()
@@ -2702,6 +2715,7 @@ class EditorActivity : AppCompatActivity() {
     }
 
     private fun refreshTabs() {
+        tabScroll.visibility = if (currentProject != null || editorSession.tabs.isNotEmpty()) View.VISIBLE else View.GONE
         tabLabels.clear()
         tabContainer.removeAllViews()
         val colors = editor.colorScheme
@@ -3065,7 +3079,7 @@ class EditorActivity : AppCompatActivity() {
 
     private fun playCurrentProject() {
         val project = currentProject ?: run {
-            openProjectManagerIfNeeded(force = true)
+            openProjectManager()
             return
         }
         saveAllThen(requireNamed = true) {

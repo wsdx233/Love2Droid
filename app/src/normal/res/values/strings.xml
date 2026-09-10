@@ -21,6 +21,9 @@
     <string name="file_browser">文件浏览器</string>
     <string name="welcome_title">欢迎使用 Love2Droid</string>
     <string name="welcome_message">打开项目文件，或新建文件开始编辑</string>
+    <string name="welcome_project_message">从这里开始创作你的 LÖVE 游戏\n导入、新建或打开一个项目</string>
+    <string name="import_project">导入项目</string>
+    <string name="open_project">打开项目</string>
     <string name="open_file">打开文件</string>
     <string name="dsh_file_access_denied">无法打开此文件：路径不在应用可访问的存储范围内。</string>
     <string name="dsh_file_bridge_unsupported">在编辑器打开 DSH 文件需要更新 Android System WebView。</string>
