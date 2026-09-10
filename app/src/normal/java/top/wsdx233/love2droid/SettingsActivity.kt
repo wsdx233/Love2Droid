@@ -23,6 +23,7 @@ import com.google.android.material.materialswitch.MaterialSwitch
 class SettingsActivity : AppCompatActivity() {
     private lateinit var content: LinearLayout
     private lateinit var settings: SettingsStore
+    private lateinit var checkUpdateButton: MaterialButton
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -61,6 +62,7 @@ class SettingsActivity : AppCompatActivity() {
         }
         ViewCompat.requestApplyInsets(root)
         render()
+        AppUpdateUi.bind(this, ::showUpdateCheckProgress)
     }
 
     private fun render() {
@@ -155,6 +157,24 @@ class SettingsActivity : AppCompatActivity() {
             setOnClickListener { SetupActivity.start(this@SettingsActivity, fromSettings = true) }
         }
         content.addView(componentsButton, LinearLayout.LayoutParams.MATCH_PARENT, dp(52))
+
+        addSection(R.string.settings_updates)
+        addInfoPreference(R.string.settings_current_version, BuildConfig.VERSION_NAME)
+        addSwitchPreference(
+            R.string.settings_auto_check_updates,
+            R.string.settings_auto_check_updates_summary,
+            settings.autoCheckUpdates,
+        ) { settings.autoCheckUpdates = it }
+        checkUpdateButton = MaterialButton(this).apply {
+            setOnClickListener { AppUpdateUi.session.checkManually() }
+        }
+        content.addView(checkUpdateButton, LinearLayout.LayoutParams.MATCH_PARENT, dp(52))
+        showUpdateCheckProgress(AppUpdateUi.session.state.value.checking)
+    }
+
+    private fun showUpdateCheckProgress(checking: Boolean) {
+        checkUpdateButton.isEnabled = !checking
+        checkUpdateButton.setText(if (checking) R.string.update_checking else R.string.settings_check_updates)
     }
 
     private fun addSection(title: Int) {

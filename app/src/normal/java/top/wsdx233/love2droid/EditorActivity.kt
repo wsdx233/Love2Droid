@@ -327,6 +327,7 @@ class EditorActivity : AppCompatActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         setContentView(R.layout.activity_editor)
+        AppUpdateUi.bind(this)
 
         drawer = findViewById(R.id.drawer_layout)
         toolbar = findViewById(R.id.toolbar)

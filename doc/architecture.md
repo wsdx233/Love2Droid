@@ -159,6 +159,14 @@ Android 发布与 Play 分离；发布结果是可安装、可分享的独立 AP
 - 帧预算按成功的 `love.graphics.present()` 计数，顶层 main 和标准 `love.load` 中的加载画面不计入。自定义 `love.run` 的阻塞式绘制循环也受呈现预算约束；没有呈现的循环由外部超时终止。不改写 dt/随机数，不伪造图形 API，不保证未执行的关卡或交互路径正确。
 - 有效检查命令在 stdout 返回一个 JSON 结果；日志保留末尾最多 64 KiB 并标记截断。提前退出、错误、超时和取消均不算通过；超时和信号取消回收受监督的游戏、Xvfb 及其进程组。命令与验收见 [verification.md](verification.md#löve-无界面检查)。
 
+## 应用更新检查
+
+- `SettingsStore.autoCheckUpdates` 沿用应用偏好存储，缺省为 `true`；普通版和离线版共用检查实现及 `BuildConfig.VERSION_NAME`，不使用游戏项目的发布版本号。
+- `AppUpdateChecker` 在 `Dispatchers.IO` 请求 `https://api.github.com/repos/wsdx233/Love2Droid/releases/latest`，使用连接/读取超时和响应大小上限。只接受正式非草稿 Release，404 表示暂无正式版本；HTTP 错误、异常 JSON 和不可解析版本作为检查失败处理。
+- 版本比较兼容 `v`/`V` 前缀，按数字段比较并补齐末尾零；预发布标识低于同号正式版，build metadata 不影响排序。相同或更低版本不提示升级，下载入口只构造在固定项目仓库下的 Release 页面。
+- `AppUpdateSession` 在应用进程内去重启动检查与并发请求，持有待消费结果而不持有 Activity；自动无更新/失败不产生用户通知，手动检查保留结果反馈。关闭开关后未显示的自动更新结果不再弹出。
+- `AppUpdateUi` 绑定安装向导、编辑器、项目管理和设置的 `RESUMED` 生命周期；页面销毁不取消共享检查，后台不弹窗，结果仅消费一次。`AppUpdateDialog` 使用 Fragment 参数恢复旋转时已显示的更新提示，不触及独立游戏进程或上游 runtime。
+
 ## 主要模块职责
 
 - Activity：组装 View 和生命周期；不执行递归文件操作。

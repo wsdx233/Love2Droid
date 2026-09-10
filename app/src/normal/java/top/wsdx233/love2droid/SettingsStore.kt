@@ -30,6 +30,10 @@ internal fun ThemeMode.resolveEditorThemeId(systemIsDark: Boolean): String = whe
 internal class SettingsStore(context: Context) {
     private val preferences = context.applicationContext.getSharedPreferences(NAME, Context.MODE_PRIVATE)
 
+    var autoCheckUpdates: Boolean
+        get() = preferences.getBoolean(KEY_AUTO_CHECK_UPDATES, true)
+        set(value) = preferences.edit().putBoolean(KEY_AUTO_CHECK_UPDATES, value).apply()
+
     var appThemeMode: ThemeMode
         get() = ThemeMode.fromStored(preferences.getString(KEY_APP_THEME_MODE, ThemeMode.SYSTEM.storedValue))
         set(value) = preferences.edit().putString(KEY_APP_THEME_MODE, value.storedValue).apply()
@@ -84,6 +88,7 @@ internal class SettingsStore(context: Context) {
 
     companion object {
         private const val NAME = "workspace-settings"
+        private const val KEY_AUTO_CHECK_UPDATES = "auto_check_updates"
         private const val KEY_HAS_SHOWN_INITIAL_SETUP = "has_shown_initial_setup"
         private const val KEY_APP_THEME_MODE = "app_theme_mode"
         private const val KEY_EDITOR_THEME_MODE = "editor_theme_mode"

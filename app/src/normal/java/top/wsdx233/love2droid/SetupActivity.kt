@@ -64,6 +64,7 @@ class SetupActivity : AppCompatActivity() {
 
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.activity_setup)
+        AppUpdateUi.bind(this)
 
         val root = findViewById<View>(R.id.setup_root)
         val toolbar = findViewById<MaterialToolbar>(R.id.setup_toolbar)

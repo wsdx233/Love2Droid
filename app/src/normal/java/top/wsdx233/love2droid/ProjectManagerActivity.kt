@@ -80,6 +80,7 @@ class ProjectManagerActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.activity_project_manager)
+        AppUpdateUi.bind(this)
         repository = ProjectRepository(this)
         emptyContainer = findViewById(R.id.project_empty_container)
         toolbar = findViewById(R.id.project_toolbar)
