@@ -2762,6 +2762,11 @@ class EditorActivity : AppCompatActivity() {
                         selectTab(currentIndex)
                     }
                 }
+                setOnLongClickListener {
+                    val currentIndex = editorSession.tabs.indexOf(tab)
+                    if (currentIndex >= 0) showTabMenu(currentIndex, this)
+                    true
+                }
             }
             val content = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL

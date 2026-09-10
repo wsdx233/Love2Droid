@@ -232,7 +232,10 @@ podman unshare unshare --net sh -ec \
 不使用 Android 模拟器验证界面、输入法、文件系统、PRoot、Ubuntu、LuaLS 或 LÖVE runtime。相关变更需在 arm64 真机观察：
 
 - 首次安装、安装失败重试、应用重启、横竖屏切换、后台恢复。
-- Tab 栏在真机上单击文件或终端标签应一次完成切换；即使 OMP 终端连续刷新内容，标签点击仍应及时响应；关闭和新建按钮均可直接操作。
+- Tab 栏单击非活动文件、终端或 DSH 标签应一次完成切换，单击活动标签则打开操作菜单；即使 OMP 终端连续刷新内容，标签点击仍应及时响应。关闭和新建按钮均可直接操作。
+- 长按任意标签正文应打开与单击活动标签相同的菜单，不先切换内容；松手不追加单击或切换，取消菜单后原活动标签及未保存文本保持不变。横向滚动标签栏不应误开菜单，独立关闭按钮行为不变。
+- 混合打开至少三个文件/终端/DSH 标签，长按中间的非活动标签，分别检查关闭当前、其他、全部、左侧和右侧的目标范围；首尾标签对应方向应禁用。涉及 dirty 文件时继续显示保存、放弃、取消，取消不会继续批量关闭。
+- 本轮本地命令为 `CMAKE_BUILD_PARALLEL_LEVEL=2 ./gradlew :app:assembleNormalNoRecordDebug :app:testNormalNoRecordDebugUnitTest --tests top.wsdx233.love2droid.StorageAndPackagingTest --tests top.wsdx233.love2droid.EditorFileRobustnessTest`，共 19 项通过。临时 JVM 脚本以真实 `EditorSession` 和源码中的单击/长按回调覆盖活动/非活动文件、DSH、原单击行为、索引变化与目标移除，共 7 个场景通过；菜单显示边界使用替身，不执行 Android runtime，不能替代上述真机手势、弹窗和批量关闭验收。
 - 打开普通终端，确认登录 shell 不输出 `groups: cannot find name for group ID`；分别打开和关闭“OMP 使用项目目录”，在已有 OMP 会话的目录中新建 OMP 标签，确认执行 `omp --allow-home` 且不恢复旧会话；退出并重启应用后，确认恢复的 OMP 标签沿用已保存的工作目录并执行 `omp --allow-home --continue`，由 OMP 选择该目录下第一个可恢复 session，没有可恢复 session 时创建新 session。启动时先停留在文件标签，再首次选中恢复的 OMP 标签，确认启动命令没有丢失；来回切换标签不重复发送命令。
 - 首次安装以及从旧版本升级后，在普通终端确认 `/etc/resolv.conf` 包含 `8.8.8.8`、`8.8.4.4` 和 `options use-vc timeout:2 attempts:2`；执行 `getent hosts baidu.com` 与 `curl` 域名请求，确认默认命令无需临时设置 `RES_OPTIONS` 即可解析。
 - 从项目打开普通终端，确认不再闪退或输出 `proot warning: can't chdir`，`pwd` 为项目真实路径且可读取 `main.lua`；保持一个终端运行，再打开第二个普通终端和 DSH，确认挂载占位目录不影响并行会话。只安装 rootfs、未安装 OMP/LuaLS 的环境中，普通终端仍可打开。
