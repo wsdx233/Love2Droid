@@ -474,14 +474,41 @@ class EditorActivity : AppCompatActivity() {
 
     private fun updateEditorMenuState() {
         val activeTab = editorSession.activeEditorTab
-        toolbar.menu.findItem(R.id.action_undo).isEnabled = activeTab != null && !activeTab.readOnly
-        toolbar.menu.findItem(R.id.action_word_wrap).isChecked = editor.isWordwrap
-        toolbar.menu.findItem(R.id.action_symbol_bar).isChecked = settings.editorSymbolBar
-        toolbar.menu.findItem(R.id.action_read_only).apply {
-            isEnabled = activeTab != null
+        val hasDocument = activeTab != null
+        val hasProject = currentProject != null
+        val menu = toolbar.menu
+        menu.findItem(R.id.action_play).isVisible = hasProject
+        menu.findItem(R.id.action_package_android).isVisible = hasProject
+        menu.findItem(R.id.action_save).apply {
+            isVisible = hasDocument
+            isEnabled = hasDocument && (activeTab.file != null || hasProject)
+        }
+        menu.findItem(R.id.action_undo).apply {
+            isVisible = hasDocument
+            isEnabled = hasDocument && !activeTab.readOnly
+        }
+        menu.findItem(R.id.action_save_as).apply {
+            isVisible = hasDocument
+            isEnabled = hasDocument && hasProject
+        }
+        menu.findItem(R.id.action_find_replace).isVisible = hasDocument
+        menu.findItem(R.id.action_word_wrap).apply {
+            isVisible = hasDocument
+            isChecked = editor.isWordwrap
+        }
+        menu.findItem(R.id.action_symbol_bar).apply {
+            isVisible = hasDocument
+            isChecked = settings.editorSymbolBar
+        }
+        menu.findItem(R.id.action_read_only).apply {
+            isVisible = hasDocument
+            isEnabled = hasDocument
             isChecked = activeTab?.readOnly == true
         }
-        toolbar.menu.findItem(R.id.action_lsp_hover).isChecked = settings.editorHoverInfo
+        menu.findItem(R.id.action_lsp_hover).apply {
+            isVisible = hasDocument
+            isChecked = settings.editorHoverInfo
+        }
     }
 
     private fun updateSymbolBarVisibility() {
